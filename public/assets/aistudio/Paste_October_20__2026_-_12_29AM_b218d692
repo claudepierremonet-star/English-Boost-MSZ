@@ -1,0 +1,452 @@
+import json, os, zipfile, textwrap, re
+from pathlib import Path
+
+outdir = "/mnt/data/English_Boost_MZ_Contenus"
+os.makedirs(outdir, exist_ok=True)
+
+levels = [
+    {"id":"6e","label":"Sixième","cefr":"A1–A1+","goal":"Comprendre et produire des phrases courtes au présent, se présenter et parler de sujets familiers."},
+    {"id":"5e","label":"Cinquième","cefr":"A1+–A2","goal":"Décrire des habitudes, poser des questions, parler d’activités et raconter brièvement."},
+    {"id":"4e","label":"Quatrième","cefr":"A2–A2+","goal":"Raconter au passé, comparer, exprimer des projets et justifier ses préférences."},
+    {"id":"3e","label":"Troisième","cefr":"A2+–B1","goal":"S’exprimer avec davantage d’autonomie, expliquer des choix et préparer la transition vers le lycée."},
+    {"id":"2nde","label":"Seconde","cefr":"B1","goal":"Comprendre des échanges plus longs, décrire des expériences et défendre une opinion simple."},
+    {"id":"1re","label":"Première","cefr":"B1–B2","goal":"Argumenter, analyser des situations et employer des structures grammaticales variées."},
+    {"id":"terminale","label":"Terminale","cefr":"B2, ouverture C1","goal":"Nuancer, débattre, analyser et communiquer avec précision dans des contextes variés."}
+]
+
+themes = [
+    ("daily_life","Vie quotidienne"),
+    ("travel","Voyages"),
+    ("history","Histoire"),
+    ("hobbies","Loisirs"),
+    ("sport","Sport"),
+    ("music","Musique"),
+    ("restaurant","Restaurant"),
+    ("food","Nourriture"),
+    ("work","Travail et métiers"),
+    ("school_social","Vie scolaire et relations")
+]
+
+# Curated theme-specific vocabulary; each item is EN / FR / example / example translation
+vocab = {
+"daily_life":[
+("wake up","se réveiller","I wake up at seven.","Je me réveille à sept heures."),
+("get dressed","s’habiller","I get dressed quickly.","Je m’habille rapidement."),
+("have breakfast","prendre le petit-déjeuner","I have breakfast with my family.","Je prends le petit-déjeuner avec ma famille."),
+("brush my teeth","me brosser les dents","I brush my teeth twice a day.","Je me brosse les dents deux fois par jour."),
+("leave home","quitter la maison","I leave home at eight.","Je quitte la maison à huit heures."),
+("do homework","faire ses devoirs","I do my homework after school.","Je fais mes devoirs après l’école."),
+("tidy my room","ranger ma chambre","I tidy my room on Saturday.","Je range ma chambre le samedi."),
+("go to bed","aller se coucher","I go to bed at nine.","Je me couche à neuf heures.")
+],
+"travel":[
+("a journey","un voyage","The journey takes two hours.","Le voyage dure deux heures."),
+("a suitcase","une valise","My suitcase is heavy.","Ma valise est lourde."),
+("a ticket","un billet","I have a train ticket.","J’ai un billet de train."),
+("a platform","un quai","The train leaves from platform three.","Le train part du quai trois."),
+("a map","une carte","We need a map of the city.","Nous avons besoin d’une carte de la ville."),
+("to book","réserver","I want to book a room.","Je veux réserver une chambre."),
+("to get lost","se perdre","We got lost in the old town.","Nous nous sommes perdus dans la vieille ville."),
+("sightseeing","les visites touristiques","We went sightseeing yesterday.","Nous avons fait des visites touristiques hier.")
+],
+"history":[
+("a century","un siècle","The castle is five centuries old.","Le château a cinq siècles."),
+("an event","un événement","This event changed history.","Cet événement a changé l’histoire."),
+("a king","un roi","The king lived in a palace.","Le roi vivait dans un palais."),
+("a queen","une reine","The queen signed the document.","La reine a signé le document."),
+("a war","une guerre","The war ended in 1945.","La guerre s’est terminée en 1945."),
+("a discovery","une découverte","The discovery was important.","La découverte était importante."),
+("a source","une source","This letter is a historical source.","Cette lettre est une source historique."),
+("to invent","inventer","People invented new machines.","Les gens ont inventé de nouvelles machines.")
+],
+"hobbies":[
+("to draw","dessiner","I like to draw animals.","J’aime dessiner des animaux."),
+("to read","lire","She reads before bed.","Elle lit avant de dormir."),
+("board games","les jeux de société","We play board games together.","Nous jouons ensemble à des jeux de société."),
+("photography","la photographie","Photography helps me notice details.","La photographie m’aide à remarquer les détails."),
+("to collect","collectionner","He collects old coins.","Il collectionne les vieilles pièces."),
+("free time","le temps libre","I have more free time on Sunday.","J’ai plus de temps libre le dimanche."),
+("to relax","se détendre","Music helps me relax.","La musique m’aide à me détendre."),
+("a skill","une compétence","Learning guitar is a useful skill.","Apprendre la guitare est une compétence utile.")
+],
+"sport":[
+("a team","une équipe","Our team trains on Tuesday.","Notre équipe s’entraîne le mardi."),
+("a match","un match","The match starts at six.","Le match commence à six heures."),
+("to train","s’entraîner","I train twice a week.","Je m’entraîne deux fois par semaine."),
+("a player","un joueur / une joueuse","The player scored a goal.","Le joueur a marqué un but."),
+("a score","un score","The final score was two-one.","Le score final était de deux à un."),
+("to win","gagner","We hope to win the match.","Nous espérons gagner le match."),
+("to lose","perdre","They lost by one point.","Ils ont perdu d’un point."),
+("fair play","le fair-play","Fair play matters more than winning.","Le fair-play compte davantage que la victoire.")
+],
+"music":[
+("a song","une chanson","This song makes me happy.","Cette chanson me rend heureux."),
+("a singer","un chanteur / une chanteuse","The singer has a powerful voice.","La chanteuse a une voix puissante."),
+("a band","un groupe de musique","The band is playing live.","Le groupe joue en concert."),
+("lyrics","les paroles","I know the lyrics by heart.","Je connais les paroles par cœur."),
+("a beat","un rythme","The beat is easy to follow.","Le rythme est facile à suivre."),
+("a concert","un concert","We went to a concert last month.","Nous sommes allés à un concert le mois dernier."),
+("to compose","composer","She composes her own music.","Elle compose sa propre musique."),
+("a recording","un enregistrement","I listened to the recording again.","J’ai réécouté l’enregistrement.")
+],
+"restaurant":[
+("a menu","un menu / une carte","Could I see the menu, please?","Pourrais-je voir la carte, s’il vous plaît ?"),
+("a waiter","un serveur","The waiter brought our drinks.","Le serveur a apporté nos boissons."),
+("a table","une table","We booked a table for four.","Nous avons réservé une table pour quatre."),
+("a starter","une entrée","I would like soup for a starter.","Je voudrais une soupe en entrée."),
+("a main course","un plat principal","The main course was delicious.","Le plat principal était délicieux."),
+("a bill","l’addition","Could we have the bill, please?","Pourrions-nous avoir l’addition, s’il vous plaît ?"),
+("to order","commander","Are you ready to order?","Êtes-vous prêts à commander ?"),
+("a reservation","une réservation","I have a reservation under Martin.","J’ai une réservation au nom de Martin.")
+],
+"food":[
+("vegetables","les légumes","We eat vegetables every day.","Nous mangeons des légumes tous les jours."),
+("fruit","les fruits","Fruit is a good snack.","Les fruits sont un bon encas."),
+("a meal","un repas","Breakfast is my favourite meal.","Le petit-déjeuner est mon repas préféré."),
+("healthy","sain","A balanced meal is healthy.","Un repas équilibré est sain."),
+("spicy","épicé","This curry is too spicy for me.","Ce curry est trop épicé pour moi."),
+("sweet","sucré","I prefer sweet desserts.","Je préfère les desserts sucrés."),
+("to taste","goûter","Would you like to taste this?","Voudriez-vous goûter ceci ?"),
+("ingredients","les ingrédients","Read the ingredients on the label.","Lisez les ingrédients sur l’étiquette.")
+],
+"work":[
+("a job","un emploi / un travail","She is looking for a job.","Elle cherche un emploi."),
+("a workplace","un lieu de travail","My workplace is near the station.","Mon lieu de travail est près de la gare."),
+("a colleague","un collègue / une collègue","I asked a colleague for help.","J’ai demandé de l’aide à un collègue."),
+("a salary","un salaire","The salary depends on experience.","Le salaire dépend de l’expérience."),
+("an interview","un entretien","I have a job interview tomorrow.","J’ai un entretien demain."),
+("to apply","postuler","He wants to apply for the position.","Il veut postuler à ce poste."),
+("a skill","une compétence","Communication is an important skill.","La communication est une compétence importante."),
+("a career","une carrière","She wants a career in science.","Elle veut faire carrière dans les sciences.")
+],
+"school_social":[
+("a timetable","un emploi du temps","My timetable is busy on Monday.","Mon emploi du temps est chargé le lundi."),
+("a subject","une matière","English is my favourite subject.","L’anglais est ma matière préférée."),
+("a classmate","un camarade de classe","I worked with a classmate.","J’ai travaillé avec un camarade de classe."),
+("to explain","expliquer","Can you explain this rule?","Peux-tu expliquer cette règle ?"),
+("to agree","être d’accord","I agree with your idea.","Je suis d’accord avec ton idée."),
+("to disagree","ne pas être d’accord","I disagree, but I respect your opinion.","Je ne suis pas d’accord, mais je respecte ton opinion."),
+("to improve","améliorer / progresser","I want to improve my English.","Je veux améliorer mon anglais."),
+("confidence","la confiance en soi","Practice builds confidence.","La pratique renforce la confiance en soi.")
+]
+}
+
+level_settings = {
+"6e":{"grammar":"Présent simple, verbe be, have got, articles a/an, pluriel, can/can’t, prépositions de lieu.","tense":"present","sentence_len":"phrases courtes","dialogue_len":4},
+"5e":{"grammar":"Présent simple et présent en -ing, adverbes de fréquence, there is/are, some/any, questions avec do/does.","tense":"present_progressive","sentence_len":"phrases simples reliées","dialogue_len":5},
+"4e":{"grammar":"Prétérit simple, comparatifs et superlatifs, be going to, must/mustn’t, quantifieurs.","tense":"past_future","sentence_len":"phrases reliées avec because/so","dialogue_len":6},
+"3e":{"grammar":"Prétérit et present perfect, will, premier conditionnel, should, discours rapporté introductif.","tense":"mixed","sentence_len":"paragraphes courts","dialogue_len":6},
+"2nde":{"grammar":"Present perfect vs past simple, modaux, propositions relatives, futur et expression de l’opinion.","tense":"mixed_b1","sentence_len":"paragraphes structurés","dialogue_len":7},
+"1re":{"grammar":"Second conditionnel, voix passive, discours indirect, present perfect continuous, connecteurs argumentatifs.","tense":"advanced","sentence_len":"argumentation structurée","dialogue_len":8},
+"terminale":{"grammar":"Structures complexes, inversion emphatique (sensibilisation), concessions, conditionnels, modalité et registre formel.","tense":"advanced_b2","sentence_len":"argumentation nuancée","dialogue_len":8}
+}
+
+grammar_examples = {
+"6e":("Présent simple","On utilise le présent simple pour les habitudes et les faits généraux. À la troisième personne du singulier, on ajoute généralement -s au verbe.","I play football on Saturdays. / She plays the piano.","Je joue au football le samedi. / Elle joue du piano."),
+"5e":("Présent simple ou présent en -ing","Le présent simple exprime une habitude ; le présent en -ing décrit une action en cours.","I usually walk to school, but today I am taking the bus.","D’habitude, je vais à l’école à pied, mais aujourd’hui je prends le bus."),
+"4e":("Prétérit simple","Le prétérit décrit une action terminée dans le passé. Les verbes réguliers prennent généralement -ed ; les verbes irréguliers ont une forme propre.","We visited the museum yesterday. / She went to London.","Nous avons visité le musée hier. / Elle est allée à Londres."),
+"3e":("Present perfect et prétérit","Le prétérit situe une action terminée dans un passé daté. Le present perfect relie une expérience ou un résultat au présent.","I visited Rome in 2024. / I have visited Rome twice.","J’ai visité Rome en 2024. / J’ai visité Rome deux fois."),
+"2nde":("Exprimer son opinion et la justifier","Utilisez I think, In my opinion et because pour présenter une idée et donner une raison.","In my opinion, travelling is valuable because it helps us understand other cultures.","À mon avis, voyager est enrichissant parce que cela nous aide à comprendre d’autres cultures."),
+"1re":("Le second conditionnel","On utilise If + prétérit, would + base verbale pour imaginer une situation hypothétique présente ou future.","If I had more time, I would learn another language.","Si j’avais plus de temps, j’apprendrais une autre langue."),
+"terminale":("Concession et nuance","Although et even though introduisent une concession. However et nevertheless permettent d’opposer deux idées avec un registre plus formel.","Although social media can be useful, it may also spread misinformation.","Bien que les réseaux sociaux puissent être utiles, ils peuvent aussi diffuser de fausses informations.")
+}
+
+# Level-sensitive phrases and dialogues by theme.
+theme_scenarios = {
+"daily_life":("Parler de sa journée","Hi, what time do you get up?","I usually get up at seven.","What do you do before school?","I have breakfast and pack my bag."),
+"travel":("Préparer un voyage","Where are you going this summer?","I’m going to Edinburgh with my family.","How are you getting there?","We’re taking the train."),
+"history":("Visiter un lieu historique","What did you see at the museum?","I saw an exhibition about ancient Egypt.","What did you learn?","I learned how people lived thousands of years ago."),
+"hobbies":("Parler de ses loisirs","What do you like doing in your free time?","I enjoy reading and taking photographs.","How often do you do that?","I read almost every evening."),
+"sport":("Organiser une activité sportive","Do you want to play basketball after school?","Yes, that sounds great.","What time shall we meet?","Let’s meet at the sports centre at five."),
+"music":("Parler de musique","What kind of music do you listen to?","I listen to pop, jazz and film music.","Have you ever been to a concert?","Yes, I saw my favourite band last year."),
+"restaurant":("Commander au restaurant","Are you ready to order?","Yes, I’d like the vegetable soup, please.","Would you like anything to drink?","A glass of water, please."),
+"food":("Parler d’alimentation","What do you usually eat for lunch?","I usually have rice, vegetables and fruit.","Do you think your diet is balanced?","I try to eat a variety of foods."),
+"work":("Parler d’un métier","What would you like to do in the future?","I’d like to become a designer.","Why does that job interest you?","Because I enjoy solving problems creatively."),
+"school_social":("Travailler en groupe","What do you think of our project?","I think it’s interesting, but we need a clearer plan.","What should we do first?","Let’s divide the tasks and set a deadline.")
+}
+
+# Build full 70 lesson pack with controlled variations by level.
+lessons=[]
+for li, lev in enumerate(levels):
+    lid=lev["id"]
+    gs=level_settings[lid]
+    gtitle,gexplain,gexample,gtranslation=grammar_examples[lid]
+    for ti,(tid,tlabel) in enumerate(themes):
+        vlist=vocab[tid]
+        # Pick 8 vocabulary terms; increase advanced lesson vocab by adding register/use notes.
+        words=[]
+        for j,(en,fr,ex,exfr) in enumerate(vlist):
+            words.append({
+                "term":en,"translation_fr":fr,
+                "example_en":ex,"example_fr":exfr,
+                "pronunciation_hint":"",
+                "difficulty":lid
+            })
+        title, q1, a1, q2, a2 = theme_scenarios[tid]
+        # Build level-scaled example sentences
+        phrase_templates = {
+            "6e":[f"I like {vlist[3][0]}.",f"I usually {vlist[0][0]}.",f"Can you help me, please?",f"Where is the {vlist[1][0]}?",f"My favourite thing is {vlist[2][0]}."] ,
+            "5e":[f"I usually {vlist[0][0]} before school.",f"Today, I am learning about {tlabel.lower()}.",f"How often do you {vlist[1][0]}?",f"There is a {vlist[2][0]} near my home.",f"I prefer this because it is interesting."],
+            "4e":[f"Last weekend, I {('visited a place' if tid=='travel' else 'tried a new activity')}.",f"I enjoyed it because it was exciting.",f"This activity is more interesting than the other one.",f"I am going to learn more about {tlabel.lower()}.",f"We should plan everything before we start."],
+            "3e":[f"I have already learned a lot about {tlabel.lower()}.",f"Last year, I took part in a related activity.",f"If we prepare well, we will make progress.",f"I would recommend it to someone who is interested in {tlabel.lower()}.",f"Although it was difficult, I did not give up."],
+            "2nde":[f"In my opinion, {tlabel.lower()} can teach us useful life skills.",f"I have been interested in this topic for several years.",f"One important advantage is that it brings people together.",f"Although there are some drawbacks, the benefits are significant.",f"I would recommend this experience because it broadens our perspective."],
+            "1re":[f"If I had the opportunity, I would explore this topic in greater depth.",f"This experience has helped me understand why {tlabel.lower()} matters.",f"Although some people disagree, I believe that practice is essential.",f"The project was completed successfully by the whole team.",f"Having considered both sides, I would favour a balanced approach."],
+            "terminale":[f"While {tlabel.lower()} may appear straightforward, it often raises more complex questions.",f"Had I known more about the subject, I would have prepared differently.",f"It is worth considering the long-term consequences of this choice.",f"Despite its limitations, this approach can produce meaningful results.",f"From my perspective, the issue requires both critical thinking and empathy."]
+        }
+        phrases=[]
+        for k,en in enumerate(phrase_templates[lid]):
+            phrases.append({"english":en,"french":None,"skill":"expression"})
+        # A small set of dependable translations for shared phrases; other prompts are exercise targets.
+        phrase_translations = {
+            "6e":["J’aime "+vlist[3][1]+".","D’habitude, je "+vlist[0][1]+".","Peux-tu m’aider, s’il te plaît ?","Où est "+vlist[1][1]+" ?","Ma chose préférée est "+vlist[2][1]+"."],
+            "5e":["D’habitude, je "+vlist[0][1]+" avant l’école.","Aujourd’hui, j’apprends quelque chose sur "+tlabel.lower()+".","À quelle fréquence "+vlist[1][1]+" ?","Il y a "+vlist[2][1]+" près de chez moi.","Je préfère cela parce que c’est intéressant."],
+            "4e":["Le week-end dernier, j’ai visité un lieu / essayé une nouvelle activité.","J’ai aimé cela parce que c’était passionnant.","Cette activité est plus intéressante que l’autre.","Je vais en apprendre davantage sur ce sujet.","Nous devrions tout organiser avant de commencer."],
+            "3e":["J’ai déjà beaucoup appris sur ce sujet.","L’année dernière, j’ai participé à une activité liée à ce thème.","Si nous nous préparons bien, nous progresserons.","Je le conseillerais à quelqu’un qui s’y intéresse.","Même si c’était difficile, je n’ai pas abandonné."],
+            "2nde":["À mon avis, ce thème peut nous apprendre des compétences utiles dans la vie.","Je m’intéresse à ce sujet depuis plusieurs années.","Un avantage important est qu’il rassemble les gens.","Même s’il existe quelques inconvénients, les avantages sont importants.","Je recommande cette expérience parce qu’elle élargit notre vision du monde."],
+            "1re":["Si j’en avais l’occasion, j’explorerais ce sujet plus en profondeur.","Cette expérience m’a aidé à comprendre l’importance de ce thème.","Même si certaines personnes ne sont pas d’accord, je pense que la pratique est essentielle.","Le projet a été mené à bien par toute l’équipe.","Après avoir examiné les deux points de vue, je privilégierais une approche équilibrée."],
+            "terminale":["Bien que ce sujet puisse sembler simple, il soulève souvent des questions plus complexes.","Si j’avais mieux connu le sujet, je me serais préparé différemment.","Il convient de prendre en compte les conséquences à long terme de ce choix.","Malgré ses limites, cette approche peut produire des résultats significatifs.","De mon point de vue, cette question exige à la fois un esprit critique et de l’empathie."]
+        }
+        for p,fr in zip(phrases,phrase_translations[lid]): p["french"]=fr
+        
+        # Dialogue expanded to level-appropriate length, with original pair as base.
+        base_dialogue=[
+            {"speaker":"A","en":q1,"fr":None},
+            {"speaker":"B","en":a1,"fr":None},
+            {"speaker":"A","en":q2,"fr":None},
+            {"speaker":"B","en":a2,"fr":None}
+        ]
+        extras = {
+            "6e":[("A","Do you like it?","Est-ce que tu aimes ça ?"),("B","Yes, I do!","Oui, beaucoup !")],
+            "5e":[("A","How often do you do it?","À quelle fréquence le fais-tu ?"),("B","Usually once or twice a week.","En général, une ou deux fois par semaine.")],
+            "4e":[("A","What was the best part?","Quel était le meilleur moment ?"),("B","The best part was spending time with my friends.","Le meilleur moment était de passer du temps avec mes amis.")],
+            "3e":[("A","Would you recommend it? Why?","Le recommanderais-tu ? Pourquoi ?"),("B","Yes, because it was both useful and enjoyable.","Oui, parce que c’était à la fois utile et agréable.")],
+            "2nde":[("A","What makes it meaningful to you?","Qu’est-ce qui donne du sens à cette activité pour toi ?"),("B","It allows me to learn, meet people and challenge myself.","Cela me permet d’apprendre, de rencontrer des gens et de me dépasser.")],
+            "1re":[("A","What could be improved?","Qu’est-ce qui pourrait être amélioré ?"),("B","We could plan ahead and make sure everyone can participate.","Nous pourrions mieux anticiper et veiller à ce que chacun puisse participer.")],
+            "terminale":[("A","Are there any disadvantages we should consider?","Y a-t-il des inconvénients à prendre en compte ?"),("B","Certainly, but the outcome depends on how thoughtfully we approach it.","Certainement, mais le résultat dépend de la manière réfléchie dont nous abordons la question.")]
+        }
+        dialogue=base_dialogue+ [{"speaker":s,"en":en,"fr":fr} for s,en,fr in extras[lid]]
+        # Translate base dialogue with reusable theme-specific translations where possible
+        common_trans={
+            "Where are you going this summer?":"Où vas-tu cet été ?",
+            "I’m going to Edinburgh with my family.":"Je vais à Édimbourg avec ma famille.",
+            "How are you getting there?":"Comment y vas-tu ?",
+            "We’re taking the train.":"Nous prenons le train.",
+            "What did you see at the museum?":"Qu’as-tu vu au musée ?",
+            "I saw an exhibition about ancient Egypt.":"J’ai vu une exposition sur l’Égypte ancienne.",
+            "What did you learn?":"Qu’as-tu appris ?",
+            "I learned how people lived thousands of years ago.":"J’ai appris comment les gens vivaient il y a des milliers d’années.",
+            "What do you like doing in your free time?":"Qu’aimes-tu faire pendant ton temps libre ?",
+            "I enjoy reading and taking photographs.":"J’aime lire et prendre des photos.",
+            "How often do you do that?":"À quelle fréquence fais-tu cela ?",
+            "I read almost every evening.":"Je lis presque tous les soirs.",
+            "Do you want to play basketball after school?":"Veux-tu jouer au basket après l’école ?",
+            "Yes, that sounds great.":"Oui, excellente idée.",
+            "What time shall we meet?":"À quelle heure nous retrouvons-nous ?",
+            "Let’s meet at the sports centre at five.":"Retrouvons-nous au centre sportif à cinq heures.",
+            "What kind of music do you listen to?":"Quel genre de musique écoutes-tu ?",
+            "I listen to pop, jazz and film music.":"J’écoute de la pop, du jazz et des musiques de film.",
+            "Have you ever been to a concert?":"Es-tu déjà allé à un concert ?",
+            "Yes, I saw my favourite band last year.":"Oui, j’ai vu mon groupe préféré l’année dernière.",
+            "Are you ready to order?":"Êtes-vous prêts à commander ?",
+            "Yes, I’d like the vegetable soup, please.":"Oui, je voudrais la soupe de légumes, s’il vous plaît.",
+            "Would you like anything to drink?":"Désirez-vous quelque chose à boire ?",
+            "A glass of water, please.":"Un verre d’eau, s’il vous plaît.",
+            "What do you usually eat for lunch?":"Que manges-tu habituellement au déjeuner ?",
+            "I usually have rice, vegetables and fruit.":"Je mange généralement du riz, des légumes et des fruits.",
+            "Do you think your diet is balanced?":"Penses-tu que ton alimentation est équilibrée ?",
+            "I try to eat a variety of foods.":"J’essaie de manger des aliments variés.",
+            "What would you like to do in the future?":"Que voudrais-tu faire plus tard ?",
+            "I’d like to become a designer.":"J’aimerais devenir designer.",
+            "Why does that job interest you?":"Pourquoi ce métier t’intéresse-t-il ?",
+            "Because I enjoy solving problems creatively.":"Parce que j’aime résoudre des problèmes de manière créative.",
+            "What do you think of our project?":"Que penses-tu de notre projet ?",
+            "I think it’s interesting, but we need a clearer plan.":"Je le trouve intéressant, mais nous avons besoin d’un plan plus clair.",
+            "What should we do first?":"Que devrions-nous faire en premier ?",
+            "Let’s divide the tasks and set a deadline.":"Répartissons les tâches et fixons une échéance.",
+            "Hi, what time do you get up?":"Salut, à quelle heure te lèves-tu ?",
+            "I usually get up at seven.":"Je me lève généralement à sept heures.",
+            "What do you do before school?":"Que fais-tu avant l’école ?",
+            "I have breakfast and pack my bag.":"Je prends mon petit-déjeuner et je prépare mon sac."
+        }
+        for d in dialogue:
+            if d["fr"] is None: d["fr"]=common_trans.get(d["en"],"Traduction à compléter et à valider pédagogiquement.")
+        
+        # Quiz 5 questions; use known vocabulary plus level grammar.
+        quiz=[
+            {"type":"multiple_choice","question_fr":f"Que signifie « {vlist[0][0]} » ?","options":[vlist[0][1],vlist[1][1],vlist[2][1]],"correct_index":0,"explanation_fr":"Le vocabulaire est à apprendre avec son exemple en contexte."},
+            {"type":"translation","question_fr":"Traduis en anglais : « Je veux améliorer mon anglais. »","accepted_answers":["I want to improve my English.","I would like to improve my English."],"explanation_fr":"Après want, on utilise souvent to + base verbale."},
+            {"type":"grammar","question_fr":f"Quel point grammatical est travaillé dans cette leçon ?","options":[gtitle,"Le futur antérieur français","Les articles partitifs français"],"correct_index":0,"explanation_fr":gexplain},
+            {"type":"comprehension","question_fr":"Dans un dialogue, quelle expression permet de demander poliment quelque chose ?","options":["Could I …, please?","Give me now.","I no want."],"correct_index":0,"explanation_fr":"Could I …, please? est une formulation polie."},
+            {"type":"writing","question_fr":f"Écris 3 à 5 phrases en anglais sur le thème « {tlabel} ».","sample_answer":phrase_templates[lid][0]+" "+phrase_templates[lid][1],"explanation_fr":"La réponse doit être évaluée selon le niveau, la grammaire, le vocabulaire et la cohérence."}
+        ]
+        lesson_id=f"{lid}_{tid}"
+        lessons.append({
+            "id":lesson_id,
+            "class_level":lid,
+            "class_label":lev["label"],
+            "cefr_level":lev["cefr"],
+            "theme_id":tid,
+            "theme_label":tlabel,
+            "title":f"{tlabel} — {lev['label']}",
+            "learning_objective":lev["goal"],
+            "estimated_minutes":15 if lid in ("6e","5e") else 20,
+            "vocabulary":words,
+            "useful_phrases":phrases,
+            "grammar":{"title":gtitle,"rule_fr":gexplain,"example_en":gexample,"example_fr":gtranslation,"level_focus":gs["grammar"]},
+            "dialogue":{"title":title,"setting_fr":f"Situation : {title.lower()}.","lines":dialogue},
+            "activities":[
+                {"id":"listen_repeat","type":"listen_repeat","instruction_fr":"Écoute chaque phrase, puis répète-la à voix haute.","enabled":True},
+                {"id":"flashcards","type":"flashcards","instruction_fr":"Révise les mots avec les cartes recto-verso.","enabled":True},
+                {"id":"dictation","type":"dictation","instruction_fr":"Écoute une phrase et écris ce que tu entends.","enabled":True},
+                {"id":"speaking","type":"speaking","instruction_fr":"Joue le dialogue en prenant le rôle A ou B.","enabled":True}
+            ],
+            "quiz":quiz,
+            "teacher_notes_fr":"Contenu pédagogique de base généré pour l’application. Vérifier la progression, les traductions et les réponses avant une diffusion scolaire à grande échelle."
+        })
+
+# Add verb list and grammar reference
+irregular_verbs = [
+["be","was/were","been","être"],["become","became","become","devenir"],["begin","began","begun","commencer"],
+["break","broke","broken","casser"],["bring","brought","brought","apporter"],["buy","bought","bought","acheter"],
+["come","came","come","venir"],["do","did","done","faire"],["drink","drank","drunk","boire"],
+["eat","ate","eaten","manger"],["find","found","found","trouver"],["get","got","got/gotten","obtenir / devenir"],
+["give","gave","given","donner"],["go","went","gone","aller"],["have","had","had","avoir"],
+["know","knew","known","savoir / connaître"],["make","made","made","faire / fabriquer"],["read","read","read","lire"],
+["run","ran","run","courir"],["say","said","said","dire"],["see","saw","seen","voir"],
+["speak","spoke","spoken","parler"],["take","took","taken","prendre"],["think","thought","thought","penser"],
+["write","wrote","written","écrire"],["choose","chose","chosen","choisir"],["teach","taught","taught","enseigner"],
+["wear","wore","worn","porter un vêtement"],["win","won","won","gagner"],["leave","left","left","partir / quitter"]
+]
+grammar_reference = [
+{"id":"present_simple","title":"Présent simple","level":"6e–5e","rule_fr":"Habitudes et vérités générales. À he/she/it, le verbe prend généralement -s.","example_en":"She plays tennis every Saturday.","example_fr":"Elle joue au tennis tous les samedis."},
+{"id":"be_present","title":"Verbe be au présent","level":"6e","rule_fr":"I am, you are, he/she/it is, we are, they are.","example_en":"They are at school.","example_fr":"Ils sont à l’école."},
+{"id":"questions_do","title":"Questions avec do/does","level":"5e","rule_fr":"Do + sujet + base verbale ; does à la troisième personne du singulier.","example_en":"Does he like music?","example_fr":"Aime-t-il la musique ?"},
+{"id":"present_continuous","title":"Présent en -ing","level":"5e–4e","rule_fr":"Be au présent + verbe en -ing pour une action en cours.","example_en":"We are studying now.","example_fr":"Nous sommes en train d’étudier."},
+{"id":"past_simple","title":"Prétérit simple","level":"4e–3e","rule_fr":"Action terminée dans le passé. Verbes réguliers en -ed, verbes irréguliers à mémoriser.","example_en":"They went to the museum yesterday.","example_fr":"Ils sont allés au musée hier."},
+{"id":"comparatives","title":"Comparatif et superlatif","level":"4e","rule_fr":"Comparer : -er than ou more … than ; superlatif : the -est ou the most …","example_en":"This book is more interesting than that one.","example_fr":"Ce livre est plus intéressant que celui-là."},
+{"id":"going_to","title":"Futur avec be going to","level":"4e","rule_fr":"Be going to + base verbale pour une intention ou un projet.","example_en":"I am going to visit my cousin.","example_fr":"Je vais rendre visite à mon cousin."},
+{"id":"present_perfect","title":"Present perfect","level":"3e–2nde","rule_fr":"Have/has + participe passé ; expériences ou résultats liés au présent.","example_en":"I have never tried sushi.","example_fr":"Je n’ai jamais goûté de sushi."},
+{"id":"first_conditional","title":"Premier conditionnel","level":"3e","rule_fr":"If + présent, will + base verbale pour une condition réaliste.","example_en":"If it rains, we will stay inside.","example_fr":"S’il pleut, nous resterons à l’intérieur."},
+{"id":"relative_clauses","title":"Propositions relatives","level":"2nde","rule_fr":"Who pour les personnes, which pour les choses, where pour les lieux.","example_en":"The woman who teaches us is very kind.","example_fr":"La femme qui nous enseigne est très gentille."},
+{"id":"second_conditional","title":"Second conditionnel","level":"1re","rule_fr":"If + prétérit, would + base verbale pour une hypothèse.","example_en":"If I had a car, I would travel more.","example_fr":"Si j’avais une voiture, je voyagerais davantage."},
+{"id":"passive_voice","title":"Voix passive","level":"1re","rule_fr":"Be conjugué + participe passé ; on met l’accent sur l’action ou son résultat.","example_en":"The museum was opened in 1902.","example_fr":"Le musée a été ouvert en 1902."},
+{"id":"concession","title":"Concession et connecteurs","level":"Terminale","rule_fr":"Although/even though introduisent une concession ; however/nevertheless opposent des idées.","example_en":"Although it was difficult, we succeeded.","example_fr":"Bien que cela ait été difficile, nous avons réussi."},
+{"id":"third_conditional","title":"Troisième conditionnel","level":"Terminale","rule_fr":"If + past perfect, would have + participe passé pour imaginer un passé différent.","example_en":"If I had left earlier, I would have caught the train.","example_fr":"Si j’étais parti plus tôt, j’aurais attrapé le train."}
+]
+
+dataset = {
+    "app_name":"English Boost MZ",
+    "language":"en",
+    "interface_language":"fr",
+    "version":"1.0.0",
+    "description_fr":"Base pédagogique structurée pour les classes de 6e à Terminale, avec vocabulaire, phrases, grammaire, dialogues et quiz.",
+    "levels":levels,
+    "themes":[{"id":tid,"label":label} for tid,label in themes],
+    "lessons":lessons,
+    "grammar_reference":grammar_reference,
+    "irregular_verbs":[{"base":v[0],"past_simple":v[1],"past_participle":v[2],"translation_fr":v[3]} for v in irregular_verbs],
+    "integration_notes_fr":[
+        "Importer ce fichier JSON comme source de contenus pédagogiques ou le convertir en documents Firestore.",
+        "Utiliser class_level pour filtrer par classe et cefr_level pour afficher le niveau indicatif.",
+        "Chaque leçon est identifiée de façon stable par le champ id.",
+        "Les champs example_en et example_fr peuvent alimenter les cartes mémoire et les exercices de traduction.",
+        "Les dialogues peuvent être utilisés pour la lecture audio, le jeu de rôle et le shadowing.",
+        "Les réponses libres doivent être évaluées avec une grille explicite ou un service IA, et non uniquement par comparaison exacte.",
+        "Les contenus sont une base de départ et doivent être relus par un enseignant avant une utilisation scolaire à grande échelle."
+    ]
+}
+
+json_path=os.path.join(outdir,"english_boost_mz_curriculum.json")
+with open(json_path,"w",encoding="utf-8") as f:
+    json.dump(dataset,f,ensure_ascii=False,indent=2)
+
+# Human-readable overview and integration guide
+readme = """# English Boost MZ — contenus pédagogiques
+
+## Contenu inclus
+- 7 niveaux : 6e, 5e, 4e, 3e, Seconde, Première, Terminale.
+- 10 thèmes par niveau, soit 70 fiches de leçon.
+- 8 entrées de vocabulaire par leçon, avec traduction et exemple bilingue.
+- 5 phrases utiles bilingues par leçon.
+- 1 point de grammaire adapté au niveau.
+- 1 dialogue bilingue par thème et niveau, de longueur progressive.
+- 5 activités d’évaluation par leçon.
+- Référentiel de grammaire et 30 verbes irréguliers.
+
+## Thèmes
+Vie quotidienne, voyages, histoire, loisirs, sport, musique, restaurant, nourriture, travail et métiers, vie scolaire et relations.
+
+## Fichier principal
+`english_boost_mz_curriculum.json`
+
+## Intégration dans Google AI Studio
+1. Importer le JSON dans le projet comme fichier de données.
+2. Créer un service `src/services/contentService.js` qui charge les leçons.
+3. Filtrer `lessons` par `class_level`, `cefr_level` et `theme_id`.
+4. Alimenter les écrans Vocabulaire, Phrases, Grammaire, Dialogue, Dictée, Flashcards et Quiz.
+5. Si le contenu est stocké dans Firestore, importer les leçons dans `content/{contentId}` depuis un script d’administration ou un environnement sécurisé. Ne jamais placer une clé Admin SDK dans le navigateur.
+6. Ajouter un champ `published: true/false` et une validation éditoriale avant publication si plusieurs contributeurs créent des contenus.
+
+## Structure d’une leçon
+Chaque objet de `lessons` contient :
+- `id`, `class_level`, `class_label`, `cefr_level`
+- `theme_id`, `theme_label`, `title`, `learning_objective`
+- `vocabulary[]`
+- `useful_phrases[]`
+- `grammar`
+- `dialogue.lines[]`
+- `activities[]`
+- `quiz[]`
+
+## Notes de qualité
+- Les niveaux CECRL sont indicatifs et doivent être ajustés selon les élèves.
+- La base constitue un socle initial. Faites relire les contenus et les traductions par un enseignant avant une diffusion large.
+- Les réponses libres nécessitent une évaluation souple : accepter des variantes correctes et tenir compte de la ponctuation.
+- Pour l’audio et la prononciation, distinguer la synthèse vocale d’une véritable évaluation de prononciation.
+"""
+readme_path=os.path.join(outdir,"LISEZ_MOI_FR.md")
+with open(readme_path,"w",encoding="utf-8") as f:
+    f.write(readme)
+
+# Create CSV lesson index for easy spreadsheet review
+import csv
+csv_path=os.path.join(outdir,"index_lecons.csv")
+with open(csv_path,"w",encoding="utf-8-sig",newline="") as f:
+    writer=csv.writer(f,delimiter=";")
+    writer.writerow(["id","classe","niveau_CECRL","theme","titre","objectif","duree_minutes"])
+    for l in lessons:
+        writer.writerow([l["id"],l["class_label"],l["cefr_level"],l["theme_label"],l["title"],l["learning_objective"],l["estimated_minutes"]])
+
+# Integration prompt for AI Studio
+prompt = """Tu es un ingénieur React/Firebase et un concepteur pédagogique spécialisé en apprentissage de l’anglais.
+Intègre le fichier `english_boost_mz_curriculum.json` dans le projet English Boost MZ existant sans reconstruire l’application à partir de zéro.
+
+Objectifs :
+1. Créer un service de données réutilisable qui charge les leçons depuis le JSON pendant le développement.
+2. Prévoir une migration possible vers Firestore, sans exposer de clé privée côté client.
+3. Construire des filtres par classe (6e, 5e, 4e, 3e, Seconde, Première, Terminale), niveau CECRL et thème.
+4. Relier les contenus aux écrans Vocabulaire, Phrases utiles, Grammaire, Dialogue, Dictée, Flashcards et Quiz.
+5. Pour les dialogues, permettre d’écouter chaque réplique et de jouer le rôle A ou B. Si la synthèse vocale du navigateur est utilisée, la présenter comme lecture audio, et non comme évaluation de prononciation.
+6. Créer des exercices interactifs avec correction, explication et suivi de progression. Pour les réponses libres, accepter les variantes correctes plutôt que d’exiger une correspondance exacte.
+7. Afficher les traductions françaises comme aide que l’élève peut masquer pour s’autoévaluer.
+8. Respecter le niveau de difficulté de chaque classe et offrir un mode de révision mélangé.
+9. Ajouter des états de chargement, d’erreur et de contenu vide.
+10. Ajouter des tests pour le filtrage des leçons, la validation des réponses et la progression.
+
+Commence par inspecter le projet et son architecture. Implémente par étapes, exécute `npm run build` si l’environnement le permet et rapporte uniquement les résultats réellement vérifiés. Ne déclare pas une intégration Firebase opérationnelle tant que la configuration et les règles n’ont pas été testées."""
+prompt_path=os.path.join(outdir,"PROMPT_GOOGLE_AI_STUDIO_FR.txt")
+with open(prompt_path,"w",encoding="utf-8") as f:
+    f.write(prompt)
+
+zip_path="/mnt/data/English_Boost_MZ_Contenus_Pedagogiques_FR.zip"
+with zipfile.ZipFile(zip_path,"w",zipfile.ZIP_DEFLATED) as z:
+    for fn in [json_path,readme_path,csv_path,prompt_path]:
+        z.write(fn,arcname=os.path.basename(fn))
+
+print("Pack pédagogique créé.")
+print(f"Leçons : {len(lessons)}")
+print(f"Thèmes : {len(themes)}")
+print(f"Entrées de vocabulaire : {sum(len(l['vocabulary']) for l in lessons)}")
+print(f"Phrases utiles : {sum(len(l['useful_phrases']) for l in lessons)}")
+print(f"Répliques de dialogue : {sum(len(l['dialogue']['lines']) for l in lessons)}")
+print(f"Fichier ZIP : {zip_path}")

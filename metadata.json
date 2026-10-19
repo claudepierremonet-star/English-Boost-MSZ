@@ -1,0 +1,6 @@
+{
+  "name": "English Boost MSZ",
+  "description": "Application éditoriale et immersive de perfectionnement en anglais avancé (B1 à C2) avec analyse rhétorique, répétition espacée, dictée cadencée et studio d'élocution.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,37 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // User private profile document
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      // User private learning attempts subcollection
+      match /attempts/{attemptId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      // User private flashcard progress subcollection
+      match /flashcardProgress/{cardId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+    
+    // Public shared educational content (read-only for authenticated or all users)
+    match /content/{contentId} {
+      allow read: if true;
+      allow write: if false; // Only admin via backend
+    }
+    
+    // Public daily challenges (read-only)
+    match /dailyChallenges/{date} {
+      allow read: if true;
+      allow write: if false;
+    }
+    
+    // Default deny all other paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
