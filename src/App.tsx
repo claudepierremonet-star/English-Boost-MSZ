@@ -16,6 +16,7 @@ import { ProfileModal } from './components/ProfileModal';
 import { FloralBorderFrame } from './components/FloralBorderFrame';
 import { ThemeSelectorModal } from './components/ThemeSelectorModal';
 import { SchoolCurriculumView } from './components/SchoolCurriculumView';
+import { useSyncStatus } from './offline/useSyncStatus';
 import {
   getLocalUserProfile,
   subscribeToAuthState,
@@ -28,6 +29,7 @@ import type { StudyFolio, CurioWord } from './data/curriculum';
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabKey>('accueil');
   const [user, setUser] = useState<UserProfile>(getLocalUserProfile());
+  const { isOnline, pendingCount, triggerSync } = useSyncStatus();
   const [currentLevel, setCurrentLevel] = useState<CEFRLevel>('C1');
   const [heroPhotoUrl, setHeroPhotoUrl] = useState<string>(user.heroImageURL);
 
@@ -123,8 +125,35 @@ export default function App() {
         onNavigateCursus={() => setActiveTab('cursus')}
       />
 
+      {/* Offline Alert Banner */}
+      {!isOnline && (
+        <div className="fixed top-16 left-0 right-0 z-30 bg-amber-950/95 border-b border-amber-500/50 px-4 py-2 text-center text-xs text-amber-200 font-medium flex items-center justify-center gap-2 backdrop-blur-md shadow-lg animate-fadeIn">
+          <span className="material-symbols-outlined text-sm text-amber-400">wifi_off</span>
+          <span>
+            Mode Hors-Ligne activé : vos leçons, quiz et scores sont enregistrés sur <strong>IndexedDB local</strong> et seront synchronisés automatiquement à la reconnexion.
+          </span>
+        </div>
+      )}
+
+      {/* Pending Sync Notification Banner (when online with pending queue items) */}
+      {isOnline && pendingCount > 0 && (
+        <div className="fixed top-16 left-0 right-0 z-30 bg-[#191f2f]/95 border-b border-[#f2ca50]/50 px-4 py-2 text-center text-xs text-[#dce2f8] font-medium flex items-center justify-center gap-3 backdrop-blur-md shadow-lg animate-fadeIn">
+          <span className="material-symbols-outlined text-sm text-[#f2ca50] animate-pulse">cloud_upload</span>
+          <span>
+            <strong>{pendingCount}</strong> modification(s) enregistrée(s) hors-ligne en attente de synchronisation Cloud Firestore.
+          </span>
+          <button
+            type="button"
+            onClick={() => triggerSync()}
+            className="px-2.5 py-0.5 rounded-full bg-[#f2ca50] text-[#3c2f00] text-[10px] font-bold uppercase tracking-wider hover:bg-[#ffe088] transition-colors shadow-sm"
+          >
+            Synchroniser maintenant
+          </button>
+        </div>
+      )}
+
       {/* Main Routed Content */}
-      <main className="flex-1 w-full pt-16 pb-20">
+      <main className={`flex-1 w-full pb-20 ${!isOnline || (isOnline && pendingCount > 0) ? 'pt-24' : 'pt-16'}`}>
         {activeTab === 'accueil' && (
           <div className="flex flex-col w-full max-w-4xl mx-auto animate-fadeIn">
             {/* Monumental Hero Section with background-clip text & scroll zoom */}

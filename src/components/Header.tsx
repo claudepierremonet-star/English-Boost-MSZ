@@ -1,6 +1,8 @@
 import React from 'react';
 import type { UserProfile, CEFRLevel } from '../firebase/types';
 
+import { useSyncStatus } from '../offline/useSyncStatus';
+
 interface HeaderProps {
   user: UserProfile;
   currentLevel: CEFRLevel;
@@ -18,6 +20,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenThemeSelector,
   onNavigateCursus
 }) => {
+  const { isOnline, isSyncing, pendingCount, triggerSync } = useSyncStatus();
+
   return (
     <header className="fixed top-0 w-full z-40 pt-safe bg-[#0c1322]/85 backdrop-blur-xl border-b border-[#232a3a]/80 shadow-[0_4px_20px_rgba(0,0,0,0.5)]">
       <div className="max-w-5xl mx-auto h-16 px-4 sm:px-6 flex items-center justify-between gap-4">
@@ -38,8 +42,38 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Level, Theme Palette & Profile Zone */}
-        <div className="flex items-center gap-2.5">
+        {/* Level, Theme Palette, Network State & Profile Zone */}
+        <div className="flex items-center gap-2">
+          {/* Offline / Auto-Sync Pill */}
+          {!isOnline ? (
+            <button
+              type="button"
+              onClick={triggerSync}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-950/80 border border-amber-500/50 text-[11px] text-amber-300 font-mono font-bold shadow-sm"
+              title="Mode Hors-Ligne : les exercices et le score sont enregistrés dans IndexedDB local"
+            >
+              <span className="material-symbols-outlined text-[13px]">wifi_off</span>
+              <span className="hidden sm:inline">Hors-Ligne (IDB)</span>
+            </button>
+          ) : isSyncing ? (
+            <div
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-[#232a3a] border border-[#f2ca50]/40 text-[11px] text-[#f2ca50] font-mono"
+              title="Synchronisation automatique avec Cloud Firestore..."
+            >
+              <span className="material-symbols-outlined text-[13px] animate-spin">sync</span>
+              <span className="hidden sm:inline">Synchro...</span>
+            </div>
+          ) : pendingCount > 0 ? (
+            <button
+              type="button"
+              onClick={triggerSync}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#f2ca50]/20 hover:bg-[#f2ca50]/30 border border-[#f2ca50]/50 text-[11px] text-[#f2ca50] font-mono font-bold transition-all active:scale-95"
+              title={`${pendingCount} opération(s) en attente. Cliquer pour synchroniser avec Cloud Firestore.`}
+            >
+              <span className="material-symbols-outlined text-[13px]">cloud_upload</span>
+              <span>{pendingCount} à synchroniser</span>
+            </button>
+          ) : null}
           {/* Cursus 6e-Tle quick badge */}
           {onNavigateCursus && (
             <button

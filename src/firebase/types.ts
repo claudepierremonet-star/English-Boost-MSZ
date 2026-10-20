@@ -13,6 +13,25 @@ export interface UserStats {
   lastActiveDate: string;
 }
 
+export type BadgeTier = 'bronze' | 'silver' | 'gold' | 'platinum' | 'oxford';
+export type BadgeCategory = 'xp' | 'streak' | 'lessons' | 'dictation' | 'quiz' | 'mastery';
+
+export interface AcademicBadge {
+  id: string;
+  title: string;
+  latinTitle: string;
+  tier: BadgeTier;
+  category: BadgeCategory;
+  description: string;
+  icon: string;
+  requirementLabel: string;
+  requiredTarget: number;
+  currentProgress: number;
+  isUnlocked: boolean;
+  unlockedAt?: string;
+  xpReward: number;
+}
+
 export interface UserProfile {
   uid: string;
   displayName: string;
@@ -22,6 +41,7 @@ export interface UserProfile {
   heroImageURL: string;
   stats: UserStats;
   isAnonymous?: boolean;
+  unlockedBadgeIds?: string[];
 }
 
 export interface LearningAttempt {

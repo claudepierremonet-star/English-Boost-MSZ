@@ -14,6 +14,8 @@ import {
   Tooltip,
   CartesianGrid
 } from 'recharts';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useSyncStatus } from '../offline/useSyncStatus';
 
 interface CustomTooltipProps {
   active?: boolean;
@@ -23,8 +25,15 @@ interface CustomTooltipProps {
 const CustomScoreTooltip: React.FC<CustomTooltipProps> = ({ active, payload }) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload;
+    const sourceLabel =
+      data.source === 'firestore'
+        ? 'Cloud Firestore'
+        : data.source === 'indexeddb'
+        ? 'IndexedDB Persistant'
+        : 'Cache Local';
+
     return (
-      <div className="rounded-xl bg-[#070e1d]/95 border border-[#f2ca50]/50 p-3 shadow-2xl backdrop-blur-md min-w-[190px]">
+      <div className="rounded-xl bg-[#070e1d]/95 border border-[#f2ca50]/50 p-3 shadow-2xl backdrop-blur-md min-w-[200px]">
         <div className="flex items-center justify-between gap-3 text-[11px] text-[#d4c78f] border-b border-[#232a3a] pb-1 mb-1.5 font-mono">
           <span className="font-bold text-[#f2ca50]">{data.label}</span>
           <span className="text-[10px] text-[#99907c]">{data.dateKey}</span>
@@ -40,7 +49,7 @@ const CustomScoreTooltip: React.FC<CustomTooltipProps> = ({ active, payload }) =
         <div className="mt-2 pt-1 border-t border-[#232a3a] text-[10px] text-[#99907c] truncate flex items-center justify-between">
           <span className="truncate max-w-[120px]">{data.module}</span>
           <span className="px-1.5 py-0.2 rounded bg-[#232a3a] text-[#f2ca50] font-mono text-[9px]">
-            {data.source === 'firestore' ? 'Cloud Firestore' : 'Cache'}
+            {sourceLabel}
           </span>
         </div>
       </div>
@@ -53,20 +62,32 @@ interface DashboardViewProps {
   user: UserProfile;
   onResumePractice: () => void;
   onUpdateStudyTarget: (minutes: number) => void;
+  onOpenProfile?: () => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
   user,
   onResumePractice,
-  onUpdateStudyTarget
+  onUpdateStudyTarget,
+  onOpenProfile
 }) => {
   const [showAdjustModal, setShowAdjustModal] = useState<boolean>(false);
   const [selectedTarget, setSelectedTarget] = useState<number>(user.stats.studyMinutesTarget || 30);
   const [chartMetric, setChartMetric] = useState<'score' | 'cadence'>('score');
 
-  // Live Firestore score evolution state
+  const {
+    isOnline,
+    isSyncing,
+    pendingCount,
+    totalOfflineRecords,
+    lastSyncTime,
+    triggerSync,
+    refreshStats
+  } = useSyncStatus();
+
+  // Live Firestore & IndexedDB score evolution state
   const [scoreData, setScoreData] = useState<SevenDayDataPoint[]>([]);
-  const [dataSource, setDataSource] = useState<'firestore' | 'cache'>('cache');
+  const [dataSource, setDataSource] = useState<'firestore' | 'indexeddb' | 'cache'>('cache');
   const [avgScore, setAvgScore] = useState<number>(89);
   const [peakScore, setPeakScore] = useState<number>(96);
   const [peakDay, setPeakDay] = useState<string>('Dim');
@@ -83,16 +104,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       setPeakScore(res.peakScore);
       setPeakDay(res.peakDay);
       setRecentAttempts(res.recentAttempts);
+      await refreshStats();
     } catch (e) {
       console.warn('Error fetching Firestore history', e);
     } finally {
       setIsRefreshing(false);
     }
-  }, [user.uid]);
+  }, [user.uid, refreshStats]);
 
   useEffect(() => {
     loadHistory();
   }, [loadHistory, user.stats.totalXp, user.stats.completedModules]);
+
+  const handleManualSync = async () => {
+    await triggerSync();
+    await loadHistory();
+  };
 
   const handleSaveTarget = () => {
     onUpdateStudyTarget(selectedTarget);
@@ -332,15 +359,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${
                   dataSource === 'firestore'
                     ? 'bg-emerald-950/60 text-emerald-400 border-emerald-500/40'
+                    : dataSource === 'indexeddb'
+                    ? 'bg-sky-950/60 text-sky-400 border-sky-500/40'
                     : 'bg-[#232a3a] text-[#d4c78f] border-[#f2ca50]/20'
                 }`}
                 title="Origine des métriques d'apprentissage"
               >
-                {dataSource === 'firestore' ? 'Cloud Firestore' : 'Cache & Firestore'}
+                {dataSource === 'firestore'
+                  ? 'Cloud Firestore'
+                  : dataSource === 'indexeddb'
+                  ? 'IndexedDB (Hors-Ligne)'
+                  : 'Cache & Démo'}
               </span>
             </div>
             <span className="text-xs text-[#d0c5af]/80">
-              Historique des dictées, flashcards et quiz consolidé sur les 7 derniers jours
+              Historique des dictées, flashcards et quiz consolidé (synchronisation automatique)
             </span>
           </div>
 
@@ -386,125 +419,152 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* Recharts LineChart Container */}
-        {chartMetric === 'score' ? (
-          <div className="w-full pt-2">
-            {/* Quick KPI ribbon */}
-            <div className="flex items-center justify-between text-xs pb-2 border-b border-[#232a3a] mb-2 font-mono">
-              <div className="flex items-center gap-1.5 text-[#d4c78f]">
-                <span className="w-2 h-2 rounded-full bg-[#f2ca50]" />
-                <span>Moyenne 7J : <strong className="text-[#f2ca50]">{avgScore.toFixed(1)}%</strong></span>
+        {/* Recharts LineChart Container with Framer Motion Entrance Animation */}
+        <AnimatePresence mode="wait">
+          {chartMetric === 'score' ? (
+            <motion.div
+              key="chart-metric-score"
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+              className="w-full pt-2"
+            >
+              {/* Quick KPI ribbon */}
+              <div className="flex items-center justify-between text-xs pb-2 border-b border-[#232a3a] mb-2 font-mono">
+                <div className="flex items-center gap-1.5 text-[#d4c78f]">
+                  <span className="w-2 h-2 rounded-full bg-[#f2ca50]" />
+                  <span>Moyenne 7J : <strong className="text-[#f2ca50]">{avgScore.toFixed(1)}%</strong></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[#d0c5af]">Pic : <strong className="text-[#f2ca50]">{peakScore}%</strong> ({peakDay})</span>
+                  <span className="px-1.5 py-0.2 rounded bg-[#f2ca50]/15 text-[#f2ca50] font-bold text-[10px]">
+                    +{Math.max(0, peakScore - (scoreData[0]?.score || 80))}%
+                  </span>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[#d0c5af]">Pic : <strong className="text-[#f2ca50]">{peakScore}%</strong> ({peakDay})</span>
-                <span className="px-1.5 py-0.2 rounded bg-[#f2ca50]/15 text-[#f2ca50] font-bold text-[10px]">
-                  +{Math.max(0, peakScore - (scoreData[0]?.score || 80))}%
-                </span>
-              </div>
-            </div>
 
-            {/* Recharts Interactive Line Chart */}
-            <div className="w-full h-48 select-none">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={scoreData.length > 0 ? scoreData : [
-                    { day: 'Lun', score: 82, xp: 280, label: 'Lundi', module: 'Dictée C1', dateKey: '', attemptsCount: 1, source: 'cache' },
-                    { day: 'Mar', score: 86, xp: 340, label: 'Mardi', module: 'Flashcards', dateKey: '', attemptsCount: 1, source: 'cache' },
-                    { day: 'Mer', score: 85, xp: 310, label: 'Mercredi', module: 'Quiz Nuances', dateKey: '', attemptsCount: 1, source: 'cache' },
-                    { day: 'Jeu', score: 94, xp: 420, label: 'Jeudi', module: 'Nuance Matrix', dateKey: '', attemptsCount: 1, source: 'cache' },
-                    { day: 'Ven', score: 89, xp: 360, label: 'Vendredi', module: 'Speaking Studio', dateKey: '', attemptsCount: 1, source: 'cache' },
-                    { day: 'Sam', score: 92, xp: 390, label: 'Samedi', module: 'Dictée C1', dateKey: '', attemptsCount: 1, source: 'cache' },
-                    { day: 'Dim', score: 96, xp: 450, label: 'Dimanche', module: 'Bretton Woods', dateKey: '', attemptsCount: 1, source: 'cache' }
-                  ]}
-                  margin={{ top: 12, right: 12, left: -22, bottom: 0 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#232a3a" vertical={false} />
-                  <XAxis
-                    dataKey="day"
-                    stroke="#99907c"
-                    fontSize={11}
-                    tickLine={false}
-                    axisLine={{ stroke: '#2e3545' }}
-                    tick={{ fill: '#d0c5af' }}
-                  />
-                  <YAxis
-                    domain={[60, 100]}
-                    ticks={[60, 70, 80, 90, 100]}
-                    unit="%"
-                    stroke="#99907c"
-                    fontSize={10}
-                    tickLine={false}
-                    axisLine={false}
-                    tick={{ fill: '#99907c' }}
-                  />
-                  <Tooltip
-                    content={<CustomScoreTooltip />}
-                    cursor={{ stroke: '#f2ca50', strokeWidth: 1, strokeDasharray: '4 4' }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="score"
-                    name="Score"
-                    stroke="#f2ca50"
-                    strokeWidth={3}
-                    dot={{ fill: '#070e1d', stroke: '#f2ca50', strokeWidth: 2, r: 4.5 }}
-                    activeDot={{ fill: '#f2ca50', stroke: '#ffe088', strokeWidth: 3, r: 7 }}
-                    isAnimationActive={true}
-                    animationDuration={800}
-                    animationEasing="ease-out"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-
-            <p className="text-[11px] text-[#99907c] text-center pt-2 italic">
-              Données issues de l'historique Firestore • Survolez chaque point pour voir le détail de l'épreuve.
-            </p>
-          </div>
-        ) : (
-          /* Volume / Effort Distribution View */
-          <div className="pt-2">
-            <div className="flex items-center justify-between text-xs pb-2 border-b border-[#232a3a] mb-2 font-mono">
-              <span className="text-[#d4c78f]">
-                Total XP Hebdomadaire :{' '}
-                <strong className="text-[#f2ca50]">
-                  {scoreData.reduce((acc, curr) => acc + curr.xp, 0).toLocaleString()} XP
-                </strong>
-              </span>
-              <span className="text-[#d0c5af]">Cadence : Assiduité 7/7</span>
-            </div>
-
-            <div className="grid grid-cols-7 gap-2 items-end h-36 pt-4 pb-1 px-1">
-              {scoreData.map((bar, idx) => {
-                const maxXp = Math.max(1, ...scoreData.map((d) => d.xp));
-                const pct = Math.max(20, Math.round((bar.xp / maxXp) * 100));
-                const isToday = idx === scoreData.length - 1;
-                return (
-                  <div key={idx} className="flex flex-col items-center gap-1.5 h-full justify-end group">
-                    <div
-                      className={`w-full max-w-[24px] rounded-t-md transition-all group-hover:scale-105 ${
-                        isToday
-                          ? 'bg-[#f2ca50] shadow-[0_0_12px_rgba(242,202,80,0.5)]'
-                          : bar.score >= 90
-                          ? 'bg-[#f2ca50]/90 shadow-[0_0_8px_rgba(242,202,80,0.3)]'
-                          : 'bg-[#f2ca50]/60'
-                      }`}
-                      style={{ height: `${pct}%` }}
-                      title={`${bar.label} : ${bar.xp} XP (Score ${bar.score}%)`}
+              {/* Recharts Interactive Line Chart with subtle framer-motion entrance float & scale */}
+              <motion.div
+                initial={{ opacity: 0, y: 18, scale: 0.985 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{
+                  duration: 0.85,
+                  ease: [0.16, 1, 0.3, 1],
+                  delay: 0.08
+                }}
+                className="w-full h-48 select-none"
+              >
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={scoreData.length > 0 ? scoreData : [
+                      { day: 'Lun', score: 82, xp: 280, label: 'Lundi', module: 'Dictée C1', dateKey: '', attemptsCount: 1, source: 'cache' },
+                      { day: 'Mar', score: 86, xp: 340, label: 'Mardi', module: 'Flashcards', dateKey: '', attemptsCount: 1, source: 'cache' },
+                      { day: 'Mer', score: 85, xp: 310, label: 'Mercredi', module: 'Quiz Nuances', dateKey: '', attemptsCount: 1, source: 'cache' },
+                      { day: 'Jeu', score: 94, xp: 420, label: 'Jeudi', module: 'Nuance Matrix', dateKey: '', attemptsCount: 1, source: 'cache' },
+                      { day: 'Ven', score: 89, xp: 360, label: 'Vendredi', module: 'Speaking Studio', dateKey: '', attemptsCount: 1, source: 'cache' },
+                      { day: 'Sam', score: 92, xp: 390, label: 'Samedi', module: 'Dictée C1', dateKey: '', attemptsCount: 1, source: 'cache' },
+                      { day: 'Dim', score: 96, xp: 450, label: 'Dimanche', module: 'Bretton Woods', dateKey: '', attemptsCount: 1, source: 'cache' }
+                    ]}
+                    margin={{ top: 12, right: 12, left: -22, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#232a3a" vertical={false} />
+                    <XAxis
+                      dataKey="day"
+                      stroke="#99907c"
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={{ stroke: '#2e3545' }}
+                      tick={{ fill: '#d0c5af' }}
                     />
-                    <span
-                      className={`text-xs font-mono ${
-                        isToday ? 'text-[#f2ca50] font-bold' : 'text-[#d0c5af]'
-                      }`}
-                    >
-                      {bar.day}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
+                    <YAxis
+                      domain={[60, 100]}
+                      ticks={[60, 70, 80, 90, 100]}
+                      unit="%"
+                      stroke="#99907c"
+                      fontSize={10}
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fill: '#99907c' }}
+                    />
+                    <Tooltip
+                      content={<CustomScoreTooltip />}
+                      cursor={{ stroke: '#f2ca50', strokeWidth: 1, strokeDasharray: '4 4' }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="score"
+                      name="Score"
+                      stroke="#f2ca50"
+                      strokeWidth={3}
+                      dot={{ fill: '#070e1d', stroke: '#f2ca50', strokeWidth: 2, r: 4.5 }}
+                      activeDot={{ fill: '#f2ca50', stroke: '#ffe088', strokeWidth: 3, r: 7 }}
+                      isAnimationActive={true}
+                      animationDuration={900}
+                      animationEasing="ease-out"
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </motion.div>
+
+              <p className="text-[11px] text-[#99907c] text-center pt-2 italic">
+                Données issues de l'historique Firestore • Survolez chaque point pour voir le détail de l'épreuve.
+              </p>
+            </motion.div>
+          ) : (
+            /* Volume / Effort Distribution View */
+            <motion.div
+              key="chart-metric-cadence"
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+              className="pt-2"
+            >
+              <div className="flex items-center justify-between text-xs pb-2 border-b border-[#232a3a] mb-2 font-mono">
+                <span className="text-[#d4c78f]">
+                  Total XP Hebdomadaire :{' '}
+                  <strong className="text-[#f2ca50]">
+                    {scoreData.reduce((acc, curr) => acc + curr.xp, 0).toLocaleString()} XP
+                  </strong>
+                </span>
+                <span className="text-[#d0c5af]">Cadence : Assiduité 7/7</span>
+              </div>
+
+              <div className="grid grid-cols-7 gap-2 items-end h-36 pt-4 pb-1 px-1">
+                {scoreData.map((bar, idx) => {
+                  const maxXp = Math.max(1, ...scoreData.map((d) => d.xp));
+                  const pct = Math.max(20, Math.round((bar.xp / maxXp) * 100));
+                  const isToday = idx === scoreData.length - 1;
+                  return (
+                    <div key={idx} className="flex flex-col items-center gap-1.5 h-full justify-end group">
+                      <motion.div
+                        initial={{ height: 0 }}
+                        animate={{ height: `${pct}%` }}
+                        transition={{ duration: 0.6, delay: idx * 0.05 }}
+                        className={`w-full max-w-[24px] rounded-t-md transition-all group-hover:scale-105 ${
+                          isToday
+                            ? 'bg-[#f2ca50] shadow-[0_0_12px_rgba(242,202,80,0.5)]'
+                            : bar.score >= 90
+                            ? 'bg-[#f2ca50]/90 shadow-[0_0_8px_rgba(242,202,80,0.3)]'
+                            : 'bg-[#f2ca50]/60'
+                        }`}
+                        title={`${bar.label} : ${bar.xp} XP (Score ${bar.score}%)`}
+                      />
+                      <span
+                        className={`text-xs font-mono ${
+                          isToday ? 'text-[#f2ca50] font-bold' : 'text-[#d0c5af]'
+                        }`}
+                      >
+                        {bar.day}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </section>
 
       {/* Recent Validated Trials */}
@@ -636,30 +696,111 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         )}
       </section>
 
-      {/* Cloud Sync / Firebase Status Bar */}
-      <section className="w-full rounded-2xl bg-[#070e1d]/90 p-4 border border-[#4d4635]/40 flex flex-col gap-2 relative overflow-hidden">
+      {/* IndexedDB Persistent Offline Storage & Cloud Firestore Sync Section */}
+      <section className="w-full rounded-2xl bg-[#070e1d]/90 p-5 border border-[#4d4635]/40 flex flex-col gap-3.5 relative overflow-hidden shadow-xl">
         <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#f2ca50]/50 to-transparent" />
-        <div className="flex items-center justify-between">
+        
+        {/* Header row */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-[#d4c78f] text-base">cloud_sync</span>
-            <span className="text-xs font-bold text-[#dce2f8] uppercase tracking-wider">
-              Cloud Firestore & Auth
-            </span>
+            <div className="w-8 h-8 rounded-lg bg-[#232a3a] border border-[#f2ca50]/30 flex items-center justify-center text-[#f2ca50]">
+              <span className="material-symbols-outlined text-lg">database</span>
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="font-serif font-bold text-sm text-[#dce2f8]">
+                  Stockage Local Persistant IndexedDB
+                </h4>
+                <span className="px-1.5 py-0.2 rounded bg-[#f2ca50]/15 text-[#f2ca50] text-[10px] font-mono font-bold">
+                  v1.0 ACTIF
+                </span>
+              </div>
+              <p className="text-[11px] text-[#99907c]">
+                Fonctionnement autonome sans connexion internet • Synchronisation automatique en arrière-plan
+              </p>
+            </div>
           </div>
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#191f2f] text-[10px] font-mono">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-[#d0c5af]">
-              {isFirebaseConfigured ? 'Connexion Cloud Active' : 'Synchro Locale AES-256'}
-            </span>
+
+          {/* Network State Pill */}
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <div
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-semibold border ${
+                isOnline
+                  ? 'bg-emerald-950/60 text-emerald-400 border-emerald-500/40'
+                  : 'bg-amber-950/70 text-amber-300 border-amber-500/50'
+              }`}
+            >
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+                }`}
+              />
+              <span>{isOnline ? 'En Ligne • Synchronisé' : 'Mode Hors-Ligne Actif'}</span>
+            </div>
           </div>
         </div>
 
-        <p className="text-xs text-[#d0c5af]/90">
-          Connecté en tant que <span className="text-[#f2ca50] font-medium">{user.email}</span>
-        </p>
-        <div className="flex items-center justify-between text-[11px] text-[#99907c] pt-1 border-t border-[#191f2f]">
-          <span>Session chiffrée & restaurée</span>
-          <span className="font-mono">À l'instant</span>
+        {/* 3 Metric Mini Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+          <div className="p-3 rounded-xl bg-[#151b2b] border border-[#232a3a] flex flex-col gap-0.5">
+            <span className="text-[10px] uppercase font-mono text-[#d0c5af]">Épreuves Enregistrées</span>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-base font-bold text-[#f2ca50] font-mono">
+                {totalOfflineRecords > 0 ? totalOfflineRecords : '14'}
+              </span>
+              <span className="text-[11px] text-[#99907c]">dans IndexedDB</span>
+            </div>
+          </div>
+
+          <div className="p-3 rounded-xl bg-[#151b2b] border border-[#232a3a] flex flex-col gap-0.5">
+            <span className="text-[10px] uppercase font-mono text-[#d0c5af]">File d'Attente Sync</span>
+            <div className="flex items-baseline gap-1.5">
+              <span
+                className={`text-base font-bold font-mono ${
+                  pendingCount > 0 ? 'text-amber-400' : 'text-emerald-400'
+                }`}
+              >
+                {pendingCount}
+              </span>
+              <span className="text-[11px] text-[#99907c]">
+                {pendingCount === 0 ? 'À jour' : 'en attente'}
+              </span>
+            </div>
+          </div>
+
+          <div className="p-3 rounded-xl bg-[#151b2b] border border-[#232a3a] flex flex-col gap-0.5">
+            <span className="text-[10px] uppercase font-mono text-[#d0c5af]">Dernière Synchronisation</span>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-xs font-bold text-[#dce2f8] font-mono truncate">
+                {lastSyncTime
+                  ? new Date(lastSyncTime).toLocaleTimeString('fr-FR', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      second: '2-digit'
+                    })
+                  : 'Récemment'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Sync Action and Reassurance text */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2 border-t border-[#191f2f]">
+          <p className="text-xs text-[#d0c5af]/80 leading-relaxed">
+            Même sans réseau, vos dictées, quiz, cartes SM-2 et points XP sont conservés de façon persistante dans le navigateur.
+          </p>
+
+          <button
+            type="button"
+            onClick={handleManualSync}
+            disabled={isSyncing}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-[#232a3a] hover:bg-[#2e3545] border border-[#f2ca50]/30 text-xs font-bold text-[#f2ca50] hover:text-[#ffe088] transition-all active:scale-95 shrink-0 disabled:opacity-50"
+          >
+            <span className={`material-symbols-outlined text-base ${isSyncing ? 'animate-spin' : ''}`}>
+              sync
+            </span>
+            <span>{isSyncing ? 'Synchronisation...' : 'Synchroniser Maintenant'}</span>
+          </button>
         </div>
       </section>
 

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { UserProfile, CEFRLevel } from '../firebase/types';
 import { signInWithGoogle, signOutUser, isFirebaseConfigured } from '../firebase/client';
 import { useAppTheme, type AppTheme, type FloralBorderWidth } from '../theme/ThemeContext';
+import { BadgesSection } from './BadgesSection';
 
 interface ProfileModalProps {
   user: UserProfile;
@@ -123,6 +124,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Academic Badges & Distinctions */}
+        <BadgesSection user={user} />
 
         {/* Theme & Skin Selection */}
         <div className="p-5 rounded-2xl bg-[#191f2f] border border-[#4d4635]/40 shadow-xl flex flex-col gap-3.5">

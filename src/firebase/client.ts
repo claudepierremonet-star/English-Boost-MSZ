@@ -64,6 +64,17 @@ if (isFirebaseConfigured) {
   }
 }
 
+import {
+  saveAttemptToIndexedDB,
+  getAllAttemptsFromIndexedDB,
+  markAttemptsAsSyncedInIndexedDB,
+  enqueueSyncOperation,
+  saveProfileToIndexedDB,
+  saveFlashcardToIndexedDB
+} from '../offline/indexedDb';
+
+export { auth, db, storage };
+
 // Local storage keys for resilient fallback / offline operation
 const LOCAL_USER_KEY = 'eb_msz_user_profile';
 const LOCAL_ATTEMPTS_KEY = 'eb_msz_attempts';
@@ -178,10 +189,11 @@ export async function signOutUser(): Promise<void> {
  */
 export function subscribeToAuthState(callback: (profile: UserProfile | null) => void): () => void {
   if (isFirebaseConfigured && auth && db) {
+    const firestoreDb = db;
     return onAuthStateChanged(auth, async (user: User | null) => {
       if (user) {
         try {
-          const userRef = doc(db, 'users', user.uid);
+          const userRef = doc(firestoreDb, 'users', user.uid);
           const snap = await getDoc(userRef);
           if (snap.exists()) {
             const data = snap.data() as UserProfile;
@@ -216,14 +228,18 @@ export async function updateUserProfile(profile: Partial<UserProfile>): Promise<
     }
   };
   saveLocalUserProfile(updated);
+  saveProfileToIndexedDB(updated).catch(console.warn);
 
-  if (isFirebaseConfigured && db && auth?.currentUser) {
+  if (navigator.onLine && isFirebaseConfigured && db && auth?.currentUser) {
     try {
       const userRef = doc(db, 'users', auth.currentUser.uid);
       await updateDoc(userRef, profile as Record<string, unknown>);
     } catch (e) {
-      console.warn('Firestore update error:', e);
+      console.warn('Firestore update error, queuing sync:', e);
+      await enqueueSyncOperation('UPDATE_PROFILE', profile, auth.currentUser.uid);
     }
+  } else if (!navigator.onLine) {
+    await enqueueSyncOperation('UPDATE_PROFILE', profile, auth?.currentUser?.uid);
   }
 
   return updated;
@@ -231,7 +247,7 @@ export async function updateUserProfile(profile: Partial<UserProfile>): Promise<
 
 /**
  * Save an exercise / dictation / quiz attempt
- * Target collection: users/{uid}/attempts/{attemptId}
+ * Target: IndexedDB (persistent) + Cloud Firestore (users/{uid}/attempts/{attemptId})
  */
 export async function recordAttempt(attempt: Omit<LearningAttempt, 'attemptId' | 'completedAt'>): Promise<LearningAttempt> {
   const newAttempt: LearningAttempt = {
@@ -240,7 +256,10 @@ export async function recordAttempt(attempt: Omit<LearningAttempt, 'attemptId' |
     completedAt: new Date().toISOString()
   };
 
-  // 1. Save locally
+  // 1. Save directly into persistent IndexedDB (works 100% offline)
+  await saveAttemptToIndexedDB(newAttempt, false);
+
+  // 2. Also keep in localStorage as fallback
   try {
     const raw = localStorage.getItem(LOCAL_ATTEMPTS_KEY);
     const list: LearningAttempt[] = raw ? JSON.parse(raw) : [];
@@ -250,24 +269,32 @@ export async function recordAttempt(attempt: Omit<LearningAttempt, 'attemptId' |
     console.error('Local attempt save error', e);
   }
 
-  // 2. Update user stats
+  // 3. Update user stats locally and in IndexedDB
   const profile = getLocalUserProfile();
   profile.stats.weeklyXp += 50;
   profile.stats.totalXp += 50;
   profile.stats.completedModules = Math.min(profile.stats.totalModules, profile.stats.completedModules + 1);
   profile.stats.masteryPercentage = Math.round((profile.stats.completedModules / profile.stats.totalModules) * 100);
   saveLocalUserProfile(profile);
+  saveProfileToIndexedDB(profile).catch(console.warn);
 
-  // 3. Save to Firestore if available
-  if (isFirebaseConfigured && db && auth?.currentUser) {
+  // 4. If online & Cloud Firestore available, push to Firestore
+  if (navigator.onLine && isFirebaseConfigured && db && auth?.currentUser) {
     try {
       const attemptsCol = collection(db, 'users', auth.currentUser.uid, 'attempts');
       await addDoc(attemptsCol, newAttempt);
       const userRef = doc(db, 'users', auth.currentUser.uid);
       await updateDoc(userRef, { stats: profile.stats });
+      // Mark as synced in IndexedDB
+      await markAttemptsAsSyncedInIndexedDB([newAttempt.attemptId]);
+      return newAttempt;
     } catch (e) {
-      console.warn('Firestore attempt save error:', e);
+      console.warn('Firestore attempt save error, queuing for sync:', e);
+      await enqueueSyncOperation('ADD_ATTEMPT', newAttempt, auth.currentUser.uid);
     }
+  } else {
+    // Queued in IndexedDB for auto-sync once internet connection is available
+    await enqueueSyncOperation('ADD_ATTEMPT', newAttempt, auth?.currentUser?.uid);
   }
 
   return newAttempt;
@@ -275,10 +302,13 @@ export async function recordAttempt(attempt: Omit<LearningAttempt, 'attemptId' |
 
 /**
  * Save flashcard SM-2 review progress
- * Target collection: users/{uid}/flashcardProgress/{cardId}
+ * Target: IndexedDB (persistent) + Cloud Firestore
  */
 export async function saveFlashcardProgress(progress: FlashcardProgress): Promise<void> {
-  // 1. Local storage
+  // 1. IndexedDB persistent storage
+  await saveFlashcardToIndexedDB(progress);
+
+  // 2. Local storage fallback
   try {
     const raw = localStorage.getItem(LOCAL_CARDS_KEY);
     const map: Record<string, FlashcardProgress> = raw ? JSON.parse(raw) : {};
@@ -288,14 +318,17 @@ export async function saveFlashcardProgress(progress: FlashcardProgress): Promis
     console.error('Local card save error', e);
   }
 
-  // 2. Firestore if available
-  if (isFirebaseConfigured && db && auth?.currentUser) {
+  // 3. Firestore sync or queue
+  if (navigator.onLine && isFirebaseConfigured && db && auth?.currentUser) {
     try {
       const cardRef = doc(db, 'users', auth.currentUser.uid, 'flashcardProgress', progress.cardId);
       await setDoc(cardRef, progress);
     } catch (e) {
-      console.warn('Firestore flashcard save error:', e);
+      console.warn('Firestore flashcard save error, queuing sync:', e);
+      await enqueueSyncOperation('FLASHCARD_PROGRESS', progress, auth.currentUser.uid);
     }
+  } else {
+    await enqueueSyncOperation('FLASHCARD_PROGRESS', progress, auth?.currentUser?.uid);
   }
 }
 
@@ -338,12 +371,12 @@ export interface SevenDayDataPoint {
   label: string;
   module: string;
   attemptsCount: number;
-  source: 'firestore' | 'cache';
+  source: 'firestore' | 'indexeddb' | 'cache';
 }
 
 export interface SevenDayHistoryResult {
   history: SevenDayDataPoint[];
-  source: 'firestore' | 'cache';
+  source: 'firestore' | 'indexeddb' | 'cache';
   averageScore: number;
   peakScore: number;
   peakDay: string;
@@ -364,12 +397,13 @@ const BENCHMARK_7_DAYS = [
 
 /**
  * Fetch all learning attempts from Cloud Firestore (users/{uid}/attempts)
- * with graceful local cache fallback.
+ * with IndexedDB durable offline persistence and localStorage fallback.
  */
-export async function getUserLearningAttempts(userId?: string): Promise<{ attempts: LearningAttempt[]; source: 'firestore' | 'cache' }> {
+export async function getUserLearningAttempts(userId?: string): Promise<{ attempts: LearningAttempt[]; source: 'firestore' | 'indexeddb' | 'cache' }> {
   const targetUid = userId || auth?.currentUser?.uid;
 
-  if (isFirebaseConfigured && db && targetUid) {
+  // 1. If online and Firestore configured, fetch from Firestore and mirror into IndexedDB
+  if (navigator.onLine && isFirebaseConfigured && db && targetUid) {
     try {
       const attemptsCol = collection(db, 'users', targetUid, 'attempts');
       const q = query(attemptsCol, orderBy('completedAt', 'desc'), limit(50));
@@ -378,16 +412,29 @@ export async function getUserLearningAttempts(userId?: string): Promise<{ attemp
       if (!snapshot.empty) {
         const attempts: LearningAttempt[] = [];
         snapshot.forEach((docSnap) => {
-          attempts.push(docSnap.data() as LearningAttempt);
+          const item = docSnap.data() as LearningAttempt;
+          attempts.push(item);
+          // Mirror in IndexedDB for offline access
+          saveAttemptToIndexedDB(item, true).catch(() => {});
         });
         return { attempts, source: 'firestore' };
       }
     } catch (e) {
-      console.warn('Firestore getDocs attempts error, falling back to local cache:', e);
+      console.warn('Firestore getDocs attempts error, reading IndexedDB:', e);
     }
   }
 
-  // Fallback to local storage
+  // 2. Persistent IndexedDB query (always works offline)
+  try {
+    const idbAttempts = await getAllAttemptsFromIndexedDB();
+    if (idbAttempts && idbAttempts.length > 0) {
+      return { attempts: idbAttempts, source: 'indexeddb' };
+    }
+  } catch (e) {
+    console.warn('Error reading from IndexedDB:', e);
+  }
+
+  // 3. Fallback to localStorage
   try {
     const raw = localStorage.getItem(LOCAL_ATTEMPTS_KEY);
     if (raw) {
@@ -400,7 +447,7 @@ export async function getUserLearningAttempts(userId?: string): Promise<{ attemp
     console.error('Error reading local attempts', e);
   }
 
-  return { attempts: [], source: 'cache' };
+  return { attempts: [], source: 'indexeddb' };
 }
 
 /**

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { SchoolLesson, SchoolVocabularyItem } from '../data/schoolCurriculum';
 import confetti from 'canvas-confetti';
+import { recordAttempt } from '../firebase/client';
 
 interface LessonDetailModalProps {
   lesson: SchoolLesson | null;
@@ -94,6 +95,18 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
       if (quizAnswers[q.id] === q.correct_index) correct++;
     });
 
+    const quizScore = Math.round((correct / Math.max(1, lesson.quiz.length)) * 100);
+
+    // Persist attempt into IndexedDB (works offline) & Cloud Firestore
+    recordAttempt({
+      moduleId: `${lesson.id}_quiz`,
+      moduleType: 'quiz',
+      title: `${lesson.class_label} • Quiz : ${lesson.title}`,
+      level: (lesson.cefr_level.includes('C1') ? 'C1' : lesson.cefr_level.includes('B2') ? 'B2' : 'B1') as any,
+      score: quizScore,
+      durationSeconds: 120
+    }).catch(console.warn);
+
     if (correct >= 3) {
       confetti({
         particleCount: 50,
@@ -121,6 +134,16 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
 
     const score = Math.min(100, Math.round((matches / Math.max(1, canonWords.length)) * 100));
     setDictationScore(score);
+
+    // Persist attempt into IndexedDB (works offline) & Cloud Firestore
+    recordAttempt({
+      moduleId: `${lesson.id}_dictation`,
+      moduleType: 'dictation',
+      title: `${lesson.class_label} • Dictée : ${lesson.title}`,
+      level: (lesson.cefr_level.includes('C1') ? 'C1' : lesson.cefr_level.includes('B2') ? 'B2' : 'B1') as any,
+      score,
+      durationSeconds: 90
+    }).catch(console.warn);
 
     if (score >= 80) {
       confetti({
