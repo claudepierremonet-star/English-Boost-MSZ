@@ -22,7 +22,6 @@ export const FloralBorderFrame: React.FC = () => {
       aria-hidden="true"
       className="fixed inset-0 pointer-events-none z-50 overflow-hidden select-none"
       style={{
-        boxShadow: `inset 0 0 0 ${css} ${isDark ? 'rgba(12, 19, 34, 0.95)' : 'rgba(247, 244, 238, 0.95)'}`,
         border: `1px solid ${isDark ? 'rgba(212, 175, 55, 0.3)' : 'rgba(120, 91, 36, 0.25)'}`
       }}
     >

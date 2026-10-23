@@ -18,6 +18,7 @@ import { ThemeSelectorModal } from './components/ThemeSelectorModal';
 import { InstallAppModal } from './components/InstallAppModal';
 import { AuthModal } from './components/AuthModal';
 import { SchoolCurriculumView } from './components/SchoolCurriculumView';
+import { DiscreteWeatherBar } from './components/DiscreteWeatherBar';
 import { useSyncStatus } from './offline/useSyncStatus';
 import {
   getLocalUserProfile,
@@ -164,8 +165,13 @@ export default function App() {
         </div>
       )}
 
+      {/* Discreet 1 cm Real-Time Weather Bar (Discreet hairline bar, reveals on click, auto-dismisses in 5s) */}
+      <div className={`w-full z-30 transition-all ${!isOnline || (isOnline && pendingCount > 0) ? 'pt-24' : 'pt-16'}`}>
+        <DiscreteWeatherBar />
+      </div>
+
       {/* Main Routed Content */}
-      <main className={`flex-1 w-full pb-20 ${!isOnline || (isOnline && pendingCount > 0) ? 'pt-24' : 'pt-16'}`}>
+      <main className="flex-1 w-full pb-20">
         {activeTab === 'accueil' && (
           <div className="flex flex-col w-full max-w-4xl mx-auto animate-fadeIn">
             {/* Monumental Hero Section with background-clip text & scroll zoom */}
