@@ -6,6 +6,7 @@ interface PracticeViewProps {
   onSelectLevel: (level: CEFRLevel) => void;
   onOpenDictation: () => void;
   onOpenFlashcards: () => void;
+  onOpenFlashcardsFocus?: () => void;
   onOpenQuiz: () => void;
   onOpenSpeaking: () => void;
 }
@@ -15,6 +16,7 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
   onSelectLevel,
   onOpenDictation,
   onOpenFlashcards,
+  onOpenFlashcardsFocus,
   onOpenQuiz,
   onOpenSpeaking
 }) => {
@@ -285,14 +287,27 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
             <span className="text-xs text-[#d4c78f] italic truncate">
               Intervalle optimal : Révision dans 3h
             </span>
-            <button
-              type="button"
-              onClick={onOpenFlashcards}
-              className="px-4 py-2 rounded-xl bg-[#232a3a] text-[#dce2f8] hover:text-[#f2ca50] hover:bg-[#2e3545] font-semibold text-xs flex items-center gap-1 shadow-sm active:scale-95 transition-all shrink-0 ml-2"
-            >
-              <span>Passer en Revue</span>
-              <span className="material-symbols-outlined text-sm">chevron_right</span>
-            </button>
+            <div className="flex items-center gap-2 shrink-0 ml-2">
+              {onOpenFlashcardsFocus && (
+                <button
+                  type="button"
+                  onClick={onOpenFlashcardsFocus}
+                  className="px-3 py-2 rounded-xl bg-[#151f33] hover:bg-[#1c2c4d] text-[#ffe082] border border-[#f2ca50]/40 font-semibold text-xs flex items-center gap-1 shadow-sm active:scale-95 transition-all"
+                  title="Ouvrir directement en Mode Focus Lecture"
+                >
+                  <span className="material-symbols-outlined text-sm">center_focus_strong</span>
+                  <span className="hidden sm:inline">Focus Lecture</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onOpenFlashcards}
+                className="px-4 py-2 rounded-xl bg-[#232a3a] text-[#dce2f8] hover:text-[#f2ca50] hover:bg-[#2e3545] font-semibold text-xs flex items-center gap-1 shadow-sm active:scale-95 transition-all"
+              >
+                <span>Passer en Revue</span>
+                <span className="material-symbols-outlined text-sm">chevron_right</span>
+              </button>
+            </div>
           </div>
         </div>
 

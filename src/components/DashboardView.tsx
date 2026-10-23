@@ -16,6 +16,7 @@ import {
 } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSyncStatus } from '../offline/useSyncStatus';
+import { VocabularyMasterySummary } from './VocabularyMasterySummary';
 
 interface CustomTooltipProps {
   active?: boolean;
@@ -63,13 +64,15 @@ interface DashboardViewProps {
   onResumePractice: () => void;
   onUpdateStudyTarget: (minutes: number) => void;
   onOpenProfile?: () => void;
+  onOpenFlashcards?: () => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
   user,
   onResumePractice,
   onUpdateStudyTarget,
-  onOpenProfile
+  onOpenProfile,
+  onOpenFlashcards
 }) => {
   const [showAdjustModal, setShowAdjustModal] = useState<boolean>(false);
   const [selectedTarget, setSelectedTarget] = useState<number>(user.stats.studyMinutesTarget || 30);
@@ -566,6 +569,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           )}
         </AnimatePresence>
       </section>
+
+      {/* Visual Statistical Summary: Vocabulary Mastery & SM-2 Retention Over Time */}
+      <VocabularyMasterySummary
+        user={user}
+        onOpenFlashcards={onOpenFlashcards}
+      />
 
       {/* Recent Validated Trials */}
       <section className="flex flex-col gap-2.5">

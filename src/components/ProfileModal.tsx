@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { UserProfile, CEFRLevel } from '../firebase/types';
-import { signInWithGoogle, signOutUser, isFirebaseConfigured } from '../firebase/client';
+import { signInWithGoogle, signOutUser, isFirebaseConfigured, auth, isUserSignedInWithGoogle } from '../firebase/client';
 import { useAppTheme, type AppTheme, type FloralBorderWidth } from '../theme/ThemeContext';
 import { BadgesSection } from './BadgesSection';
 
@@ -9,13 +9,15 @@ interface ProfileModalProps {
   onClose: () => void;
   onUpdateUser: (updated: Partial<UserProfile>) => void;
   onCustomPhotoUpload: (file: File) => Promise<string>;
+  onOpenInstallModal?: () => void;
 }
 
 export const ProfileModal: React.FC<ProfileModalProps> = ({
   user,
   onClose,
   onUpdateUser,
-  onCustomPhotoUpload
+  onCustomPhotoUpload,
+  onOpenInstallModal
 }) => {
   const [selectedLevel, setSelectedLevel] = useState<CEFRLevel>(user.level);
   const [selectedPace, setSelectedPace] = useState<number>(user.stats.studyMinutesTarget || 30);
@@ -206,39 +208,64 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
         </div>
 
         {/* Authentication Zone */}
-        <div className="p-5 rounded-2xl bg-[#151b2b] border border-[#4d4635]/40 shadow-xl flex flex-col gap-3">
+        <div className="p-5 rounded-2xl bg-[#151b2b] border border-[#f2ca50]/30 shadow-xl flex flex-col gap-3.5">
           <div className="flex items-center justify-between text-xs">
-            <span className="text-[10px] text-[#f2ca50] uppercase font-bold tracking-wider">
-              Firebase Authentication
-            </span>
-            <span className="text-xs text-[#d0c5af] font-mono">
-              {isFirebaseConfigured ? 'Service Cloud Connecté' : 'Mode Session Locale'}
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-[10px] text-[#f2ca50] uppercase font-bold tracking-wider">
+                Firebase Firestore & Google Auth
+              </span>
+            </div>
+            <span className="text-xs text-emerald-300 font-mono font-semibold">
+              Projet feisty-cipher-2tn3v
             </span>
           </div>
 
-          <p className="text-xs text-[#d0c5af] leading-relaxed">
-            Connectez votre compte Google pour synchroniser instantanément vos statistiques d'apprentissage, vos révisions SM-2 et vos photographies de couverture entre tous vos appareils.
-          </p>
+          {auth?.currentUser && !auth.currentUser.isAnonymous ? (
+            <div className="p-3.5 rounded-xl bg-[#0c1322] border border-emerald-500/40 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <span className="material-symbols-outlined text-emerald-400 text-lg">verified_user</span>
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-[#dce2f8]">
+                    {auth.currentUser.displayName || 'Érudit Authentifié'}
+                  </span>
+                  <span className="text-[11px] font-mono text-[#d0c5af]">
+                    {auth.currentUser.email}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="px-3 py-1.5 rounded-lg bg-[#232a3a] hover:bg-rose-950/60 border border-rose-500/30 text-rose-300 text-xs font-semibold transition-colors cursor-pointer"
+              >
+                Déconnexion
+              </button>
+            </div>
+          ) : (
+            <>
+              <p className="text-xs text-[#d0c5af] leading-relaxed">
+                Connectez votre compte Google pour sauvegarder et synchroniser automatiquement tous vos scores de dictée, quiz, révisions SM-2 et votre progression académique dans la base de données Cloud <strong>Firebase Firestore</strong>.
+              </p>
 
-          <div className="flex items-center gap-3 pt-1">
-            <button
-              type="button"
-              onClick={handleGoogleAuth}
-              disabled={isSigningIn}
-              className="flex-1 py-3 px-4 rounded-xl bg-[#232a3a] hover:bg-[#2e3545] border border-[#f2ca50]/40 text-[#dce2f8] font-semibold text-xs flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
-            >
-              <span className="material-symbols-outlined text-base text-[#f2ca50]">account_circle</span>
-              <span>{isSigningIn ? 'Connexion en cours...' : 'Connexion avec Google'}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleSignOut}
-              className="py-3 px-4 rounded-xl bg-[#070e1d] hover:bg-[#93000a]/20 border border-[#4d4635]/30 text-[#d0c5af] hover:text-[#ffb4ab] text-xs font-semibold transition-colors"
-            >
-              Déconnexion
-            </button>
-          </div>
+              <div className="flex items-center gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={handleGoogleAuth}
+                  disabled={isSigningIn}
+                  className="flex-1 py-3 px-4 rounded-xl bg-[#f2ca50] hover:bg-[#ffe088] text-[#3c2f00] font-bold text-xs flex items-center justify-center gap-2.5 transition-all active:scale-[0.98] shadow-md shadow-[#f2ca50]/20 cursor-pointer"
+                >
+                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                  </svg>
+                  <span>{isSigningIn ? 'Connexion en cours...' : 'S\'inscrire / Se connecter avec Google'}</span>
+                </button>
+              </div>
+            </>
+          )}
         </div>
 
         {/* CEFR Level Selector */}
@@ -320,6 +347,44 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             </span>
           </label>
         </div>
+
+        {/* Mobile App Icon & Home Screen Installation */}
+        {onOpenInstallModal && (
+          <div className="p-5 rounded-2xl bg-gradient-to-br from-[#191f2f] to-[#121824] border border-[#f2ca50]/40 shadow-xl flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-xl overflow-hidden p-0.5 bg-gradient-to-br from-[#f2ca50] via-[#c69214] to-[#f2ca50] shadow-md shadow-[#f2ca50]/20 shrink-0">
+                <img
+                  src="/src/assets/images/app_icon_msz_1792789129742.jpg"
+                  alt="Icône English Boost MSZ"
+                  className="w-full h-full object-cover rounded-[10px]"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[10px] font-mono text-[#f2ca50] font-bold uppercase tracking-wider">
+                  APPLICATION MOBILE & TABLETTE
+                </span>
+                <h4 className="font-serif font-bold text-sm text-[#dce2f8]">
+                  Icône d'Écran d'Accueil iOS & Android
+                </h4>
+                <p className="text-[11px] text-[#d0c5af]/80">
+                  Ajoutez l'icône or & bleu nuit sur votre smartphone pour un accès plein écran direct.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenInstallModal();
+              }}
+              className="px-3.5 py-2 rounded-xl bg-[#f2ca50] text-[#3c2f00] text-xs font-bold uppercase tracking-wider hover:bg-[#ffe088] transition-all shrink-0 shadow-md flex items-center gap-1.5 active:scale-95"
+            >
+              <span className="material-symbols-outlined text-sm">install_mobile</span>
+              <span>Installer</span>
+            </button>
+          </div>
+        )}
       </main>
     </div>
   );

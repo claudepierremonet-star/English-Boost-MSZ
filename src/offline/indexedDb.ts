@@ -304,6 +304,26 @@ export async function saveFlashcardToIndexedDB(card: FlashcardProgress): Promise
 }
 
 /**
+ * Get all flashcards from IndexedDB
+ */
+export async function getAllFlashcardsFromIndexedDB(): Promise<FlashcardProgress[]> {
+  try {
+    const db = await getIndexedDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['flashcards'], 'readonly');
+      const store = transaction.objectStore('flashcards');
+      const req = store.getAll();
+
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
+    });
+  } catch (error) {
+    console.warn('Failed to retrieve flashcards from IndexedDB:', error);
+    return [];
+  }
+}
+
+/**
  * Record last sync timestamp in metadata store
  */
 export async function recordLastSyncTime(timestamp: string = new Date().toISOString()): Promise<void> {

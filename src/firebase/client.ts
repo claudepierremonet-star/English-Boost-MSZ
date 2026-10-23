@@ -20,6 +20,7 @@ import {
   query,
   orderBy,
   limit,
+  getDocFromServer,
   type Firestore
 } from 'firebase/firestore';
 import {
@@ -30,22 +31,23 @@ import {
   type FirebaseStorage
 } from 'firebase/storage';
 import type { UserProfile, LearningAttempt, FlashcardProgress, CEFRLevel } from './types';
+import firebaseAppletConfig from '../../firebase-applet-config.json';
 
-// Read config from client environment variables
+// Read config from provisioned JSON with environment variable fallback
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || ''
+  apiKey: firebaseAppletConfig.apiKey || import.meta.env.VITE_FIREBASE_API_KEY || '',
+  authDomain: firebaseAppletConfig.authDomain || import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
+  projectId: firebaseAppletConfig.projectId || import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
+  storageBucket: firebaseAppletConfig.storageBucket || import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
+  messagingSenderId: firebaseAppletConfig.messagingSenderId || import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
+  appId: firebaseAppletConfig.appId || import.meta.env.VITE_FIREBASE_APP_ID || ''
 };
 
-// Check if actual configuration exists
+// Check if actual configuration exists and is active
 export const isFirebaseConfigured = Boolean(
   firebaseConfig.apiKey &&
   firebaseConfig.projectId &&
-  firebaseConfig.apiKey !== 'your-api-key'
+  firebaseConfig.projectId !== 'remixed-project-id'
 );
 
 let app: FirebaseApp | null = null;
@@ -57,11 +59,28 @@ if (isFirebaseConfigured) {
   try {
     app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
     auth = getAuth(app);
-    db = getFirestore(app);
+    const dbId = (firebaseAppletConfig as any).firestoreDatabaseId;
+    db = dbId && dbId !== '(default)' ? getFirestore(app, dbId) : getFirestore(app);
     storage = getStorage(app);
   } catch (err) {
     console.warn('Firebase initialization error, using local fallback mode:', err);
   }
+}
+
+// Test live server connection to Firestore
+async function testFirestoreConnection() {
+  if (!db) return;
+  try {
+    await getDocFromServer(doc(db, 'test', 'connection'));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.warn('Firestore is running in offline-persisted mode.');
+    }
+  }
+}
+
+if (isFirebaseConfigured) {
+  testFirestoreConnection();
 }
 
 import {
@@ -129,12 +148,14 @@ export function saveLocalUserProfile(profile: UserProfile): void {
 }
 
 /**
- * Authenticate with Google
+ * Authenticate with Google (Sign Up or Sign In)
+ * Stores scholar identity and syncs all study metrics to Cloud Firestore
  */
 export async function signInWithGoogle(): Promise<UserProfile> {
   if (isFirebaseConfigured && auth && db) {
     try {
       const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
       const cred = await signInWithPopup(auth, provider);
       const user = cred.user;
 
@@ -145,29 +166,77 @@ export async function signInWithGoogle(): Promise<UserProfile> {
       let profile: UserProfile;
       if (snap.exists()) {
         profile = snap.data() as UserProfile;
+        // Merge with existing local progress if current session has higher values
+        const currentLocal = getLocalUserProfile();
+        if (currentLocal && (currentLocal.stats?.totalXp || 0) > (profile.stats?.totalXp || 0)) {
+          profile.stats = {
+            ...profile.stats,
+            totalXp: Math.max(profile.stats.totalXp, currentLocal.stats.totalXp),
+            weeklyXp: Math.max(profile.stats.weeklyXp, currentLocal.stats.weeklyXp),
+            completedModules: Math.max(profile.stats.completedModules, currentLocal.stats.completedModules),
+            streakDays: Math.max(profile.stats.streakDays, currentLocal.stats.streakDays)
+          };
+          await updateDoc(userRef, { stats: profile.stats });
+        }
       } else {
+        // First-time scholar registration with Google
+        const currentLocal = getLocalUserProfile();
         profile = {
           uid: user.uid,
-          displayName: user.displayName || 'Academic Scholar',
+          displayName: user.displayName || 'Lord Chesterfield Scholar',
           email: user.email || '',
           photoURL: user.photoURL || DEFAULT_USER_PROFILE.photoURL,
-          level: 'C1',
-          heroImageURL: DEFAULT_USER_PROFILE.heroImageURL,
-          stats: { ...DEFAULT_USER_PROFILE.stats }
+          level: currentLocal.level || 'C1',
+          heroImageURL: currentLocal.heroImageURL || DEFAULT_USER_PROFILE.heroImageURL,
+          stats: {
+            ...DEFAULT_USER_PROFILE.stats,
+            ...(currentLocal.stats || {})
+          }
         };
         await setDoc(userRef, profile);
+
+        // Migrate all local and IndexedDB learning attempts to Cloud Firestore
+        try {
+          const idbAttempts = await getAllAttemptsFromIndexedDB();
+          if (idbAttempts && idbAttempts.length > 0) {
+            const attemptsCol = collection(db, 'users', user.uid, 'attempts');
+            for (const att of idbAttempts.slice(0, 50)) {
+              await addDoc(attemptsCol, att);
+            }
+            await markAttemptsAsSyncedInIndexedDB(idbAttempts.map(a => a.attemptId));
+          }
+        } catch (migErr) {
+          console.warn('Initial attempts migration notice:', migErr);
+        }
       }
+
       saveLocalUserProfile(profile);
+      await saveProfileToIndexedDB(profile);
       return profile;
     } catch (error) {
-      console.warn('Firebase Google Sign-In error, falling back to local session:', error);
+      console.error('Firebase Google Sign-In error:', error);
+      throw error;
     }
   }
 
-  // Graceful offline/demo login
+  // Graceful offline/demo fallback
   const local = getLocalUserProfile();
   saveLocalUserProfile(local);
   return local;
+}
+
+/**
+ * Helper to check if current scholar is authenticated via Google
+ */
+export function isUserSignedInWithGoogle(): boolean {
+  return Boolean(auth?.currentUser && !auth.currentUser.isAnonymous);
+}
+
+/**
+ * Get the current active Firebase Auth user object
+ */
+export function getCurrentFirebaseUser(): User | null {
+  return auth?.currentUser || null;
 }
 
 /**

@@ -1,0 +1,21 @@
+{
+  "id": "/",
+  "name": "English Boost MSZ",
+  "short_name": "Boost MSZ",
+  "description": "Application éditoriale et immersive de perfectionnement en anglais avancé (B1 à C2) avec analyse rhétorique, répétition espacée et dictée cadencée.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0c1322",
+  "theme_color": "#0c1322",
+  "categories": ["education", "books", "productivity"],
+  "icons": [
+    {
+      "src": "/app-icon.jpg",
+      "sizes": "192x192 512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}

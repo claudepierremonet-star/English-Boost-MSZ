@@ -1,0 +1,63 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User account profile, CEFR level tier, and aggregate learning statistics.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "displayName": { "type": "string", "description": "Scholar display name" },
+        "email": { "type": "string", "format": "email", "description": "Email address of the scholar" },
+        "photoURL": { "type": "string", "description": "Scholar avatar URL" },
+        "level": { "type": "string", "enum": ["B1", "B2", "C1", "C2"], "description": "Current CEFR level" },
+        "heroImageURL": { "type": "string", "description": "Editorial hero cut-out artwork URL" },
+        "stats": { "type": "object", "description": "Aggregated study metrics and streaks" }
+      },
+      "required": ["uid", "level"]
+    },
+    "LearningAttempt": {
+      "title": "LearningAttempt",
+      "description": "A completed dictation, quiz, speech studio or daily challenge attempt.",
+      "type": "object",
+      "properties": {
+        "attemptId": { "type": "string", "description": "Unique attempt identifier" },
+        "type": { "type": "string", "enum": ["dictation", "quiz", "speaking", "challenge", "reading"], "description": "Exercise modality" },
+        "title": { "type": "string", "description": "Title of exercise or lesson" },
+        "score": { "type": "number", "description": "Score achieved (0-100)" },
+        "level": { "type": "string", "description": "CEFR level" },
+        "completedAt": { "type": "string", "format": "date-time", "description": "ISO timestamp" },
+        "durationSeconds": { "type": "number", "description": "Time spent on attempt in seconds" },
+        "details": { "type": "object", "description": "Phonetics, transcription, or answer details" }
+      },
+      "required": ["attemptId", "type", "score", "completedAt"]
+    },
+    "FlashcardProgress": {
+      "title": "FlashcardProgress",
+      "description": "Spaced repetition (SM-2) memory schedule for a vocabulary term.",
+      "type": "object",
+      "properties": {
+        "cardId": { "type": "string", "description": "Identifier of the vocabulary item" },
+        "interval": { "type": "number", "description": "SM-2 interval in days" },
+        "repetition": { "type": "number", "description": "Repetition count" },
+        "easeFactor": { "type": "number", "description": "SM-2 ease factor" },
+        "dueDate": { "type": "string", "description": "Due date for next review" },
+        "lastReviewed": { "type": "string", "description": "ISO timestamp of last review" }
+      },
+      "required": ["cardId", "interval", "repetition", "easeFactor"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile document storing academic level and study cadence"
+    },
+    "/users/{userId}/attempts/{attemptId}": {
+      "schema": "LearningAttempt",
+      "description": "Individual learning exercise attempts with scores and timestamps"
+    },
+    "/users/{userId}/flashcardProgress/{cardId}": {
+      "schema": "FlashcardProgress",
+      "description": "Spaced repetition flashcard memory state"
+    }
+  }
+}
