@@ -3,6 +3,7 @@ import { DICTATION_ITEMS, type DictationItem } from '../data/curriculum';
 import { recordAttempt } from '../firebase/client';
 import type { CEFRLevel } from '../firebase/types';
 import confetti from 'canvas-confetti';
+import { DualSpeakerButton } from './DualSpeakerButton';
 
 interface DictationModalProps {
   currentLevel: CEFRLevel;
@@ -207,15 +208,19 @@ export const DictationModal: React.FC<DictationModalProps> = ({
 
         {/* Audio Player Card */}
         <div className="p-5 rounded-2xl bg-[#151b2b] border border-[#4d4635]/40 shadow-xl flex flex-col gap-4 relative overflow-hidden">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <span className="material-symbols-outlined text-[#f2ca50] text-xl">headphones</span>
               <span className="font-serif font-bold text-base text-[#dce2f8]">{item.title}</span>
             </div>
-            <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#191f2f] text-[10px] text-[#d4c78f] border border-[#4d4635]/30">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#f2ca50] animate-pulse" />
-              Studio Audio HD
-            </div>
+            {/* Dual Speaker buttons: 1er (British UK) & 2e (American US) */}
+            <DualSpeakerButton
+              text={item.canonicalText}
+              id={`dictation-modal-${item.id}`}
+              rate={playbackSpeed}
+              variant="pill"
+              onStart={() => setListenCount((prev) => Math.min(4, prev + 1))}
+            />
           </div>
 
           {/* Simulated Waveform Display */}

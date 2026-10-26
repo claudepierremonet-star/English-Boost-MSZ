@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { SchoolLesson, SchoolVocabularyItem } from '../data/schoolCurriculum';
 import confetti from 'canvas-confetti';
 import { recordAttempt } from '../firebase/client';
+import { DualSpeakerButton } from './DualSpeakerButton';
 
 interface LessonDetailModalProps {
   lesson: SchoolLesson | null;
@@ -348,18 +349,12 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                         )}
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => speakText(phrase.en, `phrase-${idx}`)}
-                        className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
-                          isPlayingAudio === `phrase-${idx}`
-                            ? 'bg-[#f2ca50] text-[#3c2f00] animate-pulse'
-                            : 'bg-[#232a3a] text-[#f2ca50] hover:bg-[#2e3545]'
-                        }`}
-                        title="Écouter la phrase modèle"
-                      >
-                        <span className="material-symbols-outlined text-base">volume_up</span>
-                      </button>
+                      <DualSpeakerButton
+                        text={phrase.en}
+                        id={`phrase-${idx}`}
+                        explanation={phrase.fr}
+                        variant="pill"
+                      />
                     </div>
                   ))}
                 </div>
@@ -437,14 +432,13 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                     ← Précédent
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => speakText(lesson.vocabulary[flashcardIndex].term, 'fc-audio')}
-                    className="px-3 py-1.5 rounded-lg bg-[#232a3a] text-xs font-mono font-bold text-[#f2ca50] flex items-center gap-1"
-                  >
-                    <span className="material-symbols-outlined text-sm">volume_up</span>
-                    Prononcer
-                  </button>
+                  <DualSpeakerButton
+                    text={lesson.vocabulary[flashcardIndex].term}
+                    id={`fc-audio-${flashcardIndex}`}
+                    phonetic={lesson.vocabulary[flashcardIndex].phonetic}
+                    explanation={lesson.vocabulary[flashcardIndex].translation_fr}
+                    variant="pill"
+                  />
 
                   <button
                     type="button"
@@ -484,22 +478,28 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                           <span className="text-xs text-[#d4c78f] font-mono">{w.phonetic}</span>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() => speakText(w.term, `vocab-${idx}`)}
-                          className="p-1.5 rounded-lg bg-[#232a3a] text-[#f2ca50] hover:text-white transition-colors"
-                        >
-                          <span className="material-symbols-outlined text-sm">volume_up</span>
-                        </button>
+                        <DualSpeakerButton
+                          text={w.term}
+                          id={`vocab-${idx}`}
+                          phonetic={w.phonetic}
+                          explanation={w.translation_fr}
+                          variant="compact"
+                        />
                       </div>
 
                       <div className="border-t border-[#232a3a] pt-2">
                         <p className="text-xs font-semibold text-[#dce2f8]">
                           {w.translation_fr}
                         </p>
-                        <p className="text-[11px] text-[#d0c5af]/80 mt-1 italic">
-                          Ex : {w.example_en}
-                        </p>
+                        <div className="flex items-center justify-between gap-2 text-[11px] text-[#d0c5af]/80 mt-1 italic">
+                          <span>Ex : {w.example_en}</span>
+                          <DualSpeakerButton
+                            text={w.example_en}
+                            id={`vocab-ex-${idx}`}
+                            explanation={w.example_fr}
+                            variant="minimal"
+                          />
+                        </div>
                         {showTranslations && (
                           <p className="text-[10px] text-[#99907c] italic">
                             « {w.example_fr} »
@@ -612,14 +612,12 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                           {line.speaker}
                         </span>
 
-                        <button
-                          type="button"
-                          onClick={() => speakText(line.en, `line-${idx}`)}
-                          className="p-1 rounded-md text-[#d0c5af] hover:text-[#f2ca50] transition-colors"
-                          title="Écouter cette réplique"
-                        >
-                          <span className="material-symbols-outlined text-sm">volume_up</span>
-                        </button>
+                        <DualSpeakerButton
+                          text={line.en}
+                          id={`line-${idx}`}
+                          explanation={line.fr}
+                          variant="compact"
+                        />
                       </div>
 
                       <p className="text-sm sm:text-base font-serif font-semibold text-[#dce2f8]">
@@ -772,14 +770,12 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                 </p>
 
                 <div className="flex items-center justify-center p-6 rounded-xl bg-[#0c1322] border border-[#232a3a]">
-                  <button
-                    type="button"
-                    onClick={() => speakText(lesson.dictation.canonical, 'dictation-audio')}
-                    className="px-5 py-3 rounded-xl bg-[#f2ca50] text-[#3c2f00] font-bold text-xs uppercase tracking-wider flex items-center gap-2 hover:bg-[#ffe088] shadow-lg active:scale-95 transition-all"
-                  >
-                    <span className="material-symbols-outlined text-lg">volume_up</span>
-                    <span>Écouter la Phrase de Dictée</span>
-                  </button>
+                  <DualSpeakerButton
+                    text={lesson.dictation.canonical}
+                    id="dictation-audio"
+                    variant="prominent"
+                    explanation="Écoutez attentivement l'accent avant de retranscrire la phrase"
+                  />
                 </div>
 
                 <div className="flex flex-col gap-1.5">

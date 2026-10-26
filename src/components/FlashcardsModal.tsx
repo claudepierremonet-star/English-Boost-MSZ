@@ -3,6 +3,13 @@ import { FLASHCARD_ITEMS, type FlashcardItem } from '../data/curriculum';
 import { saveFlashcardProgress } from '../firebase/client';
 import type { CEFRLevel } from '../firebase/types';
 import confetti from 'canvas-confetti';
+import { DualSpeakerButton } from './DualSpeakerButton';
+import {
+  triggerAutoPlayIfEnabled,
+  getAutoPlayOnDisplay,
+  setAutoPlayOnDisplay,
+  peekNextAlternatingAccent
+} from '../services/speechService';
 
 interface FlashcardsModalProps {
   currentLevel: CEFRLevel;
@@ -23,6 +30,7 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isBookmarked, setIsBookmarked] = useState<boolean>(false);
   const [isFocusMode, setIsFocusMode] = useState<boolean>(initialFocusMode);
+  const [isAutoPlay, setIsAutoPlay] = useState<boolean>(getAutoPlayOnDisplay());
 
   const card: FlashcardItem = FLASHCARD_ITEMS[cardIndex] || FLASHCARD_ITEMS[0];
 
@@ -107,6 +115,13 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleFlip, handleNextCard, handlePrevCard, toggleFocusMode, isFocusMode, onClose, showToast]);
+
+  // Déclenchement de la lecture audio automatique alternée dès qu'une nouvelle carte est affichée
+  useEffect(() => {
+    if (card?.term) {
+      triggerAutoPlayIfEnabled(card.term, `fc-modal-${card.id}`, 350);
+    }
+  }, [cardIndex, card?.term, card?.id]);
 
   const handleSM2Rating = async (quality: 'again' | 'hard' | 'good' | 'easy') => {
     let days = 1;
@@ -210,6 +225,43 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2.5">
+            {/* Auto Play Alternating Toggle */}
+            <button
+              type="button"
+              onClick={() => {
+                const next = !isAutoPlay;
+                setIsAutoPlay(next);
+                setAutoPlayOnDisplay(next);
+                showToast(
+                  next
+                    ? 'Lecture auto alternée activée (🇬🇧⇄🇺🇸)'
+                    : 'Lecture auto désactivée'
+                );
+                if (next && card?.term) {
+                  triggerAutoPlayIfEnabled(card.term, `fc-modal-${card.id}`, 100);
+                }
+              }}
+              className={`px-2.5 py-1.5 rounded-xl border text-xs font-mono font-medium flex items-center gap-1.5 transition-all active:scale-95 shadow-sm ${
+                isAutoPlay
+                  ? 'border-[#f2ca50]/60 bg-[#1e2538] text-[#f2ca50] shadow-[0_0_10px_rgba(242,202,80,0.2)]'
+                  : 'border-[#2e3b55] bg-[#121824] text-[#8391ac] hover:text-[#dce2f8]'
+              }`}
+              title={
+                isAutoPlay
+                  ? `Lecture auto active (Alternance 50/50 • Prochain: ${
+                      peekNextAlternatingAccent() === 'en-GB' ? 'UK 🇬🇧' : 'US 🇺🇸'
+                    })`
+                  : 'Activer la lecture automatique alternée 🇬🇧/🇺🇸 à chaque carte'
+              }
+            >
+              <span className="material-symbols-outlined text-sm">
+                {isAutoPlay ? 'autoplay' : 'motion_photos_off'}
+              </span>
+              <span className="hidden sm:inline">
+                {isAutoPlay ? 'Auto: 🇬🇧⇄🇺🇸' : 'Auto: Off'}
+              </span>
+            </button>
+
             {/* Focus Lecture Toggle Button */}
             <button
               type="button"
@@ -255,6 +307,41 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
               <kbd className="px-1.5 py-0.5 rounded bg-[#151b2b] text-[#f2ca50] border border-[#2e3545]">Espace</kbd> Retourner
               <kbd className="px-1.5 py-0.5 rounded bg-[#151b2b] text-[#f2ca50] border border-[#2e3545] ml-2">← →</kbd> Naviguer
             </span>
+
+            {/* Auto Play Toggle in Focus Mode */}
+            <button
+              type="button"
+              onClick={() => {
+                const next = !isAutoPlay;
+                setIsAutoPlay(next);
+                setAutoPlayOnDisplay(next);
+                showToast(
+                  next
+                    ? 'Lecture auto alternée activée (🇬🇧⇄🇺🇸)'
+                    : 'Lecture auto désactivée'
+                );
+                if (next && card?.term) {
+                  triggerAutoPlayIfEnabled(card.term, `fc-modal-${card.id}`, 100);
+                }
+              }}
+              className={`px-2.5 py-1.5 rounded-full border text-[11px] font-mono flex items-center gap-1 transition-all backdrop-blur-md active:scale-95 cursor-pointer ${
+                isAutoPlay
+                  ? 'border-[#f2ca50]/60 bg-[#1e2538]/90 text-[#f2ca50] shadow-[0_0_8px_rgba(242,202,80,0.3)]'
+                  : 'border-white/10 bg-[#151f33]/80 text-[#8391ac] hover:text-[#d0c5af]'
+              }`}
+              title={
+                isAutoPlay
+                  ? `Lecture auto active (Prochain accent: ${
+                      peekNextAlternatingAccent() === 'en-GB' ? 'UK 🇬🇧' : 'US 🇺🇸'
+                    })`
+                  : 'Activer la lecture automatique alternée 🇬🇧/🇺🇸'
+              }
+            >
+              <span className="material-symbols-outlined text-xs">
+                {isAutoPlay ? 'autoplay' : 'motion_photos_off'}
+              </span>
+              <span className="hidden sm:inline">Auto 🇬🇧⇄🇺🇸</span>
+            </button>
 
             <button
               type="button"
@@ -371,24 +458,17 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
                   « {card.term} »
                 </h2>
 
-                <div className="flex items-center justify-center gap-3 my-4">
+                <div className="flex items-center justify-center gap-3 my-4 flex-wrap">
                   <span className="text-base text-[#dce2f8] font-mono italic tracking-wide">
                     {card.phonetic}
                   </span>
-                  <button
-                    type="button"
-                    onClick={playPronunciation}
-                    className="w-10 h-10 rounded-full bg-gradient-to-br from-[#f2ca50] to-[#d4af37] text-[#2c2000] flex items-center justify-center transition-transform active:scale-90 shadow-md hover:brightness-110"
-                    title="Écouter la prononciation académique (Oxford RP)"
-                  >
-                    <span
-                      className={`material-symbols-outlined text-xl ${
-                        isPlayingAudio ? 'animate-pulse' : ''
-                      }`}
-                    >
-                      {isPlayingAudio ? 'graphic_eq' : 'volume_up'}
-                    </span>
-                  </button>
+                  <DualSpeakerButton
+                    text={card.term}
+                    id={`fc-modal-${card.id}`}
+                    phonetic={card.phonetic}
+                    explanation={card.frenchDef}
+                    variant="pill"
+                  />
                 </div>
 
                 <div
@@ -470,8 +550,15 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
                 {/* Press Excerpt */}
                 <div className="p-3.5 rounded-xl bg-[#070d1a]/85 border border-[#4d4635]/40">
                   <div className="flex items-center justify-between text-[10px] mb-1.5 text-[#d0c5af]">
-                    <span className="uppercase font-bold text-[#f2ca50]">Extrait de Presse</span>
-                    <span className="italic font-mono text-amber-200">{card.pressSource}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="uppercase font-bold text-[#f2ca50]">Extrait de Presse</span>
+                      <span className="italic font-mono text-amber-200">{card.pressSource}</span>
+                    </div>
+                    <DualSpeakerButton
+                      text={card.pressExcerpt}
+                      id={`fc-excerpt-${card.id}`}
+                      variant="minimal"
+                    />
                   </div>
                   <p className="font-serif italic text-xs sm:text-sm text-[#fff8e7] leading-relaxed">
                     {card.pressExcerpt}

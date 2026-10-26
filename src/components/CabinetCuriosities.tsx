@@ -1,29 +1,12 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { CURIOSITIES, type CurioWord } from '../data/curriculum';
+import { DualSpeakerButton } from './DualSpeakerButton';
 
 interface CabinetCuriositiesProps {
   onWordClick?: (word: CurioWord) => void;
 }
 
 export const CabinetCuriosities: React.FC<CabinetCuriositiesProps> = ({ onWordClick }) => {
-  const [playingWord, setPlayingWord] = useState<string | null>(null);
-
-  const pronounceWord = (word: CurioWord, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(word.term);
-      utterance.lang = 'en-GB';
-      utterance.rate = 0.85;
-      utterance.onstart = () => setPlayingWord(word.id);
-      utterance.onend = () => setPlayingWord(null);
-      utterance.onerror = () => setPlayingWord(null);
-      window.speechSynthesis.speak(utterance);
-    } else {
-      setPlayingWord(word.id);
-      setTimeout(() => setPlayingWord(null), 1400);
-    }
-  };
 
   return (
     <section className="px-4 sm:px-6 pb-6 select-none">
@@ -43,9 +26,7 @@ export const CabinetCuriosities: React.FC<CabinetCuriositiesProps> = ({ onWordCl
 
       {/* Grid of Rare Words */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {CURIOSITIES.slice(0, 4).map((word, idx) => {
-          const isPlaying = playingWord === word.id;
-          return (
+        {CURIOSITIES.slice(0, 4).map((word, idx) => (
             <div
               key={word.id}
               onClick={() => onWordClick?.(word)}
@@ -56,20 +37,13 @@ export const CabinetCuriosities: React.FC<CabinetCuriositiesProps> = ({ onWordCl
                   <span className="text-[10px] text-[#d4c78f] uppercase tracking-widest font-mono">
                     Lemme {idx + 1} • {word.level}
                   </span>
-                  <button
-                    type="button"
-                    onClick={(e) => pronounceWord(word, e)}
-                    className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
-                      isPlaying
-                        ? 'bg-[#f2ca50] text-[#3c2f00]'
-                        : 'bg-[#232a3a] text-[#f2ca50] hover:bg-[#f2ca50]/20'
-                    }`}
-                    title="Écouter la prononciation"
-                  >
-                    <span className="material-symbols-outlined text-sm">
-                      {isPlaying ? 'graphic_eq' : 'volume_up'}
-                    </span>
-                  </button>
+                  <DualSpeakerButton
+                    text={word.term}
+                    id={`curio-${word.id}`}
+                    phonetic={word.phonetic}
+                    explanation={word.frenchDef}
+                    variant="compact"
+                  />
                 </div>
 
                 <h4 className="font-serif text-lg font-bold text-[#f2ca50] group-hover:text-[#ffe088] transition-colors">
@@ -92,8 +66,7 @@ export const CabinetCuriosities: React.FC<CabinetCuriositiesProps> = ({ onWordCl
                 </div>
               </div>
             </div>
-          );
-        })}
+          ))}
       </div>
     </section>
   );

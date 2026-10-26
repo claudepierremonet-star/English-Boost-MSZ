@@ -402,18 +402,57 @@ export async function saveFlashcardProgress(progress: FlashcardProgress): Promis
 }
 
 /**
- * Upload custom hero photography to Firebase Storage (with local data URL fallback)
+ * Compresses an image file client-side to prevent localStorage/Firestore quota limits.
+ * Scales large photos to max 1600x1200px and outputs a high-definition JPEG data URL (~120KB-220KB).
+ */
+export async function compressImageToDataUrl(file: File, maxWidth = 1600, maxHeight = 1200, quality = 0.85): Promise<string> {
+  return new Promise((resolve) => {
+    if (typeof createImageBitmap !== 'undefined' && typeof document !== 'undefined') {
+      createImageBitmap(file)
+        .then((bitmap) => {
+          let { width, height } = bitmap;
+          if (width > maxWidth || height > maxHeight) {
+            const ratio = Math.min(maxWidth / width, maxHeight / height);
+            width = Math.round(width * ratio);
+            height = Math.round(height * ratio);
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(bitmap, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+            return;
+          }
+          fallbackFileReader(file, resolve);
+        })
+        .catch(() => {
+          fallbackFileReader(file, resolve);
+        });
+    } else {
+      fallbackFileReader(file, resolve);
+    }
+  });
+}
+
+function fallbackFileReader(file: File, resolve: (val: string) => void) {
+  const reader = new FileReader();
+  reader.onload = () => resolve(reader.result as string);
+  reader.onerror = () => resolve(URL.createObjectURL(file));
+  reader.readAsDataURL(file);
+}
+
+/**
+ * Upload custom hero photography to Firebase Storage (with local compressed data URL fallback)
  */
 export async function uploadHeroPhoto(file: File): Promise<string> {
-  // Always produce an instant local data URL for immediate rendering
-  const dataUrl = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+  // Always produce a web-optimized, compressed data URL first (safe for localStorage & Firestore)
+  const compressedDataUrl = await compressImageToDataUrl(file);
 
-  // If Firebase Storage is active, also upload to storage bucket
+  // If Firebase Storage is active, also attempt upload to storage bucket
   if (isFirebaseConfigured && storage && auth?.currentUser) {
     try {
       const fileExt = file.name.split('.').pop() || 'jpg';
@@ -423,13 +462,13 @@ export async function uploadHeroPhoto(file: File): Promise<string> {
       await updateUserProfile({ heroImageURL: downloadURL });
       return downloadURL;
     } catch (e) {
-      console.warn('Firebase Storage upload error, falling back to local image data:', e);
+      console.warn('Firebase Storage upload error, falling back to compressed local image data:', e);
     }
   }
 
-  // Update profile with local image
-  await updateUserProfile({ heroImageURL: dataUrl });
-  return dataUrl;
+  // Update profile with compressed image
+  await updateUserProfile({ heroImageURL: compressedDataUrl });
+  return compressedDataUrl;
 }
 
 export interface SevenDayDataPoint {

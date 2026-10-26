@@ -5,6 +5,8 @@ import {
   type StackCategoryType,
   type StackCardItem
 } from '../data/stackedCollections';
+import { DualSpeakerButton } from './DualSpeakerButton';
+import { triggerAutoPlayIfEnabled } from '../services/speechService';
 
 interface StackedCardsProps {
   onOpenFolioStudy: (folio: StudyFolio) => void;
@@ -111,6 +113,13 @@ export const StackedCards: React.FC<StackedCardsProps> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [focusItem, items]);
+
+  // Lecture audio automatique alternée dès l'ouverture d'un folio en focus lecture
+  useEffect(() => {
+    if (focusItem?.quote) {
+      triggerAutoPlayIfEnabled(focusItem.quote, `stacked-focus-${focusItem.id}`, 400);
+    }
+  }, [focusItem?.id, focusItem?.quote]);
 
   return (
     <section className="px-4 sm:px-6 py-4 flex flex-col gap-3 select-none">
@@ -469,9 +478,13 @@ export const StackedCards: React.FC<StackedCardsProps> = ({
               <blockquote className="font-serif italic text-lg sm:text-2xl text-[#fff7d6] leading-relaxed relative z-10 font-normal">
                 {focusItem.quote}
               </blockquote>
-              <div className="mt-4 pt-3 border-t border-[#f2ca50]/25 flex items-center justify-between text-xs text-[#d4c78f] font-mono">
-                <span>{focusItem.author}</span>
-                <span className="text-[#f2ca50] font-semibold">{focusItem.level}</span>
+              <div className="mt-4 pt-3 border-t border-[#f2ca50]/25 flex items-center justify-between text-xs text-[#d4c78f] font-mono flex-wrap gap-2">
+                <span>{focusItem.author} • {focusItem.level}</span>
+                <DualSpeakerButton
+                  text={focusItem.quote}
+                  id={`stacked-focus-${focusItem.id}`}
+                  variant="pill"
+                />
               </div>
             </div>
 

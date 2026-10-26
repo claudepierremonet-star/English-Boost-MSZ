@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import confetti from 'canvas-confetti';
+import { DualSpeakerButton } from './DualSpeakerButton';
 
 interface DailyChallengeCardProps {
   onChallengeComplete?: (xpEarned: number) => void;
@@ -105,9 +106,14 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({ onChalle
             </span>
             , giving offense to neither faction.”
           </p>
-          <div className="flex items-center justify-between mt-2 pt-2 border-t border-[#232a3a] text-xs text-[#d0c5af]">
+          <div className="flex items-center justify-between mt-2 pt-2 border-t border-[#232a3a] text-xs text-[#d0c5af] flex-wrap gap-2">
             <span>Substituer le lemme souligné par son équivalent C2 exact :</span>
-            <span className="text-[#d4c78f] font-semibold">B2/C1 Focus</span>
+            <DualSpeakerButton
+              text="The ambassador’s response was characteristically equivocal, giving offense to neither faction."
+              id="daily-cloze-sentence"
+              explanation="La réponse de l'ambassadeur était typiquement équivoque, n'offensant aucune des factions."
+              variant="pill"
+            />
           </div>
         </div>
 
@@ -116,12 +122,10 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({ onChalle
           {options.map((opt) => {
             const isChosen = selectedOption === opt.id;
             return (
-              <button
+              <div
                 key={opt.id}
-                type="button"
                 onClick={() => handleSelect(opt.id, opt.isAnswer)}
-                disabled={hasSubmitted}
-                className={`w-full p-3 rounded-xl text-left transition-all flex items-center justify-between border active:scale-[0.99] ${
+                className={`w-full p-3 rounded-xl text-left transition-all flex items-center justify-between border cursor-pointer active:scale-[0.99] ${
                   hasSubmitted && opt.isAnswer
                     ? 'bg-[#f2ca50]/15 border-[#f2ca50] text-[#f2ca50]'
                     : isChosen && !opt.isAnswer
@@ -130,11 +134,19 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({ onChalle
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <span className="w-6 h-6 rounded-full bg-[#232a3a] flex items-center justify-center text-xs text-[#d4c78f] font-mono font-bold">
+                  <span className="w-6 h-6 rounded-full bg-[#232a3a] flex items-center justify-center text-xs text-[#d4c78f] font-mono font-bold shrink-0">
                     {opt.label}
                   </span>
                   <div className="flex flex-col">
-                    <span className="font-semibold text-sm">{opt.term}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-sm">{opt.term}</span>
+                      <DualSpeakerButton
+                        text={opt.term}
+                        id={`opt-speaker-${opt.id}`}
+                        explanation={opt.definition}
+                        variant="minimal"
+                      />
+                    </div>
                     <span className="text-xs text-[#d0c5af]/80">{opt.definition}</span>
                   </div>
                 </div>
@@ -146,7 +158,7 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({ onChalle
                     ? 'cancel'
                     : 'radio_button_unchecked'}
                 </span>
-              </button>
+              </div>
             );
           })}
         </div>

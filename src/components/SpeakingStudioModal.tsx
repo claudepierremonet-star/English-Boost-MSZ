@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { SPEAKING_ITEMS, type SpeakingItem } from '../data/curriculum';
 import { recordAttempt } from '../firebase/client';
 import type { CEFRLevel } from '../firebase/types';
+import { DualSpeakerButton } from './DualSpeakerButton';
 
 interface SpeakingStudioModalProps {
   currentLevel: CEFRLevel;
@@ -213,21 +214,14 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
           </div>
         </div>
 
-        {/* Audio Reference button */}
-        <button
-          type="button"
-          onClick={handlePlayReference}
-          className={`w-full py-3 px-4 rounded-xl border flex items-center justify-center gap-2 font-bold text-xs uppercase tracking-wider transition-all ${
-            isPlayingReference
-              ? 'bg-[#f2ca50] text-[#3c2f00] border-[#f2ca50] shadow-md shadow-[#f2ca50]/20'
-              : 'bg-[#232a3a] text-[#dce2f8] border-[#4d4635]/40 hover:bg-[#2e3545]'
-          }`}
-        >
-          <span className="material-symbols-outlined text-base">
-            {isPlayingReference ? 'graphic_eq' : 'volume_up'}
-          </span>
-          <span>{isPlayingReference ? 'Écoute en cours...' : 'Écouter le locuteur de référence (RP)'}</span>
-        </button>
+        {/* Dual Audio Reference buttons: Premier (British UK) & Deuxième (American US) */}
+        <DualSpeakerButton
+          text={item.textToRead}
+          id={`speaking-ref-${item.id}`}
+          phonetic={item.phoneticHints}
+          explanation="Écoutez le modèle britannique ou américain avant votre enregistrement"
+          variant="prominent"
+        />
 
         {/* Recording Studio Stage */}
         <div className="p-6 rounded-2xl bg-[#191f2f] border border-[#4d4635]/40 shadow-xl flex flex-col items-center text-center gap-4">

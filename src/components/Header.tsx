@@ -13,6 +13,7 @@ interface HeaderProps {
   onNavigateCursus?: () => void;
   onOpenInstallModal?: () => void;
   onOpenAuthModal?: () => void;
+  onOpenAccentStudio?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -24,7 +25,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenThemeSelector,
   onNavigateCursus,
   onOpenInstallModal,
-  onOpenAuthModal
+  onOpenAuthModal,
+  onOpenAccentStudio
 }) => {
   const { isOnline, isSyncing, pendingCount, triggerSync } = useSyncStatus();
 
@@ -105,10 +107,23 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={onOpenThemeSelector}
-              className="p-1.5 rounded-full bg-[#232a3a]/80 hover:bg-[#2e3545] border border-[#f2ca50]/30 text-[#f2ca50] hover:text-[#ffe088] transition-all active:scale-95 flex items-center justify-center"
+              className="p-1.5 rounded-full bg-[#232a3a]/80 hover:bg-[#2e3545] border border-[#f2ca50]/30 text-[#f2ca50] hover:text-[#ffe088] transition-all active:scale-95 flex items-center justify-center cursor-pointer"
               title="Changer la peau de l'application (Sombre, Claire, Florale)"
             >
               <span className="material-symbols-outlined text-[19px]">palette</span>
+            </button>
+          )}
+
+          {/* Authentic American Accent Studio Button */}
+          {onOpenAccentStudio && (
+            <button
+              type="button"
+              onClick={onOpenAccentStudio}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#101e33] hover:bg-[#192b47] border border-[#38bdf8]/40 hover:border-[#38bdf8] text-xs font-semibold text-[#7dd3fc] transition-all active:scale-95 shadow-sm cursor-pointer"
+              title="Studio d'Authenticité Vocale Américaine (General American)"
+            >
+              <span className="text-[13px]">🇺🇸</span>
+              <span className="hidden sm:inline font-mono text-[11px] font-bold text-[#38bdf8]">Accent US</span>
             </button>
           )}
 

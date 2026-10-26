@@ -19,6 +19,7 @@ import { InstallAppModal } from './components/InstallAppModal';
 import { AuthModal } from './components/AuthModal';
 import { SchoolCurriculumView } from './components/SchoolCurriculumView';
 import { DiscreteWeatherBar } from './components/DiscreteWeatherBar';
+import { AmericanAccentStudioModal } from './components/AmericanAccentStudioModal';
 import { useSyncStatus } from './offline/useSyncStatus';
 import {
   getLocalUserProfile,
@@ -50,6 +51,7 @@ export default function App() {
   const [flashcardsFocusMode, setFlashcardsFocusMode] = useState<boolean>(false);
   const [isQuizOpen, setIsQuizOpen] = useState<boolean>(false);
   const [isSpeakingOpen, setIsSpeakingOpen] = useState<boolean>(false);
+  const [isAccentStudioOpen, setIsAccentStudioOpen] = useState<boolean>(false);
   const [activeFolioForStudy, setActiveFolioForStudy] = useState<StudyFolio | null>(null);
 
   // Subscribe to auth / local session
@@ -136,6 +138,7 @@ export default function App() {
         onNavigateCursus={() => setActiveTab('cursus')}
         onOpenInstallModal={() => setIsInstallModalOpen(true)}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
+        onOpenAccentStudio={() => setIsAccentStudioOpen(true)}
       />
 
       {/* Offline Alert Banner */}
@@ -417,6 +420,12 @@ export default function App() {
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
         onSuccess={(profile) => setUser(profile)}
+      />
+
+      {/* Authentic American Accent Studio Modal */}
+      <AmericanAccentStudioModal
+        isOpen={isAccentStudioOpen}
+        onClose={() => setIsAccentStudioOpen(false)}
       />
     </div>
   );

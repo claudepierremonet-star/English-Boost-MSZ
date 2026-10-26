@@ -3,6 +3,12 @@ import type { UserProfile, CEFRLevel } from '../firebase/types';
 import { signInWithGoogle, signOutUser, isFirebaseConfigured, auth, isUserSignedInWithGoogle } from '../firebase/client';
 import { useAppTheme, type AppTheme, type FloralBorderWidth } from '../theme/ThemeContext';
 import { BadgesSection } from './BadgesSection';
+import {
+  getAutoPlayOnDisplay,
+  setAutoPlayOnDisplay,
+  peekNextAlternatingAccent,
+  speakText
+} from '../services/speechService';
 
 interface ProfileModalProps {
   user: UserProfile;
@@ -23,6 +29,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   const [selectedPace, setSelectedPace] = useState<number>(user.stats.studyMinutesTarget || 30);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState<boolean>(false);
   const [isSigningIn, setIsSigningIn] = useState<boolean>(false);
+  const [autoPlayAudio, setAutoPlayAudio] = useState<boolean>(getAutoPlayOnDisplay());
 
   const handleLevelSelect = (lvl: CEFRLevel) => {
     setSelectedLevel(lvl);
@@ -67,6 +74,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
       console.error('Photo upload error', err);
     } finally {
       setIsUploadingPhoto(false);
+      if (e.target) {
+        e.target.value = '';
+      }
     }
   };
 
@@ -319,6 +329,67 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 {mins} min
               </button>
             ))}
+          </div>
+        </div>
+        {/* Lecture Audio Automatique Bilingue Alternée */}
+        <div className="p-5 rounded-2xl bg-gradient-to-br from-[#191f2f] to-[#131c2d] border border-[#f2ca50]/40 shadow-xl flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-[#f2ca50] text-lg">
+                autoplay
+              </span>
+              <span className="text-xs text-[#f2ca50] font-bold uppercase tracking-wider font-sans">
+                Lecture Audio Automatique Alternée
+              </span>
+            </div>
+            {/* Toggle Switch */}
+            <button
+              type="button"
+              onClick={() => {
+                const next = !autoPlayAudio;
+                setAutoPlayAudio(next);
+                setAutoPlayOnDisplay(next);
+              }}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer border ${
+                autoPlayAudio ? 'bg-[#f2ca50] border-[#f2ca50]' : 'bg-[#232a3a] border-[#4d4635]'
+              }`}
+              title="Activer ou désactiver la lecture automatique des citations et phrases"
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-[#0c1322] transition-transform ${
+                  autoPlayAudio ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+
+          <p className="text-xs text-[#d0c5af] leading-relaxed">
+            Dès qu'une nouvelle citation ou phrase est affichée à l'écran, l'application la lit automatiquement à voix haute en alternant systématiquement entre l'<strong>anglais britannique (🇬🇧 UK)</strong> et l'<strong>anglais américain (🇺🇸 US)</strong> pour habituer votre oreille aux deux phonétiques.
+          </p>
+
+          <div className="pt-2 border-t border-[#232a3a] flex items-center justify-between text-xs font-mono">
+            <div className="flex items-center gap-1.5 text-[#dce2f8]">
+              <span className="text-[10px] text-[#99907c]">Prochain accent :</span>
+              <span className="font-bold text-[#f2ca50]">
+                {peekNextAlternatingAccent() === 'en-GB' ? '🇬🇧 British (UK)' : '🇺🇸 American (US)'}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                const nextAccent = peekNextAlternatingAccent();
+                speakText(
+                  "Elegance is an art of disciplined expression.",
+                  nextAccent,
+                  "test-autoplay-sample"
+                );
+              }}
+              className="px-2.5 py-1 rounded-lg bg-[#232a3a] hover:bg-[#2e374d] text-xs font-semibold text-[#f2ca50] flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-sm">volume_up</span>
+              <span>Tester</span>
+            </button>
           </div>
         </div>
 
