@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { UserProfile, CEFRLevel } from '../firebase/types';
-
 import { useSyncStatus } from '../offline/useSyncStatus';
+import appIconImg from '../assets/images/app_icon_msz_1792789129742.jpg';
 
 interface HeaderProps {
   user: UserProfile;
@@ -29,6 +29,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAccentStudio
 }) => {
   const { isOnline, isSyncing, pendingCount, triggerSync } = useSyncStatus();
+  const [imageError, setImageError] = useState(false);
 
   return (
     <header className="fixed top-0 w-full z-40 pt-safe bg-[#0c1322]/85 backdrop-blur-xl border-b border-[#232a3a]/80 shadow-[0_4px_20px_rgba(0,0,0,0.5)]">
@@ -39,13 +40,23 @@ export const Header: React.FC<HeaderProps> = ({
           className="flex items-center gap-2.5 cursor-pointer group"
           title="Voir l'icône de l'application et l'ajouter sur votre écran d'accueil iOS/Android"
         >
-          <div className="relative w-9 h-9 rounded-xl overflow-hidden p-0.5 bg-gradient-to-br from-[#d4af37] via-[#f2ca50] to-[#ccb14f] shadow-md shadow-[#f2ca50]/20 group-hover:scale-105 transition-transform shrink-0">
-            <img
-              src="/src/assets/images/app_icon_msz_1792789129742.jpg"
-              alt="English Boost MSZ App Icon"
-              className="w-full h-full object-cover rounded-[10px]"
-              referrerPolicy="no-referrer"
-            />
+          <div className="relative w-9 h-9 rounded-xl overflow-hidden p-0.5 bg-gradient-to-br from-[#d4af37] via-[#f2ca50] to-[#ccb14f] shadow-md shadow-[#f2ca50]/20 group-hover:scale-105 transition-transform shrink-0 flex items-center justify-center">
+            {!imageError ? (
+              <img
+                src={appIconImg}
+                onError={() => {
+                  setImageError(true);
+                }}
+                alt="English Boost MSZ App Icon"
+                className="w-full h-full object-cover rounded-[10px] block"
+                loading="eager"
+                decoding="async"
+              />
+            ) : (
+              <div className="w-full h-full bg-[#0e1628] rounded-[10px] flex items-center justify-center text-[#f2ca50] font-black text-xs font-serif shadow-inner">
+                MSZ
+              </div>
+            )}
           </div>
           <div className="flex flex-col">
             <span className="font-sans font-bold text-[17px] text-[#f2ca50] tracking-wide leading-none group-hover:text-[#ffe088] transition-colors">

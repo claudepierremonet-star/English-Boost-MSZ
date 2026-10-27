@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import appIconImg from '../assets/images/app_icon_msz_1792789129742.jpg';
 
 interface InstallAppModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-export const APP_ICON_URL = '/src/assets/images/app_icon_msz_1792789129742.jpg';
+export const APP_ICON_URL = appIconImg || '/app-icon.jpg';
 
 export const InstallAppModal: React.FC<InstallAppModalProps> = ({ isOpen, onClose }) => {
   const [platformTab, setPlatformTab] = useState<'ios' | 'android'>('ios');
@@ -103,6 +104,10 @@ export const InstallAppModal: React.FC<InstallAppModalProps> = ({ isOpen, onClos
               <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-[22px] overflow-hidden shadow-[0_12px_30px_rgba(0,0,0,0.8)] border border-[#f2ca50]/60 ring-2 ring-black/40">
                 <img
                   src={APP_ICON_URL}
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = '/app-icon.jpg';
+                  }}
                   alt="English Boost MSZ App Icon"
                   className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                   referrerPolicy="no-referrer"
