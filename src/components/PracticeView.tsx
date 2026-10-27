@@ -9,6 +9,7 @@ interface PracticeViewProps {
   onOpenFlashcardsFocus?: () => void;
   onOpenQuiz: () => void;
   onOpenSpeaking: () => void;
+  onOpenGames?: () => void;
 }
 
 export const PracticeView: React.FC<PracticeViewProps> = ({
@@ -18,9 +19,12 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
   onOpenFlashcards,
   onOpenFlashcardsFocus,
   onOpenQuiz,
-  onOpenSpeaking
+  onOpenSpeaking,
+  onOpenGames
 }) => {
   const levelDescriptions: Record<CEFRLevel, string> = {
+    A1: 'A1 : Découverte et acquisition des structures élémentaires (6e / Cycle 3).',
+    A2: 'A2 : Consolidation et communication usuelle en contexte quotidien (5e / 4e).',
     B1: 'B1 : Perfectionnement des fondamentaux grammaticaux et du lexique académique.',
     B2: 'B2 : Expression fluide, maîtrise des nuances d’argumentation et idiomatique.',
     C1: 'C1 : Niveau Recommandé — Autonomie opérationnelle, discours feutré et précision.',
@@ -114,6 +118,43 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
         </button>
       </section>
 
+      {/* 20 Mini-Jeux Arcade Banner */}
+      {onOpenGames && (
+        <section
+          onClick={onOpenGames}
+          className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-950/60 via-[#172133] to-[#121927] border border-[#f2ca50]/50 shadow-xl flex items-center justify-between gap-4 cursor-pointer hover:border-[#f2ca50] transition-all group"
+        >
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#f2ca50] via-amber-500 to-amber-700 flex items-center justify-center text-[#3c2f00] shadow-md group-hover:scale-105 transition-transform shrink-0">
+              <span className="material-symbols-outlined text-2xl font-bold">sports_esports</span>
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono text-[#f2ca50] font-bold uppercase tracking-wider">
+                  SALLE D'ARCADE LINGUISTIQUE
+                </span>
+                <span className="px-2 py-0.2 rounded-full bg-amber-500/20 text-amber-300 text-[9px] font-mono font-bold">
+                  20 JEUX INTERACTIFS
+                </span>
+              </div>
+              <h3 className="font-serif font-bold text-base sm:text-lg text-[#dce2f8] group-hover:text-[#f2ca50] transition-colors mt-0.5">
+                Apprends l'Anglais en Jouant (Style Duolingo)
+              </h3>
+              <p className="text-xs text-[#d0c5af]/80">
+                Anagrammes, verbes irréguliers, pendu de l'espace, duel UK/US, expressions idiomatiques et boss battle !
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="px-4 py-2.5 rounded-xl bg-[#f2ca50] text-[#3c2f00] font-bold text-xs uppercase tracking-wider hidden sm:flex items-center gap-1 shrink-0 group-hover:bg-[#ffe088] shadow-md"
+          >
+            <span>Jouer</span>
+            <span className="material-symbols-outlined text-sm">play_arrow</span>
+          </button>
+        </section>
+      )}
+
       {/* CEFR Level Filter */}
       <section className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
@@ -129,6 +170,8 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
           {(['B1', 'B2', 'C1', 'C2'] as CEFRLevel[]).map((lvl) => {
             const isActive = currentLevel === lvl;
             const subLabels: Record<CEFRLevel, string> = {
+              A1: 'Initiation',
+              A2: 'Élémentaire',
               B1: 'Seuil',
               B2: 'Avancé',
               C1: 'Autonome',

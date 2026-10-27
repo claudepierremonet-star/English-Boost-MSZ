@@ -1,0 +1,28 @@
+# Configuration de Déploiement Netlify pour English Boost MSZ (Vite + React SPA)
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Règle de redirection essentielle pour Single Page Application (SPA)
+# Évite toute erreur 404 lors du rafraîchissement d'une page ou d'une URL directe
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# En-têtes de sécurité et d'optimisation du cache
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "SAMEORIGIN"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

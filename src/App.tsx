@@ -18,6 +18,7 @@ import { ThemeSelectorModal } from './components/ThemeSelectorModal';
 import { InstallAppModal } from './components/InstallAppModal';
 import { AuthModal } from './components/AuthModal';
 import { SchoolCurriculumView } from './components/SchoolCurriculumView';
+import { TwentyGamesHub } from './components/TwentyGamesHub';
 import { DiscreteWeatherBar } from './components/DiscreteWeatherBar';
 import { AmericanAccentStudioModal } from './components/AmericanAccentStudioModal';
 import { useSyncStatus } from './offline/useSyncStatus';
@@ -260,6 +261,41 @@ export default function App() {
               </button>
             </div>
 
+            {/* Editorial Banner for 20 Mini-Games Arcade */}
+            <div
+              onClick={() => setActiveTab('jeux')}
+              className="mx-4 sm:mx-6 my-2 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-950/60 via-[#172133] to-[#121927] border border-[#f2ca50]/50 shadow-xl flex items-center justify-between gap-4 cursor-pointer hover:border-[#f2ca50] transition-all group"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#f2ca50] via-amber-500 to-amber-700 flex items-center justify-center text-[#3c2f00] shadow-md group-hover:scale-105 transition-transform shrink-0">
+                  <span className="material-symbols-outlined text-2xl font-bold">sports_esports</span>
+                </div>
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] font-mono text-[#f2ca50] font-bold uppercase tracking-widest">
+                      SALLE D'ARCADE LINGUISTIQUE
+                    </span>
+                    <span className="px-2 py-0.2 rounded-full bg-amber-500/20 text-amber-300 text-[9px] font-mono font-bold">
+                      20 MINI-JEUX INTERACTIFS
+                    </span>
+                  </div>
+                  <h3 className="font-serif font-bold text-base sm:text-lg text-[#dce2f8] group-hover:text-[#f2ca50] transition-colors mt-0.5">
+                    Apprends & Joue en Même Temps (Style Duolingo)
+                  </h3>
+                  <p className="text-xs text-[#d0c5af]/80">
+                    Trouve des mots, maîtrise les verbes irréguliers, anagrammes, pendu spatial, memory, duel d'opposés et combat de boss !
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="px-4 py-2.5 rounded-xl bg-[#f2ca50] text-[#3c2f00] font-bold text-xs uppercase tracking-wider hidden sm:flex items-center gap-1 shrink-0 group-hover:bg-[#ffe088] shadow-md"
+              >
+                <span>Jouer</span>
+                <span className="material-symbols-outlined text-sm">play_arrow</span>
+              </button>
+            </div>
+
             {/* Stacked Overlapping Study Cards (Manuscrits d'Étude & Collections) */}
             <StackedCards
               onOpenFolioStudy={handleOpenFolioStudy}
@@ -299,6 +335,15 @@ export default function App() {
           </div>
         )}
 
+        {activeTab === 'jeux' && (
+          <div className="max-w-5xl mx-auto animate-fadeIn pt-2">
+            <TwentyGamesHub
+              onXpEarned={(xp) => handleChallengeComplete(xp)}
+              onClose={() => setActiveTab('accueil')}
+            />
+          </div>
+        )}
+
         {activeTab === 'dashboard' && (
           <div className="max-w-4xl mx-auto animate-fadeIn pt-2">
             <DashboardView
@@ -323,6 +368,7 @@ export default function App() {
               }}
               onOpenQuiz={() => setIsQuizOpen(true)}
               onOpenSpeaking={() => setIsSpeakingOpen(true)}
+              onOpenGames={() => setActiveTab('jeux')}
             />
           </div>
         )}

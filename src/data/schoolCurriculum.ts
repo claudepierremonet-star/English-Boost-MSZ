@@ -129,3 +129,5 @@ export function downloadCurriculumMarkdown() {
   downloadAnchor.click();
   downloadAnchor.remove();
 }
+
+export * from './grammar6eData';

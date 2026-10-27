@@ -11,6 +11,8 @@ import {
   type SchoolLesson
 } from '../data/schoolCurriculum';
 import { LessonDetailModal } from './LessonDetailModal';
+import { Grammar6eStudio } from './Grammar6eStudio';
+import { RhetoricalAnalyzerView } from './RhetoricalAnalyzerView';
 
 interface SchoolCurriculumViewProps {
   onLessonCompleted?: (lessonId: string, xpEarned: number) => void;
@@ -20,6 +22,7 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
   onLessonCompleted
 }) => {
   const [selectedGrade, setSelectedGrade] = useState<SchoolGrade>('6e');
+  const [subTab6e, setSubTab6e] = useState<'themes' | 'grammar' | 'rhetoric'>('themes');
   const [selectedThemeId, setSelectedThemeId] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeLesson, setActiveLesson] = useState<SchoolLesson | null>(null);
@@ -140,10 +143,69 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
             </span>
           </div>
         )}
+
+        {/* 6E SPECIFIC TRI-MODE TOGGLE (THEMES vs GRAMMAR 50 vs RHETORIC) */}
+        {selectedGrade === '6e' && (
+          <div className="flex flex-col sm:flex-row p-1 rounded-xl bg-[#151b2b] border border-[#f2ca50]/30 shadow-md gap-1 mt-1">
+            <button
+              type="button"
+              onClick={() => setSubTab6e('themes')}
+              className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                subTab6e === 'themes'
+                  ? 'bg-[#f2ca50] text-[#3c2f00] shadow-md shadow-[#f2ca50]/20'
+                  : 'text-[#d0c5af] hover:text-white'
+              }`}
+            >
+              <span className="material-symbols-outlined text-sm">auto_stories</span>
+              <span>10 Leçons Thématiques</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSubTab6e('grammar')}
+              className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                subTab6e === 'grammar'
+                  ? 'bg-[#f2ca50] text-[#3c2f00] shadow-md shadow-[#f2ca50]/20'
+                  : 'text-[#d0c5af] hover:text-white'
+              }`}
+            >
+              <span className="material-symbols-outlined text-sm">psychology</span>
+              <span>Atelier Grammaire (50 Fiches)</span>
+              <span className="px-1.5 py-0.2 rounded-full bg-[#3c2f00]/20 text-[10px] font-mono">
+                50
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSubTab6e('rhetoric')}
+              className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                subTab6e === 'rhetoric'
+                  ? 'bg-[#f2ca50] text-[#3c2f00] shadow-md shadow-[#f2ca50]/20'
+                  : 'text-[#d0c5af] hover:text-white'
+              }`}
+            >
+              <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>
+                auto_awesome
+              </span>
+              <span>Analyse Rhétorique Automatique</span>
+              <span className="px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-mono font-bold">
+                Auto
+              </span>
+            </button>
+          </div>
+        )}
       </section>
 
-      {/* SEARCH AND 10 THEMES QUICK FILTER */}
-      <section className="flex flex-col gap-3">
+      {/* RENDER EITHER GRAMMAR 6E STUDIO, RHETORICAL ANALYZER OR STANDARD THEMATIC LESSONS */}
+      {selectedGrade === '6e' && subTab6e === 'grammar' ? (
+        <Grammar6eStudio />
+      ) : selectedGrade === '6e' && subTab6e === 'rhetoric' ? (
+        <RhetoricalAnalyzerView />
+      ) : (
+        <>
+          {/* SEARCH AND 10 THEMES QUICK FILTER */}
+          <section className="flex flex-col gap-3">
         <div className="flex flex-col sm:flex-row gap-2.5">
           {/* Search box */}
           <div className="relative flex-1">
@@ -300,6 +362,8 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
           ))}
         </div>
       </section>
+        </>
+      )}
 
       {/* INTERACTIVE LESSON MODAL */}
       <LessonDetailModal

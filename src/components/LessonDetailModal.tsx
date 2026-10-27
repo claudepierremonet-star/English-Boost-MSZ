@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import type { SchoolLesson, SchoolVocabularyItem } from '../data/schoolCurriculum';
+import { GRAMMAR_6E_ITEMS } from '../data/grammar6eData';
+import { SentenceStructuringExercise } from './SentenceStructuringExercise';
 import confetti from 'canvas-confetti';
 import { recordAttempt } from '../firebase/client';
 import { DualSpeakerButton } from './DualSpeakerButton';
+import { RhetoricalAnalyzerView } from './RhetoricalAnalyzerView';
 
 interface LessonDetailModalProps {
   lesson: SchoolLesson | null;
@@ -11,7 +14,7 @@ interface LessonDetailModalProps {
   onCompleteLesson?: (lessonId: string, xpEarned: number) => void;
 }
 
-type LessonTab = 'overview' | 'vocab' | 'grammar' | 'dialogue' | 'quiz' | 'dictation';
+type LessonTab = 'overview' | 'vocab' | 'grammar' | 'dialogue' | 'quiz' | 'dictation' | 'rhetoric';
 
 export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
   lesson,
@@ -28,6 +31,13 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
   // Flashcard mode inside vocab tab
   const [flashcardIndex, setFlashcardIndex] = useState<number>(0);
   const [isFlipped, setIsFlipped] = useState<boolean>(false);
+
+  // Vocabulary search & filter state
+  const [vocabSearchQuery, setVocabSearchQuery] = useState<string>('');
+  const [vocabFilterType, setVocabFilterType] = useState<'all' | 'noun' | 'verb' | 'phrase'>('all');
+
+  // Grammar 6e sentence structuring exercise index
+  const [modalGrammarIndex, setModalGrammarIndex] = useState<number>(0);
 
   // Quiz state
   const [quizAnswers, setQuizAnswers] = useState<Record<string, number>>({});
@@ -52,6 +62,24 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
       setFlashcardIndex(0);
       setIsFlipped(false);
       setActiveDialogueIndex(null);
+      setVocabSearchQuery('');
+      setVocabFilterType('all');
+
+      if (lesson.class_level === '6e') {
+        const themeMap: Record<string, number> = {
+          daily_life: 0,
+          travel: 19,
+          history: 42,
+          hobbies: 14,
+          sport: 20,
+          music: 15,
+          restaurant: 22,
+          food: 25,
+          work: 9,
+          school_social: 5
+        };
+        setModalGrammarIndex(themeMap[lesson.theme_id] ?? 0);
+      }
     }
   }, [lesson]);
 
@@ -187,12 +215,35 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
     playNextLine();
   };
 
+  const filteredVocab = React.useMemo(() => {
+    if (!lesson?.vocabulary) return [];
+    return lesson.vocabulary.filter((w) => {
+      // Filter by type
+      if (vocabFilterType === 'noun' && !w.part_of_speech.toLowerCase().includes('n')) return false;
+      if (vocabFilterType === 'verb' && !w.part_of_speech.toLowerCase().includes('v')) return false;
+      if (vocabFilterType === 'phrase' && !w.part_of_speech.toLowerCase().includes('phr') && !w.part_of_speech.toLowerCase().includes('exp')) return false;
+
+      // Filter by search query
+      if (vocabSearchQuery.trim()) {
+        const q = vocabSearchQuery.toLowerCase();
+        return (
+          w.term.toLowerCase().includes(q) ||
+          w.translation_fr.toLowerCase().includes(q) ||
+          w.example_en.toLowerCase().includes(q) ||
+          w.example_fr.toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+  }, [lesson?.vocabulary, vocabFilterType, vocabSearchQuery]);
+
   const tabsList: Array<{ id: LessonTab; label: string; icon: string }> = [
     { id: 'overview', label: 'Aperçu & Phrases', icon: 'format_quote' },
-    { id: 'vocab', label: 'Vocabulaire (8)', icon: 'style' },
+    { id: 'vocab', label: `Vocabulaire (${lesson.vocabulary?.length || 0})`, icon: 'style' },
     { id: 'grammar', label: 'Grammaire', icon: 'history_edu' },
     { id: 'dialogue', label: 'Dialogue Audio', icon: 'forum' },
-    { id: 'quiz', label: 'Quiz (4)', icon: 'quiz' },
+    { id: 'rhetoric', label: 'Analyse Rhétorique', icon: 'auto_awesome' },
+    { id: 'quiz', label: `Quiz (${lesson.quiz?.length || 0})`, icon: 'quiz' },
     { id: 'dictation', label: 'Dictée', icon: 'edit_note' }
   ];
 
@@ -365,13 +416,13 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
           {/* TAB 2: VOCABULARY & FLASHCARDS */}
           {activeTab === 'vocab' && (
             <div className="space-y-5 animate-fadeIn">
-              {/* Flashcard interactive trainer widget */}
+              {/* Flashcard interactive trainer widget with 50-card scrubber */}
               <div className="p-4 rounded-xl bg-[#151b2b] border border-[#f2ca50]/30 flex flex-col gap-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="material-symbols-outlined text-[#f2ca50] text-base">style</span>
                     <span className="text-xs font-bold text-[#f2ca50] uppercase tracking-wider font-mono">
-                      Mode Flashcard Rapide • {flashcardIndex + 1} / {lesson.vocabulary.length}
+                      Flashcard • {flashcardIndex + 1} / {lesson.vocabulary.length} ({Math.round(((flashcardIndex + 1) / Math.max(1, lesson.vocabulary.length)) * 100)}%)
                     </span>
                   </div>
                   <button
@@ -383,11 +434,21 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                   </button>
                 </div>
 
+                {/* Golden Progress Bar */}
+                <div className="w-full h-1.5 rounded-full bg-[#0c1322] overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-[#d4c78f] to-[#f2ca50] transition-all duration-300 rounded-full"
+                    style={{
+                      width: `${Math.round(((flashcardIndex + 1) / Math.max(1, lesson.vocabulary.length)) * 100)}%`
+                    }}
+                  />
+                </div>
+
                 {/* Flip Card */}
                 {lesson.vocabulary[flashcardIndex] && (
                   <div
                     onClick={() => setIsFlipped(!isFlipped)}
-                    className="cursor-pointer min-h-[140px] rounded-xl bg-[#0c1322] border border-[#232a3a] p-5 flex flex-col items-center justify-center text-center shadow-inner relative group transition-all"
+                    className="cursor-pointer min-h-[145px] rounded-xl bg-[#0c1322] border border-[#232a3a] p-5 flex flex-col items-center justify-center text-center shadow-inner relative group transition-all hover:border-[#f2ca50]/40"
                   >
                     {!isFlipped ? (
                       <div className="flex flex-col items-center gap-1.5">
@@ -420,50 +481,174 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                   </div>
                 )}
 
-                <div className="flex items-center justify-between pt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsFlipped(false);
-                      setFlashcardIndex((prev) => (prev > 0 ? prev - 1 : lesson.vocabulary.length - 1));
-                    }}
-                    className="px-3 py-1.5 rounded-lg bg-[#232a3a] text-xs font-mono font-bold text-[#d0c5af] hover:text-[#f2ca50]"
-                  >
-                    ← Précédent
-                  </button>
+                {/* Steppers & Audio */}
+                <div className="flex items-center justify-between pt-1 flex-wrap gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsFlipped(false);
+                        setFlashcardIndex((prev) => Math.max(0, prev - 10));
+                      }}
+                      disabled={flashcardIndex === 0}
+                      className="px-2 py-1 rounded bg-[#232a3a] text-[10px] font-mono font-bold text-[#d0c5af] hover:text-[#f2ca50] disabled:opacity-40"
+                      title="Reculer de 10 cartes"
+                    >
+                      -10
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsFlipped(false);
+                        setFlashcardIndex((prev) => (prev > 0 ? prev - 1 : lesson.vocabulary.length - 1));
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-[#232a3a] text-xs font-mono font-bold text-[#d0c5af] hover:text-[#f2ca50] active:scale-95"
+                    >
+                      ← Précédent
+                    </button>
+                  </div>
 
-                  <DualSpeakerButton
-                    text={lesson.vocabulary[flashcardIndex].term}
-                    id={`fc-audio-${flashcardIndex}`}
-                    phonetic={lesson.vocabulary[flashcardIndex].phonetic}
-                    explanation={lesson.vocabulary[flashcardIndex].translation_fr}
-                    variant="pill"
+                  {lesson.vocabulary[flashcardIndex] && (
+                    <DualSpeakerButton
+                      text={lesson.vocabulary[flashcardIndex].term}
+                      id={`fc-audio-${flashcardIndex}`}
+                      phonetic={lesson.vocabulary[flashcardIndex].phonetic}
+                      explanation={lesson.vocabulary[flashcardIndex].translation_fr}
+                      variant="pill"
+                    />
+                  )}
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsFlipped(false);
+                        setFlashcardIndex((prev) => (prev < lesson.vocabulary.length - 1 ? prev + 1 : 0));
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-[#232a3a] text-xs font-mono font-bold text-[#d0c5af] hover:text-[#f2ca50] active:scale-95"
+                    >
+                      Suivant →
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsFlipped(false);
+                        setFlashcardIndex((prev) => Math.min(lesson.vocabulary.length - 1, prev + 10));
+                      }}
+                      disabled={flashcardIndex >= lesson.vocabulary.length - 1}
+                      className="px-2 py-1 rounded bg-[#232a3a] text-[10px] font-mono font-bold text-[#d0c5af] hover:text-[#f2ca50] disabled:opacity-40"
+                      title="Avancer de 10 cartes"
+                    >
+                      +10
+                    </button>
+                  </div>
+                </div>
+
+                {/* Range Scrubber across 50 cards with randomizer */}
+                <div className="flex items-center gap-2 pt-2 border-t border-[#232a3a]/80">
+                  <span className="text-[10px] text-[#99907c] font-mono shrink-0">Naviguer (1-{lesson.vocabulary.length}) :</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={Math.max(0, lesson.vocabulary.length - 1)}
+                    value={flashcardIndex}
+                    onChange={(e) => {
+                      setIsFlipped(false);
+                      setFlashcardIndex(parseInt(e.target.value, 10));
+                    }}
+                    className="w-full h-1.5 bg-[#0a1120] rounded-lg appearance-none cursor-pointer accent-[#f2ca50]"
+                    aria-label="Navigation parmi les cartes"
                   />
-
                   <button
                     type="button"
                     onClick={() => {
                       setIsFlipped(false);
-                      setFlashcardIndex((prev) => (prev < lesson.vocabulary.length - 1 ? prev + 1 : 0));
+                      setFlashcardIndex(Math.floor(Math.random() * lesson.vocabulary.length));
                     }}
-                    className="px-3 py-1.5 rounded-lg bg-[#232a3a] text-xs font-mono font-bold text-[#d0c5af] hover:text-[#f2ca50]"
+                    className="px-2 py-1 rounded bg-[#101b33] border border-[#f2ca50]/30 text-[#f2ca50] text-[10px] font-mono font-bold hover:bg-[#f2ca50] hover:text-[#2c2000] transition-colors shrink-0 flex items-center gap-1 shadow-sm"
+                    title="Tirer une carte au hasard"
                   >
-                    Suivant →
+                    <span className="material-symbols-outlined text-xs">shuffle</span>
+                    <span>Aléatoire</span>
                   </button>
                 </div>
               </div>
 
-              {/* Complete Vocabulary List */}
-              <div>
-                <h3 className="font-serif text-base font-bold text-[#dce2f8] mb-3">
-                  Lexique Intégral ({lesson.vocabulary.length} Termes Enregistrés)
-                </h3>
+              {/* Complete Vocabulary List with Search & Type Filter */}
+              <div className="space-y-3 pt-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-serif text-base sm:text-lg font-bold text-[#dce2f8] flex items-center gap-2">
+                      <span>Lexique Intégral</span>
+                      <span className="px-2 py-0.5 rounded-full bg-[#f2ca50]/15 text-[#f2ca50] text-xs font-mono font-bold border border-[#f2ca50]/30">
+                        {lesson.vocabulary.length} Termes
+                      </span>
+                    </h3>
+                    <p className="text-xs text-[#d0c5af]/80">
+                      Entraînement sonorisé avec phonétique internationale et phrases d'exemple en contexte.
+                    </p>
+                  </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {lesson.vocabulary.map((w: SchoolVocabularyItem, idx: number) => (
+                  {/* Filter Type Pills */}
+                  <div className="flex items-center gap-1 overflow-x-auto py-0.5">
+                    {[
+                      { id: 'all', label: `Tous (${lesson.vocabulary.length})` },
+                      { id: 'noun', label: 'Noms' },
+                      { id: 'verb', label: 'Verbes' },
+                      { id: 'phrase', label: 'Phrases' }
+                    ].map((tab) => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setVocabFilterType(tab.id as any)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-mono transition-all shrink-0 ${
+                          vocabFilterType === tab.id
+                            ? 'bg-[#f2ca50] text-[#3c2f00] font-bold shadow-sm'
+                            : 'bg-[#232a3a] text-[#d0c5af] hover:text-white'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Instant Search Bar */}
+                <div className="relative">
+                  <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[#99907c]">
+                    search
+                  </span>
+                  <input
+                    type="text"
+                    value={vocabSearchQuery}
+                    onChange={(e) => setVocabSearchQuery(e.target.value)}
+                    placeholder={`Rechercher parmi les ${lesson.vocabulary.length} termes (en anglais ou en français)...`}
+                    className="w-full pl-9 pr-8 py-2 rounded-xl bg-[#0c1322] border border-[#232a3a] text-xs text-[#dce2f8] placeholder-[#99907c] focus:outline-none focus:border-[#f2ca50]/50"
+                  />
+                  {vocabSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setVocabSearchQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-[#99907c] hover:text-white"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                {/* Dynamic count notice */}
+                {(vocabSearchQuery || vocabFilterType !== 'all') && (
+                  <div className="text-xs text-[#d4c78f] font-mono">
+                    Affichage de {filteredVocab.length} sur {lesson.vocabulary.length} termes
+                  </div>
+                )}
+
+                {/* Complete Cards Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[580px] overflow-y-auto pr-1">
+                  {filteredVocab.map((w: SchoolVocabularyItem, idx: number) => (
                     <div
                       key={w.id || idx}
-                      className="p-3.5 rounded-xl bg-[#151b2b] border border-[#232a3a] flex flex-col justify-between gap-2 hover:border-[#f2ca50]/30 transition-all"
+                      className="p-3.5 rounded-xl bg-[#151b2b] border border-[#232a3a] flex flex-col justify-between gap-2 hover:border-[#f2ca50]/30 transition-all shadow-sm"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div>
@@ -565,6 +750,49 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                   Focus officiel du cycle : {lesson.grammar.level_focus}
                 </div>
               </div>
+
+              {/* 6e Interactive Sentence Structuring Section */}
+              {lesson.class_level === '6e' && (
+                <div className="flex flex-col gap-2 pt-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-mono font-bold text-[#f2ca50] uppercase tracking-wider flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-sm">extension</span>
+                      Exercice de Structuration de Phrase (6e)
+                    </span>
+                    <span className="text-[10px] font-mono text-[#d4c78f]">
+                      Fiche #{modalGrammarIndex + 1}/50
+                    </span>
+                  </div>
+
+                  <SentenceStructuringExercise
+                    item={GRAMMAR_6E_ITEMS[modalGrammarIndex] || GRAMMAR_6E_ITEMS[0]}
+                    onComplete={(id, score) => {
+                      recordAttempt({
+                        moduleId: `${id}_struct`,
+                        moduleType: 'grammar',
+                        title: `Structuration 6e : ${GRAMMAR_6E_ITEMS[modalGrammarIndex]?.title}`,
+                        level: 'A1',
+                        score,
+                        durationSeconds: 60
+                      }).catch(console.warn);
+                    }}
+                    onNext={() => {
+                      if (modalGrammarIndex < GRAMMAR_6E_ITEMS.length - 1) {
+                        setModalGrammarIndex((prev) => prev + 1);
+                      }
+                    }}
+                    onPrev={() => {
+                      if (modalGrammarIndex > 0) {
+                        setModalGrammarIndex((prev) => prev - 1);
+                      }
+                    }}
+                    hasPrev={modalGrammarIndex > 0}
+                    hasNext={modalGrammarIndex < GRAMMAR_6E_ITEMS.length - 1}
+                    currentIndex={modalGrammarIndex + 1}
+                    totalCount={GRAMMAR_6E_ITEMS.length}
+                  />
+                </div>
+              )}
             </div>
           )}
 
@@ -581,14 +809,27 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handlePlayFullDialogue}
-                  className="px-3.5 py-2 rounded-xl bg-[#f2ca50] text-[#3c2f00] font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-md hover:bg-[#ffe088] active:scale-95 transition-all shrink-0"
-                >
-                  <span className="material-symbols-outlined text-sm">play_arrow</span>
-                  Lecture Intégrale
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('rhetoric')}
+                    className="px-3 py-2 rounded-xl bg-[#232a3a] hover:bg-[#2e374b] text-[#f2ca50] border border-[#f2ca50]/30 font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-md active:scale-95 transition-all shrink-0"
+                  >
+                    <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>
+                      auto_awesome
+                    </span>
+                    <span>Analyse Rhétorique</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handlePlayFullDialogue}
+                    className="px-3.5 py-2 rounded-xl bg-[#f2ca50] text-[#3c2f00] font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-md hover:bg-[#ffe088] active:scale-95 transition-all shrink-0"
+                  >
+                    <span className="material-symbols-outlined text-sm">play_arrow</span>
+                    Lecture Intégrale
+                  </button>
+                </div>
               </div>
 
               {/* Dialogue lines */}
@@ -833,6 +1074,13 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* TAB 7: AUTOMATIC RHETORICAL ANALYSIS */}
+          {activeTab === 'rhetoric' && (
+            <div className="space-y-4 animate-fadeIn">
+              <RhetoricalAnalyzerView initialLessonId={lesson.id} />
             </div>
           )}
         </div>

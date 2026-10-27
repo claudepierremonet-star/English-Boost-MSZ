@@ -1,6 +1,6 @@
 import React from 'react';
 
-export type TabKey = 'accueil' | 'cursus' | 'pratique' | 'dashboard' | 'profil';
+export type TabKey = 'accueil' | 'cursus' | 'jeux' | 'pratique' | 'dashboard' | 'profil';
 
 interface BottomNavProps {
   activeTab: TabKey;
@@ -10,9 +10,10 @@ interface BottomNavProps {
 export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) => {
   const tabs: Array<{ key: TabKey; label: string; icon: string }> = [
     { key: 'accueil', label: 'Accueil', icon: 'auto_stories' },
-    { key: 'cursus', label: 'Cursus 6e-Tle', icon: 'school' },
+    { key: 'cursus', label: 'Cursus', icon: 'school' },
+    { key: 'jeux', label: 'Game', icon: 'sports_esports' },
     { key: 'pratique', label: 'Atelier', icon: 'menu_book' },
-    { key: 'dashboard', label: 'Dashboard', icon: 'insights' },
+    { key: 'dashboard', label: 'Stats', icon: 'insights' },
     { key: 'profil', label: 'Profil', icon: 'person' }
   ];
 

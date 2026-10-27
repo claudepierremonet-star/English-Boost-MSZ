@@ -1,4 +1,4 @@
-export type CEFRLevel = 'B1' | 'B2' | 'C1' | 'C2';
+export type CEFRLevel = 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
 
 export interface UserStats {
   streakDays: number;
@@ -47,7 +47,7 @@ export interface UserProfile {
 export interface LearningAttempt {
   attemptId: string;
   moduleId: string;
-  moduleType: 'dictation' | 'flashcard' | 'quiz' | 'speaking' | 'daily_challenge';
+  moduleType: 'dictation' | 'flashcard' | 'quiz' | 'speaking' | 'daily_challenge' | 'grammar';
   title: string;
   level: CEFRLevel;
   score: number;
