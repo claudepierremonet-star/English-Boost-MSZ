@@ -30,6 +30,7 @@ import {
 } from './firebase/client';
 import type { UserProfile, CEFRLevel } from './firebase/types';
 import type { StudyFolio, CurioWord } from './data/curriculum';
+import { calculateLevel } from './utils/levelUtils';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabKey>('accueil');
@@ -99,15 +100,53 @@ export default function App() {
     setUser(updated);
   };
 
-  const handleChallengeComplete = async (xp: number) => {
+  /**
+   * Gestionnaire d'achèvement de défi :
+   * Implémente la logique de gain (+10 pts) en cas de succès et de perte (-5 pts) en cas d'erreur/défaite.
+   * Utilise calculateLevel(totalXp) définissant les seuils de 100 pts par niveau.
+   */
+  const handleChallengeComplete = async (isSuccessOrXp: boolean | number = true, customXp?: number) => {
+    // Calcul du delta de points (+10 pts ou -5 pts)
+    let delta = 10;
+    if (typeof isSuccessOrXp === 'boolean') {
+      delta = isSuccessOrXp ? (customXp ?? 10) : -5;
+    } else if (typeof isSuccessOrXp === 'number') {
+      if (isSuccessOrXp <= 0) {
+        delta = -5; // Défaite / échec
+      } else if (isSuccessOrXp === 10 || isSuccessOrXp === -5) {
+        delta = isSuccessOrXp;
+      } else if (isSuccessOrXp === 240) {
+        delta = 10; // Défi quotidien réussi
+      } else {
+        delta = customXp !== undefined ? customXp : (isSuccessOrXp > 0 ? isSuccessOrXp : 10);
+      }
+    }
+
+    const currentTotalXp = user.stats?.totalXp || 0;
+    const newTotalXp = Math.max(0, currentTotalXp + delta);
+    const currentWeeklyXp = user.stats?.weeklyXp || 0;
+    const newWeeklyXp = Math.max(0, currentWeeklyXp + (delta > 0 ? delta : 0));
+
+    // Calcul du niveau via la fonction utilitaire (100 pts par niveau)
+    const oldLevel = calculateLevel(currentTotalXp);
+    const newLevel = calculateLevel(newTotalXp);
+
     const updated = await updateUserProfile({
       stats: {
         ...user.stats,
-        weeklyXp: user.stats.weeklyXp + xp,
-        totalXp: user.stats.totalXp + xp
+        weeklyXp: newWeeklyXp,
+        totalXp: newTotalXp
       }
     });
     setUser(updated);
+
+    return {
+      delta,
+      newTotalXp,
+      oldLevel,
+      newLevel,
+      isLevelUp: newLevel > oldLevel
+    };
   };
 
   const handleOpenFolioStudy = (folio: StudyFolio) => {

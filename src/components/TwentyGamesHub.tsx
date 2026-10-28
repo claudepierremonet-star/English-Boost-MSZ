@@ -25,7 +25,13 @@ import {
   UK_VS_US_ITEMS,
   IDIOM_HUNTER_ITEMS,
   SPELLING_BEE_ITEMS,
-  BOSS_BATTLE_ROUNDS
+  BOSS_BATTLE_ROUNDS,
+  ArcadeProgressionState,
+  getStoredArcadeProgression,
+  saveStoredArcadeProgression,
+  calculatePlayerLevel,
+  ARCADE_DIFFICULTY_TIERS,
+  ArcadeDifficultyTierKey
 } from '../data/twentyGamesData';
 
 interface TwentyGamesHubProps {
@@ -134,6 +140,15 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({ onXpEarned, onCl
   const [activeGame, setActiveGame] = useState<MiniGameMeta | null>(null);
   const [howToPlayModal, setHowToPlayModal] = useState<MiniGameMeta | null>(null);
 
+  // Progression globale (Niveau 1 à 99, +10 pts victoire, -5 pts défaite, déblocage séquentiel)
+  const [progression, setProgression] = useState<ArcadeProgressionState>(() => getStoredArcadeProgression());
+  const [lockedGamePrompt, setLockedGamePrompt] = useState<MiniGameMeta | null>(null);
+  const [showLevelUpCelebration, setShowLevelUpCelebration] = useState<{ newLevel: number; oldLevel: number } | null>(null);
+  const [showRulesModal, setShowRulesModal] = useState<boolean>(false);
+  const [pointsToast, setPointsToast] = useState<{ text: string; isGain: boolean } | null>(null);
+
+  const levelInfo = calculatePlayerLevel(progression.points);
+
   // Stats session
   const [streak, setStreak] = useState<number>(0);
   const [sessionScore, setSessionScore] = useState<number>(0);
@@ -151,7 +166,35 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({ onXpEarned, onCl
     }
   };
 
+  const isGameUnlocked = (game: MiniGameMeta): boolean => {
+    // Jeu #1 (Speed Match) est débloqué dès le départ
+    if (game.number === 1) return true;
+    // Déblocage séquentiel : le joueur doit avoir battu/débloqué le jeu précédent
+    const isSequentialUnlocked = progression.unlockedMaxGameNumber >= game.number;
+    // Condition de niveau requise
+    const isLevelMet = levelInfo.level >= game.requiredLevel;
+    return isSequentialUnlocked && isLevelMet;
+  };
+
+  const getLockDetails = (game: MiniGameMeta) => {
+    const prevGame = TWENTY_GAMES_METADATA.find((g) => g.number === game.number - 1);
+    const missingSeq = progression.unlockedMaxGameNumber < game.number;
+    const missingLvl = levelInfo.level < game.requiredLevel;
+
+    return {
+      missingSeq,
+      missingLvl,
+      prevGameTitle: prevGame ? prevGame.title : `Jeu #${game.number - 1}`,
+      pointsNeededForLevel: Math.max(0, (game.requiredLevel - 1) * 100 - progression.points)
+    };
+  };
+
   const handleLaunchGame = (game: MiniGameMeta) => {
+    if (!isGameUnlocked(game)) {
+      sfx.playWrong();
+      setLockedGamePrompt(game);
+      return;
+    }
     sfx.playPop();
     setActiveGame(game);
     setHearts(3);
@@ -162,16 +205,74 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({ onXpEarned, onCl
     sfx.playWin();
     setSessionScore((prev) => prev + bonusXp);
     setStreak((prev) => prev + 1);
+
+    // Système de points : +10 points cumulés par victoire réussie
+    const prevPoints = progression.points;
+    const newPoints = prevPoints + 10;
+    const prevLevel = calculatePlayerLevel(prevPoints).level;
+    const newLevel = calculatePlayerLevel(newPoints).level;
+
+    // Déblocage séquentiel du jeu suivant si le joueur a réussi son palier actuel
+    let nextUnlockedMax = progression.unlockedMaxGameNumber;
+    if (activeGame && activeGame.number === progression.unlockedMaxGameNumber && progression.unlockedMaxGameNumber < 20) {
+      nextUnlockedMax = progression.unlockedMaxGameNumber + 1;
+    }
+
+    const updatedCompleted = activeGame && !progression.completedGames.includes(activeGame.id)
+      ? [...progression.completedGames, activeGame.id]
+      : progression.completedGames;
+
+    const nextState: ArcadeProgressionState = {
+      points: newPoints,
+      level: newLevel,
+      unlockedMaxGameNumber: nextUnlockedMax,
+      completedGames: updatedCompleted
+    };
+
+    setProgression(nextState);
+    saveStoredArcadeProgression(nextState);
+
+    // Toast de gain
+    setPointsToast({ text: '+10 Points de niveau gagnés ! (+10 pts)', isGain: true });
+    setTimeout(() => setPointsToast(null), 3500);
+
+    // Célébration niveau supérieur
+    if (newLevel > prevLevel) {
+      setShowLevelUpCelebration({ newLevel, oldLevel: prevLevel });
+    }
+
     setShowWinModal(true);
     if (onXpEarned) {
       onXpEarned(bonusXp);
     }
   };
 
+  const handleDefeatPenalty = () => {
+    // -5 points par défaite, cumulés, minimum 0
+    const prevPoints = progression.points;
+    const newPoints = Math.max(0, prevPoints - 5);
+    const newLevel = calculatePlayerLevel(newPoints).level;
+
+    const nextState: ArcadeProgressionState = {
+      ...progression,
+      points: newPoints,
+      level: newLevel
+    };
+
+    setProgression(nextState);
+    saveStoredArcadeProgression(nextState);
+
+    setPointsToast({ text: '-5 Points déduits (Partie perdue)', isGain: false });
+    setTimeout(() => setPointsToast(null), 3500);
+  };
+
   const handleHeartLost = () => {
     sfx.playWrong();
     setHearts((prev) => {
       const next = Math.max(0, prev - 1);
+      if (next === 0) {
+        handleDefeatPenalty();
+      }
       return next;
     });
   };
@@ -183,7 +284,25 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({ onXpEarned, onCl
   });
 
   return (
-    <div className="w-full min-h-screen bg-[#0c1322] text-[#dce2f8] px-4 sm:px-6 py-6 pb-24">
+    <div className="w-full min-h-screen bg-[#0c1322] text-[#dce2f8] px-4 sm:px-6 py-6 pb-24 relative">
+      {/* Toast Notification Points Change (+10 pts / -5 pts) */}
+      {pointsToast && (
+        <div className="fixed top-5 right-5 z-50 animate-bounce">
+          <div
+            className={`px-4 py-2.5 rounded-2xl shadow-2xl border flex items-center gap-2.5 font-mono font-bold text-xs ${
+              pointsToast.isGain
+                ? 'bg-emerald-950/95 border-emerald-400 text-emerald-200 shadow-[0_0_20px_rgba(16,185,129,0.4)]'
+                : 'bg-rose-950/95 border-rose-400 text-rose-200 shadow-[0_0_20px_rgba(244,63,94,0.4)]'
+            }`}
+          >
+            <span className="material-symbols-outlined text-base">
+              {pointsToast.isGain ? 'trending_up' : 'trending_down'}
+            </span>
+            <span>{pointsToast.text}</span>
+          </div>
+        </div>
+      )}
+
       {/* Top Banner & Header */}
       <div className="max-w-5xl mx-auto mb-8">
         <div className="flex items-center justify-between gap-4 mb-4">
@@ -205,11 +324,26 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({ onXpEarned, onCl
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Bouton Règles & Niveaux */}
+            <button
+              type="button"
+              onClick={() => {
+                sfx.playPop();
+                setShowRulesModal(true);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] border border-[#232a3a] text-xs font-semibold text-[#f2ca50] transition-colors"
+              title="Comprendre le système de niveaux et points"
+            >
+              <span className="material-symbols-outlined text-base">help</span>
+              <span className="hidden sm:inline">Règles & Niveaux</span>
+            </button>
+
             {/* Streak & Score pills */}
             <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#191f2f] border border-[#232a3a]">
               <span className="text-amber-400 text-sm font-bold">🔥 {streak} Streak</span>
               <span className="text-emerald-400 text-sm font-bold font-mono">+{sessionScore} XP</span>
             </div>
+
             {onClose && (
               <button
                 type="button"
@@ -220,6 +354,100 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({ onXpEarned, onCl
                 <span className="material-symbols-outlined text-xl">close</span>
               </button>
             )}
+          </div>
+        </div>
+
+        {/* PANNEAU DE PROGRESSION DU JOUEUR (Niveau 1 à 99 • Points • Paliers) */}
+        <div className="mb-6 p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-[#11192a] via-[#152038] to-[#0d1424] border-2 border-[#f2ca50]/30 shadow-xl">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            {/* Niveau & Rang Actuel */}
+            <div className="flex items-center gap-3.5">
+              <div className="relative">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#f2ca50] via-amber-500 to-amber-700 flex flex-col items-center justify-center text-[#1a1200] font-black shadow-[0_0_25px_rgba(242,202,80,0.4)] border border-amber-300">
+                  <span className="text-[10px] font-mono leading-none uppercase tracking-tighter">NIV.</span>
+                  <span className="text-2xl leading-none">{levelInfo.level}</span>
+                </div>
+                <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-amber-400 text-[#0c1322] flex items-center justify-center text-xs font-black shadow">
+                  ★
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-serif font-black text-lg text-white">
+                    Niveau {levelInfo.level} <span className="text-xs text-gray-400 font-sans font-normal">/ 99</span>
+                  </span>
+                  <span
+                    className={`px-2.5 py-0.5 rounded-full text-xs font-mono font-bold border ${levelInfo.tier.badgeBg} ${levelInfo.tier.badgeColor} ${levelInfo.tier.badgeBorder}`}
+                  >
+                    {levelInfo.tier.label}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-300 mt-0.5">
+                  {levelInfo.tier.description}
+                </p>
+              </div>
+            </div>
+
+            {/* Statistiques en badges clairs */}
+            <div className="flex flex-wrap items-center gap-2 self-stretch md:self-auto">
+              <div className="flex-1 md:flex-none px-3 py-2 rounded-xl bg-[#090f1d] border border-white/5 text-center">
+                <span className="text-[10px] font-mono text-gray-400 uppercase block">Points Cumulés</span>
+                <span className="text-sm font-mono font-black text-amber-300">⭐ {progression.points} pts</span>
+              </div>
+
+              <div className="flex-1 md:flex-none px-3 py-2 rounded-xl bg-[#090f1d] border border-white/5 text-center">
+                <span className="text-[10px] font-mono text-gray-400 uppercase block">Jeux Débloqués</span>
+                <span className="text-sm font-mono font-black text-emerald-400">
+                  🔓 {progression.unlockedMaxGameNumber} / 20
+                </span>
+              </div>
+
+              <div className="flex-1 md:flex-none px-3 py-2 rounded-xl bg-[#090f1d] border border-white/5 text-center">
+                <span className="text-[10px] font-mono text-gray-400 uppercase block">Jeux Réussis</span>
+                <span className="text-sm font-mono font-black text-blue-400">
+                  🏆 {progression.completedGames.length} / 20
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Jauge vers le prochain niveau (100 points = +1 niveau) */}
+          <div className="mt-4 pt-3.5 border-t border-white/10">
+            <div className="flex items-center justify-between text-xs font-mono mb-1.5">
+              <span className="text-gray-300 flex items-center gap-1.5">
+                <span className="text-amber-400 font-bold">Progression Niveau :</span>
+                {levelInfo.level >= 99 ? (
+                  <strong className="text-amber-300">Niveau Maximum 99 Atteint ! 👑</strong>
+                ) : (
+                  <span>
+                    <strong>{levelInfo.pointsInCurrentLevel}</strong> / 100 points vers le{' '}
+                    <strong className="text-amber-300">Niveau {levelInfo.level + 1}</strong>
+                  </span>
+                )}
+              </span>
+              <span className="text-gray-400 font-bold">
+                {levelInfo.level >= 99 ? '100%' : `${levelInfo.pointsInCurrentLevel}%`}
+              </span>
+            </div>
+
+            <div className="w-full h-3 rounded-full bg-[#080d1a] border border-white/10 overflow-hidden p-0.5">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-amber-400 to-[#f2ca50] transition-all duration-500 shadow-[0_0_12px_rgba(242,202,80,0.5)]"
+                style={{ width: `${levelInfo.progressPercent}%` }}
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 mt-2 text-[11px] text-gray-400">
+              <span className="flex items-center gap-1">
+                <span className="text-emerald-400 font-bold">+10 pts</span> par victoire
+                <span className="text-gray-500">•</span>
+                <span className="text-rose-400 font-bold">-5 pts</span> par défaite
+              </span>
+              <span className="text-amber-300/90 font-medium">
+                Débloque les 20 jeux séquentiellement en réussissant chaque jeu !
+              </span>
+            </div>
           </div>
         </div>
 
@@ -260,85 +488,154 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({ onXpEarned, onCl
 
       {/* Grid of the 20 Mini-Games */}
       <div className="max-w-5xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {filteredGames.map((game) => (
-          <div
-            key={game.id}
-            className={`group relative rounded-2xl p-4.5 bg-gradient-to-b ${game.bgGradient} border ${game.borderColor} transition-all duration-300 hover:-translate-y-1 hover:shadow-xl flex flex-col justify-between`}
-          >
-            {/* Top row: Number, icon, difficulty */}
-            <div>
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-11 h-11 rounded-xl bg-[#0c1322]/80 border border-white/10 flex items-center justify-center text-[#f2ca50] shadow-md group-hover:scale-110 transition-transform">
-                    <span className="material-symbols-outlined text-2xl">{game.icon}</span>
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[10px] font-mono text-[#f2ca50] font-bold">
-                      JEU #{game.number.toString().padStart(2, '0')}
-                    </span>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${game.badgeColor} mt-0.5 w-fit`}>
-                      {game.difficulty}
-                    </span>
-                  </div>
-                </div>
+        {filteredGames.map((game) => {
+          const unlocked = isGameUnlocked(game);
+          const lockDetails = !unlocked ? getLockDetails(game) : null;
+          const isCompleted = progression.completedGames.includes(game.id);
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    sfx.playPop();
-                    setHowToPlayModal(game);
-                  }}
-                  className="p-1.5 rounded-lg text-[#99907c] hover:text-[#f2ca50] hover:bg-white/5 transition-colors"
-                  title="Comment jouer (Règles)"
-                >
-                  <span className="material-symbols-outlined text-[20px]">help_outline</span>
-                </button>
-              </div>
+          return (
+            <div
+              key={game.id}
+              onClick={() => {
+                if (!unlocked) {
+                  sfx.playWrong();
+                  setLockedGamePrompt(game);
+                }
+              }}
+              className={`group relative rounded-2xl p-4.5 transition-all duration-300 flex flex-col justify-between overflow-hidden ${
+                unlocked
+                  ? `bg-gradient-to-b ${game.bgGradient} border ${game.borderColor} hover:-translate-y-1 hover:shadow-xl cursor-default`
+                  : 'bg-[#10141f] border border-stone-800 shadow-md cursor-pointer hover:border-amber-500/50'
+              }`}
+            >
+              {/* COUCHE GRISE AVEC CADENAS SI VERROUILLÉ */}
+              {!unlocked && (
+                <div className="absolute inset-0 bg-[#070b14]/85 backdrop-blur-[2px] z-10 flex flex-col items-center justify-between p-4 text-center">
+                  <div className="w-full flex items-center justify-between text-[10px] font-mono font-bold text-gray-400">
+                    <span>JEU #{game.number.toString().padStart(2, '0')}</span>
+                    <span className="px-2 py-0.5 rounded-md bg-stone-800 border border-stone-700 text-stone-300">
+                      🔒 Verrouillé
+                    </span>
+                  </div>
 
-              {/* Title & subtitle */}
-              <h3
-                className={`font-serif font-bold text-base transition-colors leading-snug ${
-                  game.id === 'speed-match'
-                    ? 'text-orange-500 font-black text-lg'
-                    : 'text-[#dce2f8] group-hover:text-[#f2ca50]'
-                }`}
-              >
-                {game.title}
-              </h3>
-              {game.id === 'speed-match' ? (
-                <div className="mt-1 mb-2">
-                  <span className="inline-block px-2.5 py-0.5 rounded-lg bg-gradient-to-r from-amber-300 via-amber-400 to-yellow-400 text-black text-[11px] font-black tracking-tight shadow-sm border border-amber-200">
-                    Traduction Éclair • 3 Niveaux
+                  {/* Icone Cadenas Central */}
+                  <div className="my-auto flex flex-col items-center">
+                    <div className="w-13 h-13 rounded-2xl bg-gradient-to-br from-stone-800 to-stone-950 border-2 border-amber-500/60 flex items-center justify-center text-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.3)] mb-2 group-hover:scale-110 transition-transform">
+                      <span className="material-symbols-outlined text-2xl font-black">lock</span>
+                    </div>
+
+                    <h4 className="font-serif font-bold text-sm text-white mb-1">
+                      {game.title}
+                    </h4>
+
+                    {/* Explications Requises */}
+                    <div className="space-y-1 my-1">
+                      {lockDetails?.missingSeq && (
+                        <div className="px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] font-semibold">
+                          🔒 Requis : Terminer Jeu #{game.number - 1}
+                        </div>
+                      )}
+                      {lockDetails?.missingLvl && (
+                        <div className="px-2.5 py-1 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-300 text-[11px] font-semibold">
+                          🔒 Requis : Niveau {game.requiredLevel} (Actuel: {levelInfo.level})
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <span className="text-[10px] font-mono text-gray-400 underline underline-offset-2">
+                    Cliquer pour voir les conditions
                   </span>
                 </div>
-              ) : (
-                <p className="text-xs text-[#f2ca50]/90 font-medium mt-0.5 mb-2">
-                  {game.subtitle}
-                </p>
               )}
-              <p className="text-[11px] text-[#d0c5af]/80 line-clamp-2 leading-relaxed">
-                {game.howToPlay.goal}
-              </p>
-            </div>
 
-            {/* Bottom Actions */}
-            <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between">
-              <span className="text-[11px] font-mono font-bold text-amber-300 flex items-center gap-1">
-                <span className="material-symbols-outlined text-sm">stars</span>
-                +{game.xpReward} XP
-              </span>
+              {/* Contenu de la Carte (actif ou sous calque) */}
+              <div className={unlocked ? '' : 'filter grayscale opacity-30 select-none'}>
+                {/* Top row: Number, icon, difficulty */}
+                <div>
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-11 h-11 rounded-xl bg-[#0c1322]/80 border border-white/10 flex items-center justify-center text-[#f2ca50] shadow-md group-hover:scale-110 transition-transform">
+                        <span className="material-symbols-outlined text-2xl">{game.icon}</span>
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-mono text-[#f2ca50] font-bold">
+                          JEU #{game.number.toString().padStart(2, '0')}
+                        </span>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${game.badgeColor} w-fit`}>
+                            {game.difficulty}
+                          </span>
+                          {isCompleted && (
+                            <span className="px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[9px] font-bold border border-emerald-500/40">
+                              ✓ Réussi
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
 
-              <button
-                type="button"
-                onClick={() => handleLaunchGame(game)}
-                className="px-3 py-1.5 rounded-xl bg-[#f2ca50] hover:bg-[#ffe088] text-[#3c2f00] font-bold text-xs uppercase tracking-wider transition-all shadow-md active:scale-95 flex items-center gap-1 cursor-pointer"
-              >
-                <span>Jouer</span>
-                <span className="material-symbols-outlined text-sm">play_arrow</span>
-              </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        sfx.playPop();
+                        setHowToPlayModal(game);
+                      }}
+                      className="p-1.5 rounded-lg text-[#99907c] hover:text-[#f2ca50] hover:bg-white/5 transition-colors"
+                      title="Comment jouer (Règles)"
+                    >
+                      <span className="material-symbols-outlined text-[20px]">help_outline</span>
+                    </button>
+                  </div>
+
+                  {/* Title & subtitle */}
+                  <h3
+                    className={`font-serif font-bold text-base transition-colors leading-snug ${
+                      game.id === 'speed-match'
+                        ? 'text-orange-500 font-black text-lg'
+                        : 'text-[#dce2f8] group-hover:text-[#f2ca50]'
+                    }`}
+                  >
+                    {game.title}
+                  </h3>
+                  {game.id === 'speed-match' ? (
+                    <div className="mt-1 mb-2">
+                      <span className="inline-block px-2.5 py-0.5 rounded-lg bg-gradient-to-r from-amber-300 via-amber-400 to-yellow-400 text-black text-[11px] font-black tracking-tight shadow-sm border border-amber-200">
+                        Traduction Éclair • 3 Niveaux
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-[#f2ca50]/90 font-medium mt-0.5 mb-2">
+                      {game.subtitle}
+                    </p>
+                  )}
+                  <p className="text-[11px] text-[#d0c5af]/80 line-clamp-2 leading-relaxed">
+                    {game.howToPlay.goal}
+                  </p>
+                </div>
+
+                {/* Bottom Actions */}
+                <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between">
+                  <span className="text-[11px] font-mono font-bold text-amber-300 flex items-center gap-1">
+                    <span className="material-symbols-outlined text-sm">stars</span>
+                    +{game.xpReward} XP
+                  </span>
+
+                  <button
+                    type="button"
+                    disabled={!unlocked}
+                    onClick={() => handleLaunchGame(game)}
+                    className="px-3 py-1.5 rounded-xl bg-[#f2ca50] hover:bg-[#ffe088] text-[#3c2f00] font-bold text-xs uppercase tracking-wider transition-all shadow-md active:scale-95 flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                  >
+                    <span>Jouer</span>
+                    <span className="material-symbols-outlined text-sm">play_arrow</span>
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* MODAL COMMENT JOUER (How to play) */}
@@ -484,19 +781,26 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({ onXpEarned, onCl
             <div className="p-5 sm:p-6 flex-1 flex flex-col justify-center">
               {hearts <= 0 ? (
                 <div className="text-center py-8">
-                  <div className="text-5xl mb-3">💔</div>
+                  <div className="text-5xl mb-3 animate-bounce">💔</div>
                   <h4 className="font-serif font-bold text-xl text-white mb-2">
                     Partie terminée !
                   </h4>
-                  <p className="text-xs text-[#d0c5af] mb-6 max-w-xs mx-auto">
-                    Ne te décourage pas, l'erreur fait partie de l'apprentissage ! Retente ta chance pour maîtriser ce défi.
+
+                  {/* Pénalité de défaite */}
+                  <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-300 font-mono font-bold text-xs mb-3">
+                    <span className="material-symbols-outlined text-sm">trending_down</span>
+                    <span>-5 Points déduits • Total : {progression.points} pts</span>
+                  </div>
+
+                  <p className="text-xs text-[#d0c5af] mb-6 max-w-xs mx-auto leading-relaxed">
+                    Ne te décourage pas, l'erreur fait partie de l'apprentissage ! Chaque victoire te redonne <strong>+10 points</strong>. Retente ta chance pour maîtriser ce défi.
                   </p>
                   <button
                     type="button"
                     onClick={() => {
                       setHearts(3);
                     }}
-                    className="px-6 py-2.5 rounded-xl bg-[#f2ca50] text-[#3c2f00] font-bold text-xs uppercase tracking-wider hover:bg-[#ffe088]"
+                    className="px-6 py-2.5 rounded-xl bg-[#f2ca50] text-[#3c2f00] font-black text-xs uppercase tracking-wider hover:bg-[#ffe088] shadow-lg active:scale-95 transition-all"
                   >
                     Recommencer
                   </button>
@@ -508,6 +812,7 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({ onXpEarned, onCl
                   onSuccess={() => handleVictory(activeGame.xpReward)}
                   onError={handleHeartLost}
                   speak={speakText}
+                  playerLevel={levelInfo.level}
                 />
               )}
             </div>
@@ -533,8 +838,14 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({ onXpEarned, onCl
               Tu as brillamment réussi le mini-jeu <strong>{activeGame.title}</strong> !
             </p>
 
-            <div className="p-4 rounded-2xl bg-[#0c1322] border border-[#f2ca50]/30 mb-5">
+            {/* Récompense Points & Déblocage */}
+            <div className="p-3.5 rounded-2xl bg-[#0c1322] border border-[#f2ca50]/30 mb-4 space-y-2.5">
               <div className="flex items-center justify-around">
+                <div className="text-center">
+                  <span className="text-[10px] text-emerald-400 uppercase font-mono font-bold block">POINTS NIVEAU</span>
+                  <span className="font-mono font-black text-xl text-emerald-300">+10 pts</span>
+                </div>
+                <div className="w-[1px] h-8 bg-white/10" />
                 <div className="text-center">
                   <span className="text-[10px] text-[#99907c] uppercase font-mono block">XP GAGNÉS</span>
                   <span className="font-mono font-black text-xl text-[#f2ca50]">+{activeGame.xpReward} XP</span>
@@ -545,7 +856,20 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({ onXpEarned, onCl
                   <span className="font-mono font-black text-xl text-amber-400">🔥 {streak}</span>
                 </div>
               </div>
+
+              <div className="pt-2 border-t border-white/5 flex items-center justify-between text-xs font-mono">
+                <span className="text-gray-400">Niveau Actuel :</span>
+                <span className="text-amber-300 font-bold">Niv. {levelInfo.level} ({levelInfo.pointsInCurrentLevel}/100 pts)</span>
+              </div>
             </div>
+
+            {/* Déblocage du prochain jeu */}
+            {activeGame.number < 20 && (
+              <div className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-semibold mb-4 flex items-center justify-center gap-1.5">
+                <span className="material-symbols-outlined text-sm">lock_open</span>
+                <span>Prochain Jeu #{activeGame.number + 1} Débloqué !</span>
+              </div>
+            )}
 
             <div className="flex items-center gap-2">
               <button
@@ -572,6 +896,277 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({ onXpEarned, onCl
           </div>
         </div>
       )}
+
+      {/* MODAL JEU VERROUILLÉ */}
+      {lockedGamePrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
+          <div className="bg-[#121927] border-2 border-amber-500/50 rounded-3xl p-6 max-w-md w-full shadow-2xl relative">
+            <button
+              type="button"
+              onClick={() => setLockedGamePrompt(null)}
+              className="absolute top-4 right-4 p-1.5 rounded-xl bg-[#0c1322] text-[#d0c5af] hover:text-white"
+            >
+              <span className="material-symbols-outlined text-xl">close</span>
+            </button>
+
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-stone-800 to-stone-950 border-2 border-amber-500/60 flex items-center justify-center text-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.3)] shrink-0">
+                <span className="material-symbols-outlined text-3xl font-black">lock</span>
+              </div>
+              <div>
+                <span className="text-[11px] font-mono text-amber-400 font-bold uppercase tracking-wider block">
+                  ACCÈS VERROUILLÉ • JEU #{lockedGamePrompt.number}
+                </span>
+                <h3 className="font-serif font-black text-xl text-white">
+                  {lockedGamePrompt.title}
+                </h3>
+                <p className="text-xs text-gray-300 font-medium">
+                  {lockedGamePrompt.subtitle}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3 mb-6">
+              <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-[#f2ca50]">
+                Conditions requises pour débloquer :
+              </h4>
+
+              {/* Condition 1 : Déblocage séquentiel */}
+              {lockedGamePrompt.number > 1 && (
+                <div
+                  className={`p-3 rounded-2xl border flex items-start gap-3 ${
+                    progression.unlockedMaxGameNumber >= lockedGamePrompt.number
+                      ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
+                      : 'bg-rose-950/40 border-rose-500/40 text-rose-200'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-xl shrink-0 mt-0.5">
+                    {progression.unlockedMaxGameNumber >= lockedGamePrompt.number ? 'check_circle' : 'cancel'}
+                  </span>
+                  <div className="text-xs">
+                    <strong className="block font-bold">1. Progression séquentielle</strong>
+                    {progression.unlockedMaxGameNumber >= lockedGamePrompt.number ? (
+                      <span>Jeu #{lockedGamePrompt.number - 1} validé avec succès !</span>
+                    ) : (
+                      <span>
+                        Tu dois d'abord réussir le <strong>Jeu #{lockedGamePrompt.number - 1}</strong> (
+                        {TWENTY_GAMES_METADATA.find((g) => g.number === lockedGamePrompt.number - 1)?.title}) !
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Condition 2 : Niveau requis */}
+              <div
+                className={`p-3 rounded-2xl border flex items-start gap-3 ${
+                  levelInfo.level >= lockedGamePrompt.requiredLevel
+                    ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
+                    : 'bg-rose-950/40 border-rose-500/40 text-rose-200'
+                }`}
+              >
+                <span className="material-symbols-outlined text-xl shrink-0 mt-0.5">
+                  {levelInfo.level >= lockedGamePrompt.requiredLevel ? 'check_circle' : 'cancel'}
+                </span>
+                <div className="text-xs">
+                  <strong className="block font-bold">2. Niveau joueur requis : Niveau {lockedGamePrompt.requiredLevel}</strong>
+                  {levelInfo.level >= lockedGamePrompt.requiredLevel ? (
+                    <span>Niveau {lockedGamePrompt.requiredLevel} atteint (Actuel : Niv. {levelInfo.level})</span>
+                  ) : (
+                    <span>
+                      Actuel : <strong>Niveau {levelInfo.level}</strong> ({levelInfo.pointsInCurrentLevel}/100 pts). Gagne encore{' '}
+                      <strong>{Math.max(0, (lockedGamePrompt.requiredLevel - 1) * 100 - progression.points)} pts</strong> pour l'atteindre.
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Rappel du système */}
+              <div className="p-3 rounded-2xl bg-[#0c1322] border border-white/5 text-xs text-gray-300">
+                <p className="leading-relaxed">
+                  💡 <strong>Comment progresser ?</strong> Chaque partie gagnée te rapporte <strong>+10 points</strong>. Tous les{' '}
+                  <strong>100 points</strong>, tu montes d'un niveau (jusqu'au niveau 99 maximum).
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setLockedGamePrompt(null)}
+                className="flex-1 py-3 rounded-2xl bg-[#191f2f] hover:bg-[#232a3a] text-[#d0c5af] font-bold text-xs uppercase tracking-wider transition-colors"
+              >
+                Compris
+              </button>
+              {progression.unlockedMaxGameNumber >= 1 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const currentGame = TWENTY_GAMES_METADATA.find((g) => g.number === progression.unlockedMaxGameNumber) || TWENTY_GAMES_METADATA[0];
+                    setLockedGamePrompt(null);
+                    handleLaunchGame(currentGame);
+                  }}
+                  className="flex-1 py-3 rounded-2xl bg-[#f2ca50] hover:bg-[#ffe088] text-[#3c2f00] font-black text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-1.5 transition-all"
+                >
+                  <span>Jouer Jeu #{progression.unlockedMaxGameNumber}</span>
+                  <span className="material-symbols-outlined text-sm font-bold">play_arrow</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CÉLÉBRATION NIVEAU SUPÉRIEUR */}
+      {showLevelUpCelebration && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
+          <div className="bg-gradient-to-b from-[#18233d] to-[#0c1322] border-2 border-amber-400 rounded-3xl p-6 max-w-sm w-full text-center shadow-[0_0_50px_rgba(242,202,80,0.5)] animate-scaleUp">
+            <div className="text-6xl mb-3 animate-bounce">⭐</div>
+            <span className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/40 text-xs font-mono font-bold uppercase tracking-wider mb-2 inline-block">
+              NIVEAU SUPÉRIEUR DÉBLOQUÉ !
+            </span>
+            <h3 className="font-serif font-black text-3xl text-white mb-1">
+              NIVEAU {showLevelUpCelebration.newLevel} !
+            </h3>
+            <p className="text-xs text-gray-300 mb-5 leading-relaxed">
+              Félicitations ! Tu as accumulé 100 points supplémentaires et atteint le <strong>Niveau {showLevelUpCelebration.newLevel}</strong>. De nouveaux mini-jeux et paliers sont désormais accessibles !
+            </p>
+
+            <div className="p-3 rounded-2xl bg-[#090f1d] border border-amber-400/30 mb-5 text-left text-xs space-y-1">
+              <div className="flex justify-between text-gray-300">
+                <span>Ancien Niveau :</span>
+                <strong className="text-gray-400 font-mono">Niveau {showLevelUpCelebration.oldLevel}</strong>
+              </div>
+              <div className="flex justify-between text-emerald-300">
+                <span>Nouveau Niveau :</span>
+                <strong className="text-amber-300 font-mono text-sm">Niveau {showLevelUpCelebration.newLevel} ★</strong>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowLevelUpCelebration(null)}
+              className="w-full py-3 rounded-2xl bg-gradient-to-r from-amber-400 via-[#f2ca50] to-yellow-500 text-[#3c2f00] font-black text-xs uppercase tracking-wider shadow-lg hover:brightness-110 active:scale-95 transition-all"
+            >
+              Continuer l'aventure
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL GUIDE DES RÈGLES ET NIVEAUX */}
+      {showRulesModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
+          <div className="bg-[#121927] border border-[#f2ca50]/40 rounded-3xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl relative">
+            <button
+              type="button"
+              onClick={() => setShowRulesModal(false)}
+              className="absolute top-4 right-4 p-1.5 rounded-xl bg-[#0c1322] text-[#d0c5af] hover:text-white"
+            >
+              <span className="material-symbols-outlined text-xl">close</span>
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-2xl bg-[#f2ca50] text-[#3c2f00] flex items-center justify-center shadow-lg font-black">
+                <span className="material-symbols-outlined text-3xl">military_tech</span>
+              </div>
+              <div>
+                <span className="text-[10px] font-mono text-[#f2ca50] font-bold uppercase tracking-wider block">
+                  SYSTÈME DE JEU • RÈGLES OFFICIELLES
+                </span>
+                <h3 className="font-serif font-black text-xl text-white">
+                  Niveaux 1 à 99 & Déblocages
+                </h3>
+              </div>
+            </div>
+
+            <div className="space-y-4 text-xs text-gray-300">
+              <div className="p-3.5 rounded-2xl bg-[#0c1322] border border-white/5 space-y-2">
+                <h4 className="font-bold text-amber-300 text-sm flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-base">stars</span>
+                  1. Gain & Perte de Points Cumulés
+                </h4>
+                <ul className="space-y-1.5 pl-2">
+                  <li className="flex items-start gap-2">
+                    <span className="text-emerald-400 font-bold">•</span>
+                    <span><strong>+10 Points</strong> pour chaque mini-jeu joué et réussi avec succès.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-rose-400 font-bold">•</span>
+                    <span><strong>-5 Points</strong> déduits en cas de défaite (perte des 3 cœurs).</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-amber-400 font-bold">•</span>
+                    <span>Tous les <strong>100 points</strong>, tu montes d'un niveau (Niveau 1: 0-99 pts, Niveau 2: 100-199 pts... jusqu'au <strong>Niveau 99</strong>).</span>
+                  </li>
+                </ul>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-[#0c1322] border border-white/5 space-y-2">
+                <h4 className="font-bold text-amber-300 text-sm flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-base">lock</span>
+                  2. Déblocage Séquentiel des 20 Jeux
+                </h4>
+                <p className="leading-relaxed">
+                  Tu commences avec le <strong>Jeu #1 (Speed Match)</strong>. Une fois remporté, tu débloques le Jeu #2 (Word Scramble), puis le #3, le #4, et ainsi de suite jusqu'au boss final #20 ! Un jeu non débloqué affiche un cadenas 🔒 et un voile gris.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-[#0c1322] border border-white/5 space-y-2">
+                <h4 className="font-bold text-amber-300 text-sm flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-base">workspace_premium</span>
+                  3. Les 5 Paliers de Difficulté
+                </h4>
+                <div className="space-y-1.5">
+                  <div className="p-2 rounded-xl bg-emerald-950/30 border border-emerald-500/30 flex justify-between items-center">
+                    <div>
+                      <strong className="text-emerald-400 block">🟢 Débutant</strong>
+                      <span className="text-[11px] text-gray-400">Accessible dès le départ (Niveaux 1 à 10)</span>
+                    </div>
+                    <span className="font-mono text-emerald-300 font-bold">Niv. 1+</span>
+                  </div>
+                  <div className="p-2 rounded-xl bg-amber-950/30 border border-amber-500/30 flex justify-between items-center">
+                    <div>
+                      <strong className="text-amber-400 block">🟡 Intermédiaire</strong>
+                      <span className="text-[11px] text-gray-400">Débloqué au Niveau 11 (1 000 pts)</span>
+                    </div>
+                    <span className="font-mono text-amber-300 font-bold">Niv. 11+</span>
+                  </div>
+                  <div className="p-2 rounded-xl bg-blue-950/30 border border-blue-500/30 flex justify-between items-center">
+                    <div>
+                      <strong className="text-blue-400 block">🔵 Professionnel</strong>
+                      <span className="text-[11px] text-gray-400">Débloqué au Niveau 21 (2 000 pts)</span>
+                    </div>
+                    <span className="font-mono text-blue-300 font-bold">Niv. 21+</span>
+                  </div>
+                  <div className="p-2 rounded-xl bg-purple-950/30 border border-purple-500/30 flex justify-between items-center">
+                    <div>
+                      <strong className="text-purple-400 block">🟣 Pro</strong>
+                      <span className="text-[11px] text-gray-400">Débloqué au Niveau 31 (3 000 pts)</span>
+                    </div>
+                    <span className="font-mono text-purple-300 font-bold">Niv. 31+</span>
+                  </div>
+                  <div className="p-2 rounded-xl bg-rose-950/30 border border-rose-500/30 flex justify-between items-center">
+                    <div>
+                      <strong className="text-rose-400 block">🔴 Expert</strong>
+                      <span className="text-[11px] text-gray-400">Débloqué au Niveau 51 (5 000 pts)</span>
+                    </div>
+                    <span className="font-mono text-rose-300 font-bold">Niv. 51+</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowRulesModal(false)}
+              className="w-full mt-5 py-3 rounded-2xl bg-[#f2ca50] hover:bg-[#ffe088] text-[#3c2f00] font-black text-xs uppercase tracking-wider shadow-lg transition-all"
+            >
+              J'ai compris, retour au jeu
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -585,17 +1180,19 @@ interface ActiveGameRendererProps {
   onSuccess: () => void;
   onError: () => void;
   speak: (text: string) => void;
+  playerLevel: number;
 }
 
 const ActiveGameRenderer: React.FC<ActiveGameRendererProps> = ({
   gameId,
   onSuccess,
   onError,
-  speak
+  speak,
+  playerLevel
 }) => {
   switch (gameId) {
     case 'speed-match':
-      return <SpeedMatchGame onSuccess={onSuccess} onError={onError} speak={speak} />;
+      return <SpeedMatchGame onSuccess={onSuccess} onError={onError} speak={speak} playerLevel={playerLevel} />;
     case 'word-scramble':
       return <WordScrambleGame onSuccess={onSuccess} onError={onError} />;
     case 'word-search':
@@ -644,9 +1241,10 @@ interface SpeedMatchGameProps {
   onSuccess: () => void;
   onError: () => void;
   speak?: (text: string) => void;
+  playerLevel: number;
 }
 
-const SpeedMatchGame: React.FC<SpeedMatchGameProps> = ({ onSuccess, onError, speak }) => {
+const SpeedMatchGame: React.FC<SpeedMatchGameProps> = ({ onSuccess, onError, speak, playerLevel }) => {
   // Mode : 'select-level' ou 'playing' ou 'level-completed'
   const [selectedLevelKey, setSelectedLevelKey] = useState<SpeedMatchLevelKey | null>(null);
 
@@ -849,27 +1447,82 @@ const SpeedMatchGame: React.FC<SpeedMatchGameProps> = ({ onSuccess, onError, spe
         <div>
           <h4 className="text-xs font-mono uppercase tracking-widest text-[#f2ca50] font-bold mb-3 flex items-center gap-1.5">
             <span className="material-symbols-outlined text-sm">tune</span>
-            Choisis ton niveau de défi :
+            Choisis ton palier de défi :
           </h4>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
-            {(['debutant', 'intermediaire', 'avance'] as SpeedMatchLevelKey[]).map((key) => {
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {(['debutant', 'intermediaire', 'professionnel', 'pro', 'expert'] as SpeedMatchLevelKey[]).map((key) => {
               const lvl = SPEED_MATCH_LEVELS[key];
-              const isDebutant = key === 'debutant';
-              const isInter = key === 'intermediaire';
+              const isTierUnlocked = playerLevel >= lvl.requiredPlayerLevel;
+
+              const borderGlow =
+                key === 'debutant'
+                  ? 'border-emerald-500/50 hover:border-emerald-400 hover:shadow-[0_0_20px_rgba(16,185,129,0.3)]'
+                  : key === 'intermediaire'
+                  ? 'border-amber-500/50 hover:border-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.3)]'
+                  : key === 'professionnel'
+                  ? 'border-blue-500/50 hover:border-blue-400 hover:shadow-[0_0_20px_rgba(59,130,246,0.3)]'
+                  : key === 'pro'
+                  ? 'border-purple-500/50 hover:border-purple-400 hover:shadow-[0_0_20px_rgba(168,85,247,0.3)]'
+                  : 'border-rose-500/50 hover:border-rose-400 hover:shadow-[0_0_20px_rgba(244,63,94,0.3)]';
+
+              const btnColor =
+                key === 'debutant'
+                  ? 'bg-emerald-500 hover:bg-emerald-400 text-stone-950'
+                  : key === 'intermediaire'
+                  ? 'bg-[#f2ca50] hover:bg-[#ffe088] text-stone-950'
+                  : key === 'professionnel'
+                  ? 'bg-blue-500 hover:bg-blue-400 text-white'
+                  : key === 'pro'
+                  ? 'bg-purple-500 hover:bg-purple-400 text-white'
+                  : 'bg-rose-500 hover:bg-rose-400 text-white';
 
               return (
                 <div
                   key={key}
-                  className={`relative p-4 rounded-2xl flex flex-col justify-between border-2 transition-all duration-200 group bg-[#11192a] hover:bg-[#16233b] ${
-                    isDebutant
-                      ? 'border-emerald-500/50 hover:border-emerald-400 hover:shadow-[0_0_20px_rgba(16,185,129,0.3)]'
-                      : isInter
-                      ? 'border-amber-500/50 hover:border-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.3)]'
-                      : 'border-rose-500/50 hover:border-rose-400 hover:shadow-[0_0_20px_rgba(244,63,94,0.3)]'
+                  className={`relative p-4 rounded-2xl flex flex-col justify-between border-2 transition-all duration-200 group overflow-hidden ${
+                    isTierUnlocked
+                      ? `bg-[#11192a] hover:bg-[#16233b] ${borderGlow}`
+                      : 'bg-[#0b101c] border-stone-800 shadow-none'
                   }`}
                 >
-                  <div>
+                  {/* COUCHE GRISE AVEC CADENAS SI PALIER VERROUILLÉ */}
+                  {!isTierUnlocked && (
+                    <div className="absolute inset-0 bg-[#070b14]/90 backdrop-blur-[2px] z-10 flex flex-col items-center justify-between p-4 text-center">
+                      <div className="w-full flex items-center justify-between text-[10px] font-mono font-bold text-gray-400">
+                        <span className="capitalize">{lvl.label}</span>
+                        <span className="px-2 py-0.5 rounded-md bg-stone-800 text-amber-300 border border-stone-700">
+                          🔒 Verrouillé
+                        </span>
+                      </div>
+
+                      <div className="my-auto flex flex-col items-center py-2">
+                        <div className="w-11 h-11 rounded-2xl bg-stone-900 border border-amber-500/60 flex items-center justify-center text-amber-400 shadow-md mb-2">
+                          <span className="material-symbols-outlined text-2xl">lock</span>
+                        </div>
+                        <h5 className="font-serif font-bold text-sm text-white mb-1">
+                          {lvl.label}
+                        </h5>
+                        <div className="px-2.5 py-1 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-semibold">
+                          🔒 Débloqué au Niveau {lvl.requiredPlayerLevel}
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-1.5 max-w-[180px]">
+                          Ton niveau : <strong className="text-white">Niveau {playerLevel}</strong>. Gagne encore{' '}
+                          <strong className="text-amber-300">
+                            {Math.max(0, (lvl.requiredPlayerLevel - 1) * 100 - (playerLevel - 1) * 100)} pts
+                          </strong>{' '}
+                          pour débloquer ce palier !
+                        </p>
+                      </div>
+
+                      <div className="w-full py-2 px-3 rounded-xl bg-stone-800/80 border border-stone-700 text-gray-400 text-xs font-mono font-bold">
+                        Niveau {lvl.requiredPlayerLevel} Requis
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Contenu de la Carte du Palier */}
+                  <div className={isTierUnlocked ? '' : 'filter grayscale opacity-25 select-none'}>
                     {/* Header carte */}
                     <div className="flex items-center justify-between mb-2">
                       <span
@@ -917,20 +1570,16 @@ const SpeedMatchGame: React.FC<SpeedMatchGameProps> = ({ onSuccess, onError, spe
                     </p>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => startLevel(key)}
-                    className={`w-full py-2.5 px-3 rounded-xl font-black text-xs uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer shadow-md ${
-                      isDebutant
-                        ? 'bg-emerald-500 hover:bg-emerald-400 text-stone-950 hover:shadow-emerald-500/40'
-                        : isInter
-                        ? 'bg-[#f2ca50] hover:bg-[#ffe088] text-stone-950 hover:shadow-amber-500/40'
-                        : 'bg-rose-500 hover:bg-rose-400 text-white hover:shadow-rose-500/40'
-                    }`}
-                  >
-                    <span>Jouer ce niveau</span>
-                    <span className="material-symbols-outlined text-sm font-bold">play_arrow</span>
-                  </button>
+                  {isTierUnlocked && (
+                    <button
+                      type="button"
+                      onClick={() => startLevel(key)}
+                      className={`w-full py-2.5 px-3 rounded-xl font-black text-xs uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer shadow-md ${btnColor}`}
+                    >
+                      <span>Jouer ce palier</span>
+                      <span className="material-symbols-outlined text-sm font-bold">play_arrow</span>
+                    </button>
+                  )}
                 </div>
               );
             })}

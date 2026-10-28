@@ -3,6 +3,149 @@
  * Fiche de données complètes : Icônes, Noms, Comment Jouer, Niveaux, Questions & Contenus
  */
 
+export type ArcadeDifficultyTierKey = 'debutant' | 'intermediaire' | 'professionnel' | 'pro' | 'expert';
+
+export interface ArcadeDifficultyTier {
+  id: ArcadeDifficultyTierKey;
+  label: string;
+  minPlayerLevel: number;
+  maxPlayerLevel: number;
+  badgeColor: string;
+  badgeBg: string;
+  badgeBorder: string;
+  icon: string;
+  description: string;
+}
+
+export const ARCADE_DIFFICULTY_TIERS: Record<ArcadeDifficultyTierKey, ArcadeDifficultyTier> = {
+  debutant: {
+    id: 'debutant',
+    label: 'Débutant',
+    minPlayerLevel: 1,
+    maxPlayerLevel: 10,
+    badgeColor: 'text-emerald-400',
+    badgeBg: 'bg-emerald-500/20',
+    badgeBorder: 'border-emerald-500/40',
+    icon: 'sentiment_satisfied',
+    description: 'Accessible dès le Niveau 1 (Niveaux 1 à 10). Fondations et vocabulaire clé.'
+  },
+  intermediaire: {
+    id: 'intermediaire',
+    label: 'Intermédiaire',
+    minPlayerLevel: 11,
+    maxPlayerLevel: 20,
+    badgeColor: 'text-amber-400',
+    badgeBg: 'bg-amber-500/20',
+    badgeBorder: 'border-amber-500/40',
+    icon: 'speed',
+    description: 'Débloqué au Niveau 11 (Niveaux 11 à 20). Phrases complètes et rythme soutenu.'
+  },
+  professionnel: {
+    id: 'professionnel',
+    label: 'Professionnel',
+    minPlayerLevel: 21,
+    maxPlayerLevel: 30,
+    badgeColor: 'text-blue-400',
+    badgeBg: 'bg-blue-500/20',
+    badgeBorder: 'border-blue-500/40',
+    icon: 'workspace_premium',
+    description: 'Débloqué au Niveau 21 (Niveaux 21 à 30). Vocabulaire professionnel et contextes d\'action.'
+  },
+  pro: {
+    id: 'pro',
+    label: 'Pro',
+    minPlayerLevel: 31,
+    maxPlayerLevel: 50,
+    badgeColor: 'text-purple-400',
+    badgeBg: 'bg-purple-500/20',
+    badgeBorder: 'border-purple-500/40',
+    icon: 'diamond',
+    description: 'Débloqué au Niveau 31 (Niveaux 31 à 50). Défi chronométré et réflexes bilingues.'
+  },
+  expert: {
+    id: 'expert',
+    label: 'Expert',
+    minPlayerLevel: 51,
+    maxPlayerLevel: 99,
+    badgeColor: 'text-rose-400',
+    badgeBg: 'bg-rose-500/20',
+    badgeBorder: 'border-rose-500/40',
+    icon: 'military_tech',
+    description: 'Débloqué au Niveau 51 (Niveaux 51 à 99). Niveau d\'excellence pour maîtres anglophones.'
+  }
+};
+
+export interface ArcadeProgressionState {
+  points: number; // Total points cumulés (+10 par victoire, -5 par défaite)
+  level: number; // 1 to 99
+  unlockedMaxGameNumber: number; // 1 to 20
+  completedGames: string[]; // IDs des jeux validés
+}
+
+export const ARCADE_STORAGE_KEY = 'msz_arcade_progression_v1';
+
+export { calculateLevel } from '../utils/levelUtils';
+
+export function calculatePlayerLevel(totalPoints: number): {
+  level: number;
+  pointsInCurrentLevel: number;
+  currentLevelMinPoints: number;
+  nextLevelTargetPoints: number;
+  progressPercent: number;
+  tier: ArcadeDifficultyTier;
+} {
+  const safePoints = Math.max(0, totalPoints);
+  const level = Math.min(99, Math.max(1, Math.floor(safePoints / 100) + 1));
+  const currentLevelMinPoints = (level - 1) * 100;
+  const nextLevelTargetPoints = level * 100;
+  const pointsInCurrentLevel = safePoints - currentLevelMinPoints;
+  const progressPercent = level >= 99 ? 100 : Math.min(100, Math.max(0, pointsInCurrentLevel));
+
+  let tierKey: ArcadeDifficultyTierKey = 'debutant';
+  if (level >= 51) tierKey = 'expert';
+  else if (level >= 31) tierKey = 'pro';
+  else if (level >= 21) tierKey = 'professionnel';
+  else if (level >= 11) tierKey = 'intermediaire';
+
+  return {
+    level,
+    pointsInCurrentLevel,
+    currentLevelMinPoints,
+    nextLevelTargetPoints,
+    progressPercent,
+    tier: ARCADE_DIFFICULTY_TIERS[tierKey]
+  };
+}
+
+export function getStoredArcadeProgression(): ArcadeProgressionState {
+  if (typeof window === 'undefined') {
+    return { points: 0, level: 1, unlockedMaxGameNumber: 1, completedGames: [] };
+  }
+  try {
+    const raw = localStorage.getItem(ARCADE_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const points = Math.max(0, Number(parsed.points) || 0);
+      const level = Math.min(99, Math.max(1, Math.floor(points / 100) + 1));
+      const unlockedMaxGameNumber = Math.max(1, Math.min(20, Number(parsed.unlockedMaxGameNumber) || 1));
+      const completedGames = Array.isArray(parsed.completedGames) ? parsed.completedGames : [];
+      return { points, level, unlockedMaxGameNumber, completedGames };
+    }
+  } catch (e) {
+    console.warn('Failed to load arcade progression:', e);
+  }
+  return { points: 0, level: 1, unlockedMaxGameNumber: 1, completedGames: [] };
+}
+
+export function saveStoredArcadeProgression(state: ArcadeProgressionState): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(ARCADE_STORAGE_KEY, JSON.stringify(state));
+  } catch (e) {
+    console.warn('Failed to save arcade progression:', e);
+  }
+}
+
 export interface MiniGameMeta {
   id: string;
   number: number;
@@ -14,6 +157,7 @@ export interface MiniGameMeta {
   borderColor: string;
   bgGradient: string;
   difficulty: 'Facile' | 'Moyen' | 'Difficile' | 'Boss';
+  requiredLevel: number; // Niveau requis du joueur (1 à 99)
   xpReward: number;
   howToPlay: {
     goal: string;
@@ -34,6 +178,7 @@ export const TWENTY_GAMES_METADATA: MiniGameMeta[] = [
     borderColor: 'border-amber-500/40 hover:border-amber-400',
     bgGradient: 'from-amber-950/40 via-[#131b2e] to-[#0c1322]',
     difficulty: 'Facile',
+    requiredLevel: 1,
     xpReward: 35,
     howToPlay: {
       goal: 'Associe chaque mot anglais à sa traduction française le plus rapidement possible. Choisis parmi 3 niveaux : Débutant (5 séries), Intermédiaire (25 séries) ou Avancé (50 séries) avec 12 mots (6 paires) par série !',
@@ -58,6 +203,7 @@ export const TWENTY_GAMES_METADATA: MiniGameMeta[] = [
     borderColor: 'border-emerald-500/40 hover:border-emerald-400',
     bgGradient: 'from-emerald-950/40 via-[#131b2e] to-[#0c1322]',
     difficulty: 'Facile',
+    requiredLevel: 1,
     xpReward: 30,
     howToPlay: {
       goal: 'Remets les lettres mélangées dans le bon ordre pour reconstituer le mot anglais secret.',
@@ -81,6 +227,7 @@ export const TWENTY_GAMES_METADATA: MiniGameMeta[] = [
     borderColor: 'border-cyan-500/40 hover:border-cyan-400',
     bgGradient: 'from-cyan-950/40 via-[#131b2e] to-[#0c1322]',
     difficulty: 'Moyen',
+    requiredLevel: 2,
     xpReward: 45,
     howToPlay: {
       goal: 'Trouve tous les mots anglais cachés dans la grille de lettres thématique.',
@@ -104,6 +251,7 @@ export const TWENTY_GAMES_METADATA: MiniGameMeta[] = [
     borderColor: 'border-rose-500/40 hover:border-rose-400',
     bgGradient: 'from-rose-950/40 via-[#131b2e] to-[#0c1322]',
     difficulty: 'Moyen',
+    requiredLevel: 3,
     xpReward: 40,
     howToPlay: {
       goal: 'Maîtrise les 3 formes des verbes irréguliers anglais (Infinitif, Prétérit, Participe Passé).',
@@ -127,6 +275,7 @@ export const TWENTY_GAMES_METADATA: MiniGameMeta[] = [
     borderColor: 'border-indigo-500/40 hover:border-indigo-400',
     bgGradient: 'from-indigo-950/40 via-[#131b2e] to-[#0c1322]',
     difficulty: 'Facile',
+    requiredLevel: 4,
     xpReward: 35,
     howToPlay: {
       goal: 'Devine le mot mystère lettre par lettre avant que la jauge d\'oxygène du cosmonaute ne tombe à zéro.',
@@ -150,6 +299,7 @@ export const TWENTY_GAMES_METADATA: MiniGameMeta[] = [
     borderColor: 'border-green-500/40 hover:border-green-400',
     bgGradient: 'from-green-950/40 via-[#131b2e] to-[#0c1322]',
     difficulty: 'Moyen',
+    requiredLevel: 6,
     xpReward: 40,
     howToPlay: {
       goal: 'Reconstitue la phrase anglaise exacte correspondant à la traduction française.',
@@ -173,6 +323,7 @@ export const TWENTY_GAMES_METADATA: MiniGameMeta[] = [
     borderColor: 'border-purple-500/40 hover:border-purple-400',
     bgGradient: 'from-purple-950/40 via-[#131b2e] to-[#0c1322]',
     difficulty: 'Facile',
+    requiredLevel: 8,
     xpReward: 35,
     howToPlay: {
       goal: 'Écoute la voix anglaise native et sélectionne la bonne phrase ou mot prononcé.',
@@ -196,6 +347,7 @@ export const TWENTY_GAMES_METADATA: MiniGameMeta[] = [
     borderColor: 'border-blue-500/40 hover:border-blue-400',
     bgGradient: 'from-blue-950/40 via-[#131b2e] to-[#0c1322]',
     difficulty: 'Moyen',
+    requiredLevel: 10,
     xpReward: 35,
     howToPlay: {
       goal: 'Identifie instantanément le synonyme ou l\'antonyme demandé pour enrichir ton vocabulaire.',
@@ -219,6 +371,7 @@ export const TWENTY_GAMES_METADATA: MiniGameMeta[] = [
     borderColor: 'border-teal-500/40 hover:border-teal-400',
     bgGradient: 'from-teal-950/40 via-[#131b2e] to-[#0c1322]',
     difficulty: 'Facile',
+    requiredLevel: 11,
     xpReward: 30,
     howToPlay: {
       goal: 'Détecte le mot qui n\'a rien à faire dans le groupe sémantique ou grammatical.',
@@ -242,6 +395,7 @@ export const TWENTY_GAMES_METADATA: MiniGameMeta[] = [
     borderColor: 'border-orange-500/40 hover:border-orange-400',
     bgGradient: 'from-orange-950/40 via-[#131b2e] to-[#0c1322]',
     difficulty: 'Moyen',
+    requiredLevel: 13,
     xpReward: 35,
     howToPlay: {
       goal: 'Complète la phrase anglaise avec la préposition, le pronom ou la conjugaison manquante.',
@@ -264,6 +418,7 @@ export const TWENTY_GAMES_METADATA: MiniGameMeta[] = [
     borderColor: 'border-emerald-500/40 hover:border-emerald-400',
     bgGradient: 'from-emerald-950/40 via-[#131b2e] to-[#0c1322]',
     difficulty: 'Facile',
+    requiredLevel: 15,
     xpReward: 30,
     howToPlay: {
       goal: 'Valide ou réfute des affirmations sur la langue, les faux-amis et la culture anglophone.',
@@ -287,6 +442,7 @@ export const TWENTY_GAMES_METADATA: MiniGameMeta[] = [
     borderColor: 'border-violet-500/40 hover:border-violet-400',
     bgGradient: 'from-violet-950/40 via-[#131b2e] to-[#0c1322]',
     difficulty: 'Facile',
+    requiredLevel: 18,
     xpReward: 40,
     howToPlay: {
       goal: 'Retrouve les 6 paires carte anglaise / carte française cachées face cachée.',
@@ -310,6 +466,7 @@ export const TWENTY_GAMES_METADATA: MiniGameMeta[] = [
     borderColor: 'border-red-500/40 hover:border-red-400',
     bgGradient: 'from-red-950/40 via-[#131b2e] to-[#0c1322]',
     difficulty: 'Difficile',
+    requiredLevel: 21,
     xpReward: 50,
     howToPlay: {
       goal: 'Traduis le plus grand nombre de mots en exactement 60 secondes sans t\'arrêter.',
@@ -333,6 +490,7 @@ export const TWENTY_GAMES_METADATA: MiniGameMeta[] = [
     borderColor: 'border-lime-500/40 hover:border-lime-400',
     bgGradient: 'from-lime-950/40 via-[#131b2e] to-[#0c1322]',
     difficulty: 'Moyen',
+    requiredLevel: 24,
     xpReward: 35,
     howToPlay: {
       goal: 'Enchaîne les mots anglais : la première lettre du mot suivant doit être la dernière lettre du mot précédent !',
@@ -355,6 +513,7 @@ export const TWENTY_GAMES_METADATA: MiniGameMeta[] = [
     borderColor: 'border-yellow-500/40 hover:border-yellow-400',
     bgGradient: 'from-yellow-950/40 via-[#131b2e] to-[#0c1322]',
     difficulty: 'Moyen',
+    requiredLevel: 27,
     xpReward: 45,
     howToPlay: {
       goal: 'Lis l\'énigme en anglais et devine quel objet, animal ou concept se dissimule derrière le mystère.',
@@ -378,6 +537,7 @@ export const TWENTY_GAMES_METADATA: MiniGameMeta[] = [
     borderColor: 'border-pink-500/40 hover:border-pink-400',
     bgGradient: 'from-pink-950/40 via-[#131b2e] to-[#0c1322]',
     difficulty: 'Moyen',
+    requiredLevel: 31,
     xpReward: 35,
     howToPlay: {
       goal: 'Identifie le ton émotionnel ou le registre linguistique d\'une réplique de dialogue.',
@@ -401,6 +561,7 @@ export const TWENTY_GAMES_METADATA: MiniGameMeta[] = [
     borderColor: 'border-sky-500/40 hover:border-sky-400',
     bgGradient: 'from-sky-950/40 via-[#131b2e] to-[#0c1322]',
     difficulty: 'Facile',
+    requiredLevel: 36,
     xpReward: 35,
     howToPlay: {
       goal: 'Associe les équivalents anglais britannique (🇬🇧) et américain (🇺🇸) pour éviter tout malentendu.',
@@ -423,6 +584,7 @@ export const TWENTY_GAMES_METADATA: MiniGameMeta[] = [
     borderColor: 'border-amber-600/40 hover:border-amber-400',
     bgGradient: 'from-amber-950/50 via-[#131b2e] to-[#0c1322]',
     difficulty: 'Moyen',
+    requiredLevel: 41,
     xpReward: 40,
     howToPlay: {
       goal: 'Découvre le sens figuré réel des expressions idiomatiques courantes sans te faire avoir par le sens littéral.',
@@ -446,6 +608,7 @@ export const TWENTY_GAMES_METADATA: MiniGameMeta[] = [
     borderColor: 'border-emerald-600/40 hover:border-emerald-400',
     bgGradient: 'from-emerald-950/50 via-[#131b2e] to-[#0c1322]',
     difficulty: 'Difficile',
+    requiredLevel: 46,
     xpReward: 45,
     howToPlay: {
       goal: 'Écoute le mot prononcé en anglais et tape son orthographe exacte sans aucune faute.',
@@ -469,6 +632,7 @@ export const TWENTY_GAMES_METADATA: MiniGameMeta[] = [
     borderColor: 'border-yellow-500 hover:border-yellow-400',
     bgGradient: 'from-yellow-950/50 via-[#191e30] to-[#0c1322]',
     difficulty: 'Boss',
+    requiredLevel: 51,
     xpReward: 100,
     howToPlay: {
       goal: 'Affronte le Boss Ultime : 5 manches mixtes combinant vocabulaire, verbes irréguliers et audio avec seulement 3 cœurs de vie !',
@@ -487,7 +651,7 @@ export const TWENTY_GAMES_METADATA: MiniGameMeta[] = [
 // SPEED MATCH (Mini-Jeu n°1) - Banques Lexicales Massives & Niveaux
 // =====================================================================
 
-export type SpeedMatchLevelKey = 'debutant' | 'intermediaire' | 'avance';
+export type SpeedMatchLevelKey = 'debutant' | 'intermediaire' | 'professionnel' | 'pro' | 'expert' | 'avance';
 
 export interface SpeedMatchPair {
   en: string;
@@ -499,6 +663,7 @@ export interface SpeedMatchLevelInfo {
   id: SpeedMatchLevelKey;
   label: string;
   subtitle: string;
+  requiredPlayerLevel: number; // Niveau requis : 1, 11, 21, 31, 51
   questionsCount: number;
   wordsPerQuestion: number; // 12 mots (6 paires)
   pairsPerQuestion: number; // 6 paires
@@ -511,11 +676,12 @@ export interface SpeedMatchLevelInfo {
   description: string;
 }
 
-export const SPEED_MATCH_LEVELS: Record<SpeedMatchLevelKey, SpeedMatchLevelInfo> = {
+export const SPEED_MATCH_LEVELS: Record<string, SpeedMatchLevelInfo> = {
   debutant: {
     id: 'debutant',
     label: 'Débutant',
-    subtitle: 'Niveau 6e Fondations',
+    subtitle: 'Niveau 1 à 10 • Fondations 6e',
+    requiredPlayerLevel: 1,
     questionsCount: 5,
     wordsPerQuestion: 12,
     pairsPerQuestion: 6,
@@ -530,32 +696,82 @@ export const SPEED_MATCH_LEVELS: Record<SpeedMatchLevelKey, SpeedMatchLevelInfo>
   intermediaire: {
     id: 'intermediaire',
     label: 'Intermédiaire',
-    subtitle: 'Niveau 6e Approfondi',
-    questionsCount: 25,
+    subtitle: 'Niveau 11 à 20 • Approfondi',
+    requiredPlayerLevel: 11,
+    questionsCount: 15,
     wordsPerQuestion: 12,
     pairsPerQuestion: 6,
     timePerQuestion: 40,
-    xpReward: 75,
+    xpReward: 60,
     badgeBg: 'bg-amber-500/20',
     badgeBorder: 'border-amber-500/40',
     badgeText: 'text-amber-400',
     icon: 'speed',
-    description: '25 séries de 12 mots (6 paires). Voyage, loisirs, sports, métiers, santé et vie quotidienne.'
+    description: '15 séries de 12 mots (6 paires). Voyage, loisirs, sports, santé et vie quotidienne.'
+  },
+  professionnel: {
+    id: 'professionnel',
+    label: 'Professionnel',
+    subtitle: 'Niveau 21 à 30 • Métiers & Monde',
+    requiredPlayerLevel: 21,
+    questionsCount: 25,
+    wordsPerQuestion: 12,
+    pairsPerQuestion: 6,
+    timePerQuestion: 38,
+    xpReward: 85,
+    badgeBg: 'bg-blue-500/20',
+    badgeBorder: 'border-blue-500/40',
+    badgeText: 'text-blue-400',
+    icon: 'workspace_premium',
+    description: '25 séries de 12 mots (6 paires). Monde du travail, entreprises, commerce, sciences et patrimoine.'
+  },
+  pro: {
+    id: 'pro',
+    label: 'Pro',
+    subtitle: 'Niveau 31 à 50 • Réflexes & Cadence',
+    requiredPlayerLevel: 31,
+    questionsCount: 35,
+    wordsPerQuestion: 12,
+    pairsPerQuestion: 6,
+    timePerQuestion: 35,
+    xpReward: 120,
+    badgeBg: 'bg-purple-500/20',
+    badgeBorder: 'border-purple-500/40',
+    badgeText: 'text-purple-400',
+    icon: 'diamond',
+    description: '35 séries de 12 mots (6 paires). Vocabulaire riche, verbes d\'action et tournures express.'
+  },
+  expert: {
+    id: 'expert',
+    label: 'Expert',
+    subtitle: 'Niveau 51 à 99 • Défi Maître Suprême',
+    requiredPlayerLevel: 51,
+    questionsCount: 50,
+    wordsPerQuestion: 12,
+    pairsPerQuestion: 6,
+    timePerQuestion: 30,
+    xpReward: 160,
+    badgeBg: 'bg-rose-500/20',
+    badgeBorder: 'border-rose-500/40',
+    badgeText: 'text-rose-400',
+    icon: 'military_tech',
+    description: '50 séries de 12 mots (6 paires). 600 mots à apparier sous chrono serré sans la moindre erreur.'
   },
   avance: {
     id: 'avance',
     label: 'Avancé',
     subtitle: 'Défi Maître Bilingue',
-    questionsCount: 50,
+    requiredPlayerLevel: 31,
+    questionsCount: 35,
     wordsPerQuestion: 12,
     pairsPerQuestion: 6,
     timePerQuestion: 35,
-    xpReward: 150,
-    badgeBg: 'bg-rose-500/20',
-    badgeBorder: 'border-rose-500/40',
-    badgeText: 'text-rose-400',
+    xpReward: 120,
+    badgeBg: 'bg-purple-500/20',
+    badgeBorder: 'border-purple-500/40',
+    badgeText: 'text-purple-400',
     icon: 'military_tech',
-    description: '50 séries de 12 mots (6 paires). Vocabulaire riche, expressions, culture, verbes d\'action et nuances.'
+    description: '35 séries de 12 mots (6 paires).'
   }
 };
 
@@ -897,11 +1113,19 @@ export function generateSpeedMatchQuestions(levelKey: SpeedMatchLevelKey): Array
     case 'intermediaire':
       pool = [...SPEED_MATCH_INTERMEDIAIRE_BANK];
       break;
-    case 'avance':
+    case 'professionnel':
+      pool = [...SPEED_MATCH_INTERMEDIAIRE_BANK, ...SPEED_MATCH_AVANCE_BANK];
+      break;
+    case 'pro':
       pool = [...SPEED_MATCH_AVANCE_BANK];
       break;
+    case 'expert':
+      pool = [...SPEED_MATCH_DEBUTANT_BANK, ...SPEED_MATCH_INTERMEDIAIRE_BANK, ...SPEED_MATCH_AVANCE_BANK];
+      break;
+    case 'avance':
     default:
-      pool = [...SPEED_MATCH_DEBUTANT_BANK];
+      pool = [...SPEED_MATCH_AVANCE_BANK];
+      break;
   }
 
   // Shuffle master pool

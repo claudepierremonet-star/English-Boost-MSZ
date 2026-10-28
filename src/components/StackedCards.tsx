@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
 import type { StudyFolio } from '../data/curriculum';
 import {
   STACKED_COLLECTIONS_DATA,
@@ -15,6 +16,207 @@ interface StackedCardsProps {
   initialCategory?: StackCategoryType;
 }
 
+// ---------------------------------------------------------------------------
+// SUB-COMPONENT: Top Interactive Swipeable Card in the Deck
+// ---------------------------------------------------------------------------
+interface TopCardProps {
+  card: StackCardItem;
+  direction: 'left' | 'right' | null;
+  onSwipe: (dir: 'left' | 'right') => void;
+  onOpenAction: (card: StackCardItem, e: React.MouseEvent) => void;
+  onFocus: (card: StackCardItem, e: React.MouseEvent) => void;
+  onExpand: () => void;
+}
+
+const TopCard: React.FC<TopCardProps> = ({
+  card,
+  direction,
+  onSwipe,
+  onOpenAction,
+  onFocus,
+  onExpand
+}) => {
+  const x = useMotionValue(0);
+  const rotate = useTransform(x, [-240, 0, 240], [-14, 0, 14]);
+  const leftIndicatorOpacity = useTransform(x, [-120, -35, 0], [1, 0.4, 0]);
+  const rightIndicatorOpacity = useTransform(x, [0, 35, 120], [0, 0.4, 1]);
+  const isDraggingRef = useRef(false);
+
+  const cardVariants = {
+    enter: (dir: 'left' | 'right' | null) => ({
+      scale: 0.94,
+      y: 16,
+      opacity: 0.85,
+      x: dir === 'left' ? 60 : dir === 'right' ? -60 : 0
+    }),
+    center: {
+      scale: 1,
+      y: 0,
+      x: 0,
+      opacity: 1,
+      rotate: 0,
+      transition: {
+        type: 'spring' as const,
+        stiffness: 380,
+        damping: 26
+      }
+    },
+    exit: (dir: 'left' | 'right' | null) => ({
+      x: dir === 'left' ? -380 : dir === 'right' ? 380 : -300,
+      opacity: 0,
+      rotate: dir === 'left' ? -18 : dir === 'right' ? 18 : -15,
+      transition: { duration: 0.28, ease: 'easeOut' as const }
+    })
+  };
+
+  return (
+    <motion.div
+      key={card.id}
+      custom={direction}
+      variants={cardVariants}
+      initial="enter"
+      animate="center"
+      exit="exit"
+      style={{ x, rotate, zIndex: 30 }}
+      drag="x"
+      dragConstraints={{ left: 0, right: 0 }}
+      dragElastic={0.7}
+      onDragStart={() => {
+        isDraggingRef.current = true;
+      }}
+      onDragEnd={(_e, info) => {
+        const threshold = 65;
+        const velocityThreshold = 220;
+        if (info.offset.x < -threshold || info.velocity.x < -velocityThreshold) {
+          onSwipe('left');
+        } else if (info.offset.x > threshold || info.velocity.x > velocityThreshold) {
+          onSwipe('right');
+        }
+        setTimeout(() => {
+          isDraggingRef.current = false;
+        }, 120);
+      }}
+      className="absolute inset-x-0 top-0 rounded-2xl p-5 flex flex-col justify-between border border-[#f2ca50]/60 bg-gradient-to-br from-[#232f48] via-[#1a253c] to-[#121c30] shadow-[0_22px_50px_-8px_rgba(242,202,80,0.25),0_16px_40px_-5px_rgba(0,0,0,0.85)] ring-1 ring-[#f2ca50]/50 backdrop-blur-xl cursor-grab active:cursor-grabbing select-none"
+    >
+      {/* Top Gold Filament Accent */}
+      <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#f2ca50] to-transparent shadow-[0_0_12px_#f2ca50]" />
+
+      {/* Swipe Feedback Badges */}
+      <motion.div
+        style={{ opacity: leftIndicatorOpacity }}
+        className="pointer-events-none absolute top-4 right-4 px-3 py-1 rounded-full bg-[#f2ca50] text-[#2c2000] text-[11px] font-mono font-black shadow-lg flex items-center gap-1 z-40 border border-white/20"
+      >
+        <span>SUIVANT</span>
+        <span className="material-symbols-outlined text-sm font-bold">arrow_forward</span>
+      </motion.div>
+
+      <motion.div
+        style={{ opacity: rightIndicatorOpacity }}
+        className="pointer-events-none absolute top-4 left-4 px-3 py-1 rounded-full bg-[#38bdf8] text-[#041d33] text-[11px] font-mono font-black shadow-lg flex items-center gap-1 z-40 border border-white/20"
+      >
+        <span className="material-symbols-outlined text-sm font-bold">arrow_back</span>
+        <span>PRÉCÉDENT</span>
+      </motion.div>
+
+      {/* Card Header: Roman ID, Badge & Expand indicator */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#f2ca50] text-[#3c2f00] shadow-[0_0_10px_rgba(242,202,80,0.4)]">
+            {card.badge}
+          </span>
+          <span className="text-[11px] text-[#f4deb3] font-mono">
+            {card.accent}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-mono text-[#d0c5af]/80 bg-[#0a1120]/70 px-2 py-0.5 rounded border border-[#232a3a]">
+            Glisser ↔
+          </span>
+          <div className="w-7 h-7 rounded-full flex items-center justify-center font-serif font-bold text-xs bg-[#f2ca50] text-[#3c2f00] shadow-[0_0_10px_rgba(242,202,80,0.5)]">
+            {card.romanId}
+          </div>
+        </div>
+      </div>
+
+      {/* Card Title & Description */}
+      <div
+        className="my-3"
+        onClick={() => {
+          if (!isDraggingRef.current) {
+            onExpand();
+          }
+        }}
+      >
+        <div className="flex items-center gap-1.5 text-xs text-[#d4c78f] font-semibold uppercase tracking-widest mb-1">
+          <span className="material-symbols-outlined text-sm text-[#f2ca50]">
+            {card.iconName}
+          </span>
+          <span>{card.itemsCount}</span>
+        </div>
+
+        <h3 className="font-serif text-lg sm:text-xl font-bold text-[#ffffff] leading-tight drop-shadow-sm">
+          {card.title}
+        </h3>
+
+        <p className="text-xs text-[#dce2f8]/90 mt-1 line-clamp-2 leading-relaxed">
+          {card.subtitle}
+        </p>
+      </div>
+
+      {/* Card Footer: Level, Audio/Focus & Primary Action */}
+      <div className="flex items-center justify-between pt-2.5 border-t border-[#f2ca50]/25">
+        <div className="flex items-center gap-2">
+          <span className="px-2 py-0.5 rounded bg-[#0a1120] text-[10px] font-bold text-[#f2ca50] border border-[#f2ca50]/40 font-mono">
+            {card.level}
+          </span>
+          {card.duration && (
+            <span className="text-xs text-[#d0c5af] hidden sm:inline">
+              {card.duration}
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Focus Lecture Mode */}
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              if (!isDraggingRef.current) {
+                onFocus(card, e);
+              }
+            }}
+            className="px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1 bg-[#10192d] hover:bg-[#1a2744] text-[#ffe082] border border-[#f2ca50]/35 transition-all active:scale-95 shadow-sm"
+            title="Lire en Mode Focus Lecture"
+          >
+            <span className="material-symbols-outlined text-sm">center_focus_strong</span>
+            <span className="hidden sm:inline">Focus</span>
+          </button>
+
+          {/* Primary Action Button */}
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              if (!isDraggingRef.current) {
+                onOpenAction(card, e);
+              }
+            }}
+            className="px-4 py-1.5 rounded-xl text-xs font-bold tracking-wide flex items-center gap-1.5 shadow-md bg-gradient-to-r from-[#ffe088] via-[#f2ca50] to-[#e6b82e] text-[#2c2000] shadow-[0_0_16px_rgba(242,202,80,0.4)] hover:brightness-110 active:scale-95 transition-all"
+          >
+            <span>{card.actionLabel}</span>
+            <span className="material-symbols-outlined text-sm">arrow_forward</span>
+          </button>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// MAIN COMPONENT: StackedCards with interactive Framer Motion swipe deck
+// ---------------------------------------------------------------------------
 export const StackedCards: React.FC<StackedCardsProps> = ({
   onOpenFolioStudy,
   onOpenVocabularyFocus,
@@ -23,40 +225,38 @@ export const StackedCards: React.FC<StackedCardsProps> = ({
 }) => {
   const [activeCategory, setActiveCategory] = useState<StackCategoryType>(initialCategory);
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
+  const [currentIndex, setCurrentIndex] = useState<number>(0);
+  const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const [selectedIdx, setSelectedIdx] = useState<number>(0);
   const [focusItem, setFocusItem] = useState<StackCardItem | null>(null);
 
   const currentCategoryData = STACKED_COLLECTIONS_DATA[activeCategory];
   const items = currentCategoryData.items;
-  const remainingCount = Math.max(0, items.length - 3);
+
+  // Reset indices when category changes
+  const handleCategorySwitch = (cat: StackCategoryType, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setActiveCategory(cat);
+    setCurrentIndex(0);
+    setSelectedIdx(0);
+    setSwipeDirection(null);
+  };
 
   // Toggle stack expansion / retraction
   const toggleStack = () => {
     setIsExpanded((prev) => !prev);
   };
 
-  const handleCategorySwitch = (cat: StackCategoryType, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setActiveCategory(cat);
-    setSelectedIdx(0);
-    // Keep stack collapsed when switching to see the new top 3 + N deck
-    setIsExpanded(false);
-  };
-
-  const handleCardClick = (idx: number, item: StackCardItem, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!isExpanded) {
-      // First click: smoothly expands the stack
-      setIsExpanded(true);
-      setSelectedIdx(idx);
+  // Handle swipe left/right
+  const handleSwipe = (direction: 'left' | 'right') => {
+    setSwipeDirection(direction);
+    if (direction === 'left') {
+      // Next card
+      setCurrentIndex((prev) => (prev + 1) % items.length);
     } else {
-      // Second click on the expanded card: sets selection or toggles collapse
-      if (selectedIdx === idx) {
-        setIsExpanded(false);
-      } else {
-        setSelectedIdx(idx);
-      }
+      // Previous card
+      setCurrentIndex((prev) => (prev - 1 + items.length) % items.length);
     }
   };
 
@@ -67,7 +267,6 @@ export const StackedCards: React.FC<StackedCardsProps> = ({
     } else if (item.actionType === 'profile' && onOpenProfile) {
       onOpenProfile();
     } else {
-      // Convert to StudyFolio format for onOpenFolioStudy compatibility
       const folioCompatible: StudyFolio = {
         id: item.id,
         folioNumber: `FOLIO ${item.romanId}`,
@@ -89,7 +288,7 @@ export const StackedCards: React.FC<StackedCardsProps> = ({
     }
   };
 
-  // Keyboard navigation for Focus Lecture mode on stacked cards
+  // Keyboard navigation for Focus Lecture mode
   useEffect(() => {
     if (!focusItem) return;
 
@@ -114,16 +313,21 @@ export const StackedCards: React.FC<StackedCardsProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [focusItem, items]);
 
-  // Lecture audio automatique alternée dès l'ouverture d'un folio en focus lecture
+  // Audio trigger in Focus Lecture mode
   useEffect(() => {
     if (focusItem?.quote) {
       triggerAutoPlayIfEnabled(focusItem.quote, `stacked-focus-${focusItem.id}`, 400);
     }
   }, [focusItem?.id, focusItem?.quote]);
 
+  // Top card & cards beneath in the stacked deck
+  const topCard = items[currentIndex] || items[0];
+  const secondCard = items[(currentIndex + 1) % items.length];
+  const thirdCard = items[(currentIndex + 2) % items.length];
+
   return (
     <section className="px-4 sm:px-6 py-4 flex flex-col gap-3 select-none">
-      {/* 1. SECTION HEADER: Title, Counter & Expand/Retract Toggle */}
+      {/* 1. SECTION HEADER: Title, Mode & Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg bg-[#232a3a] border border-[#f2ca50]/40 flex items-center justify-center text-[#f2ca50] shadow-sm">
@@ -136,15 +340,9 @@ export const StackedCards: React.FC<StackedCardsProps> = ({
               <h2 className="font-serif text-xl sm:text-2xl text-[#dce2f8] font-bold tracking-wide">
                 Manuscrits & Collections
               </h2>
-              {/* +N Remaining Indicator Pill */}
-              <span
-                className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono transition-all duration-300 ${
-                  isExpanded
-                    ? 'bg-[#232a3a] text-[#f2ca50] border border-[#f2ca50]/40'
-                    : 'bg-[#f2ca50] text-[#3c2f00] shadow-[0_0_10px_rgba(242,202,80,0.4)] animate-pulse'
-                }`}
-              >
-                {isExpanded ? `${items.length} Déployés` : `+${remainingCount} restants`}
+              {/* Active Card Pill */}
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono bg-[#f2ca50] text-[#3c2f00] shadow-[0_0_10px_rgba(242,202,80,0.4)]">
+                {currentIndex + 1} / {items.length}
               </span>
             </div>
             <p className="text-xs text-[#d0c5af]/80">
@@ -153,12 +351,12 @@ export const StackedCards: React.FC<StackedCardsProps> = ({
           </div>
         </div>
 
-        {/* Global Expand / Retract Button */}
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        {/* Global Action Bar */}
+        <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
           {/* Quick Focus Reading shortcut */}
           <button
             type="button"
-            onClick={() => setFocusItem(items[selectedIdx] || items[0])}
+            onClick={() => setFocusItem(topCard)}
             className="px-3 py-1.5 rounded-xl border border-[#f2ca50]/40 bg-[#191f2f] hover:bg-[#f2ca50]/20 text-[#f2ca50] text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
             title="Activer le Mode Focus Lecture sur le manuscrit actif"
           >
@@ -166,7 +364,7 @@ export const StackedCards: React.FC<StackedCardsProps> = ({
             <span>Focus Lecture</span>
           </button>
 
-          {/* Smooth Toggle Expand / Collapse */}
+          {/* Toggle Expand / Stacked Mode */}
           <button
             type="button"
             onClick={toggleStack}
@@ -175,20 +373,17 @@ export const StackedCards: React.FC<StackedCardsProps> = ({
                 ? 'bg-[#232a3a] text-[#ffe082] border-[#f2ca50]/40 hover:bg-[#2e374d]'
                 : 'bg-gradient-to-r from-[#f2ca50] to-[#e6b82e] text-[#2c2000] border-[#f2ca50] shadow-[0_0_12px_rgba(242,202,80,0.35)]'
             }`}
-            title={isExpanded ? 'Replier les cartes en superposition 1/3' : 'Déployer les cartes en cascade'}
+            title={isExpanded ? 'Replier en pile interactive (Swipe Deck)' : 'Déployer toutes les cartes en grille'}
           >
-            <span>{isExpanded ? 'Replier liasse' : `Déployer (${items.length})`}</span>
-            <span
-              className="material-symbols-outlined text-base transition-transform duration-500"
-              style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
-            >
-              expand_more
+            <span className="material-symbols-outlined text-sm">
+              {isExpanded ? 'view_agenda' : 'layers'}
             </span>
+            <span>{isExpanded ? 'Mode Pile (Swipe)' : `Déployer (${items.length})`}</span>
           </button>
         </div>
       </div>
 
-      {/* 2. CATEGORY TABS: 课程分类 · 学习收藏 · 词汇集 · 个人资料 */}
+      {/* 2. CATEGORY TABS: Courses / Saved / Lexicon / Profile */}
       <div className="flex items-center gap-1.5 p-1 rounded-xl bg-[#0c1322] border border-[#232a3a] overflow-x-auto">
         {(Object.keys(STACKED_COLLECTIONS_DATA) as StackCategoryType[]).map((catKey) => {
           const cat = STACKED_COLLECTIONS_DATA[catKey];
@@ -214,190 +409,268 @@ export const StackedCards: React.FC<StackedCardsProps> = ({
         })}
       </div>
 
-      {/* 3. OVERLAPPING CARDS STAGE (1/3 overlap when collapsed, staggered cascade when expanded) */}
-      <div
-        onClick={toggleStack}
-        onMouseLeave={() => setHoveredIdx(null)}
-        className="relative w-full cursor-pointer transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]"
-        style={{
-          minHeight: isExpanded
-            ? `${items.length * 180 + 30}px`
-            : '235px'
-        }}
-      >
-        {items.map((card, idx) => {
-          const isSelected = selectedIdx === idx;
-          const isHovered = hoveredIdx === idx;
-
-          // COLLAPSED: Top 3 cards overlap by approximately 1/3 (52px step for ~160px card height)
-          // Cards index >= 3 are hidden behind card 2 with opacity 0 and pointer-events none
-          const foldedTop = idx < 3 ? idx * 52 : 104;
-          const foldedScale = idx < 3 ? 1 - idx * 0.038 : 0.92;
-          const foldedZIndex = (items.length - idx) * 10;
-          const foldedOpacity = idx < 3 ? 1 - idx * 0.08 : 0;
-          const foldedPointerEvents = idx < 3 ? 'auto' : 'none';
-
-          // EXPANDED: Full cascading layout where each card reveals its full name and height
-          const unfoldedTop = idx * 180;
-          const unfoldedScale = 1;
-          const unfoldedZIndex = isSelected ? 80 : 30 + idx;
-
-          const currentTop = isExpanded ? `${unfoldedTop}px` : `${foldedTop}px`;
-          const currentZIndex = isHovered ? 90 : isExpanded ? unfoldedZIndex : foldedZIndex;
-          const currentOpacity = isExpanded ? 1 : foldedOpacity;
-          const currentScale = isHovered
-            ? isExpanded
-              ? 1.025
-              : foldedScale * 1.03
-            : isExpanded
-            ? unfoldedScale
-            : foldedScale;
-
-          // Stagger delay for fluid sequential expansion and retraction
-          const staggerDelay = isHovered || hoveredIdx !== null ? 0 : idx * 55;
-
-          return (
-            <div
-              key={card.id}
-              onClick={(e) => handleCardClick(idx, card, e)}
-              onMouseEnter={() => setHoveredIdx(idx)}
-              onMouseLeave={() => setHoveredIdx(null)}
-              className={`absolute inset-x-0 rounded-2xl p-5 flex flex-col justify-between border backdrop-blur-xl group cursor-pointer transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-                isHovered
-                  ? 'border-[#f2ca50] bg-gradient-to-br from-[#232f48] via-[#1a253c] to-[#121c30] shadow-[0_24px_55px_-8px_rgba(242,202,80,0.28),0_16px_40px_-5px_rgba(0,0,0,0.85)] ring-1 ring-[#f2ca50]/70'
-                  : isSelected && isExpanded
-                  ? 'border-[#f2ca50] bg-[#212b3e] ring-1 ring-[#f2ca50]/50 shadow-2xl'
-                  : idx === 0
-                  ? 'border-[#f2ca50]/40 bg-[#1e2739]/95 shadow-xl'
-                  : 'border-[#4d4635]/50 bg-[#151d2d]/95 shadow-lg'
-              }`}
-              style={{
-                top: currentTop,
-                transform: `scale(${currentScale}) translateY(${isHovered ? '-6px' : '0px'})`,
-                zIndex: currentZIndex,
-                opacity: currentOpacity,
-                pointerEvents: isExpanded ? 'auto' : (foldedPointerEvents as any),
-                transitionDelay: `${staggerDelay}ms`
-              }}
-            >
-              {/* Luminous Top Gold Filament on Hover */}
-              <div
-                className={`absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#f2ca50] to-transparent transition-opacity duration-300 pointer-events-none ${
-                  isHovered ? 'opacity-100 shadow-[0_0_12px_#f2ca50]' : 'opacity-0'
-                }`}
-              />
-
-              {/* Card Header: Roman ID, Badge, +N Counter on 3rd card when folded */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span
-                    className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition-colors duration-300 ${
-                      isHovered
-                        ? 'bg-[#f2ca50] text-[#3c2f00] shadow-[0_0_10px_rgba(242,202,80,0.4)]'
-                        : idx === 0
-                        ? 'bg-[#f2ca50]/20 text-[#f2ca50] border border-[#f2ca50]/30'
-                        : 'bg-[#0f1726] text-[#d4c78f] border border-[#30394c]'
-                    }`}
-                  >
-                    {card.badge}
+      {/* 3. INTERACTIVE STACK VIEW OR EXPANDED CASCADE */}
+      {!isExpanded ? (
+        /* INTERACTIVE SWIPEABLE PILE (FRAMER MOTION) */
+        <div className="flex flex-col gap-3 pt-2">
+          {/* Card Stack Container */}
+          <div className="relative w-full h-[225px] sm:h-[215px] perspective-[1000px]">
+            {/* 3rd Card in Stack (Deep Background) */}
+            {items.length > 2 && thirdCard && (
+              <motion.div
+                key={`deck-3rd-${thirdCard.id}`}
+                animate={{
+                  scale: 0.88,
+                  y: 32,
+                  opacity: 0.55
+                }}
+                transition={{ duration: 0.3 }}
+                style={{ zIndex: 10 }}
+                className="absolute inset-x-0 top-0 rounded-2xl p-5 border border-[#30394c]/50 bg-[#0d1422]/90 shadow-md pointer-events-none"
+              >
+                <div className="flex items-center justify-between opacity-50">
+                  <span className="text-[10px] font-mono font-bold text-[#d0c5af]">
+                    {thirdCard.badge}
                   </span>
-
-                  <span className="text-[11px] text-[#d0c5af] group-hover:text-amber-200 transition-colors font-mono">
-                    {card.accent}
+                  <span className="text-xs font-serif text-[#f2ca50]">
+                    {thirdCard.romanId}
                   </span>
                 </div>
+                <div className="mt-2 text-sm font-serif font-bold text-white/50 truncate">
+                  {thirdCard.title}
+                </div>
+              </motion.div>
+            )}
 
-                <div className="flex items-center gap-2">
-                  {/* On 3rd card (idx === 2) when collapsed: Show prominent +N badge */}
-                  {!isExpanded && idx === 2 && remainingCount > 0 && (
+            {/* 2nd Card in Stack (Mid Background) */}
+            {items.length > 1 && secondCard && (
+              <motion.div
+                key={`deck-2nd-${secondCard.id}`}
+                animate={{
+                  scale: 0.94,
+                  y: 16,
+                  opacity: 0.85
+                }}
+                transition={{ duration: 0.3 }}
+                style={{ zIndex: 20 }}
+                className="absolute inset-x-0 top-0 rounded-2xl p-5 border border-[#4d4635]/60 bg-[#141c2c]/95 shadow-lg pointer-events-none"
+              >
+                <div className="flex items-center justify-between opacity-80">
+                  <span className="text-[10px] font-mono font-bold text-[#f2ca50]/80">
+                    {secondCard.badge}
+                  </span>
+                  <span className="text-xs font-serif text-[#f2ca50]">
+                    {secondCard.romanId}
+                  </span>
+                </div>
+                <div className="mt-2 text-sm sm:text-base font-serif font-bold text-white/80 truncate">
+                  {secondCard.title}
+                </div>
+                <div className="text-xs text-[#d0c5af]/70 truncate mt-0.5">
+                  {secondCard.subtitle}
+                </div>
+              </motion.div>
+            )}
+
+            {/* 1st Top Card (Swipeable with framer-motion) */}
+            <AnimatePresence mode="popLayout" custom={swipeDirection}>
+              <TopCard
+                key={topCard.id}
+                card={topCard}
+                direction={swipeDirection}
+                onSwipe={handleSwipe}
+                onOpenAction={handleCardAction}
+                onFocus={(c, e) => {
+                  e.stopPropagation();
+                  setFocusItem(c);
+                }}
+                onExpand={toggleStack}
+              />
+            </AnimatePresence>
+          </div>
+
+          {/* SWIPE CONTROLS & PAGINATION BAR */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 px-1 pt-1 border-t border-[#232a3a]/60">
+            {/* Gesture Hint */}
+            <div className="flex items-center gap-1.5 text-xs text-[#d0c5af]/80">
+              <span className="material-symbols-outlined text-base text-[#f2ca50] animate-pulse">
+                swipe
+              </span>
+              <span>Glissez la carte à gauche ou à droite pour feuilleter</span>
+            </div>
+
+            {/* Navigation Buttons and Dots */}
+            <div className="flex items-center gap-3">
+              {/* Previous Button */}
+              <button
+                type="button"
+                onClick={() => handleSwipe('right')}
+                className="px-2.5 py-1 rounded-lg bg-[#141d2f] hover:bg-[#1f2b44] text-[#dce2f8] border border-[#2e374d] hover:border-[#f2ca50]/40 text-xs font-medium flex items-center gap-1 active:scale-95 transition-all"
+                title="Carte précédente (Swipe droite)"
+              >
+                <span className="material-symbols-outlined text-sm">arrow_back</span>
+                <span className="hidden sm:inline">Précédent</span>
+              </button>
+
+              {/* Dots Pagination */}
+              <div className="flex items-center gap-1.5">
+                {items.map((it, idx) => {
+                  const isActive = idx === currentIndex;
+                  return (
+                    <button
+                      key={it.id}
+                      type="button"
+                      onClick={() => {
+                        setSwipeDirection(idx > currentIndex ? 'left' : 'right');
+                        setCurrentIndex(idx);
+                      }}
+                      className={`h-2 rounded-full transition-all duration-300 ${
+                        isActive
+                          ? 'w-6 bg-[#f2ca50] shadow-[0_0_8px_rgba(242,202,80,0.6)]'
+                          : 'w-2 bg-[#232a3a] hover:bg-[#3d4860]'
+                      }`}
+                      title={`Aller à ${it.title}`}
+                    />
+                  );
+                })}
+              </div>
+
+              {/* Next Button */}
+              <button
+                type="button"
+                onClick={() => handleSwipe('left')}
+                className="px-2.5 py-1 rounded-lg bg-[#141d2f] hover:bg-[#1f2b44] text-[#dce2f8] border border-[#2e374d] hover:border-[#f2ca50]/40 text-xs font-medium flex items-center gap-1 active:scale-95 transition-all"
+                title="Carte suivante (Swipe gauche)"
+              >
+                <span className="hidden sm:inline">Suivant</span>
+                <span className="material-symbols-outlined text-sm">arrow_forward</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* EXPANDED GRID VIEW (ALL CARDS DEPLOYED) */
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-2">
+          {items.map((card, idx) => {
+            const isHovered = hoveredIdx === idx;
+            const isSelected = selectedIdx === idx;
+
+            return (
+              <motion.div
+                key={card.id}
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25, delay: idx * 0.04 }}
+                onMouseEnter={() => setHoveredIdx(idx)}
+                onMouseLeave={() => setHoveredIdx(null)}
+                onClick={() => {
+                  setSelectedIdx(idx);
+                  setCurrentIndex(idx);
+                }}
+                className={`relative rounded-2xl p-5 flex flex-col justify-between border backdrop-blur-xl group cursor-pointer transition-all duration-300 ${
+                  isHovered || isSelected
+                    ? 'border-[#f2ca50] bg-gradient-to-br from-[#232f48] via-[#1a253c] to-[#121c30] shadow-[0_16px_40px_-8px_rgba(242,202,80,0.22),0_12px_30px_-5px_rgba(0,0,0,0.85)] ring-1 ring-[#f2ca50]/60'
+                    : 'border-[#4d4635]/40 bg-[#151d2d]/95 hover:border-[#f2ca50]/50 shadow-md'
+                }`}
+              >
+                {/* Luminous Top Gold Line */}
+                <div
+                  className={`absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#f2ca50] to-transparent transition-opacity duration-300 pointer-events-none ${
+                    isHovered || isSelected ? 'opacity-100 shadow-[0_0_10px_#f2ca50]' : 'opacity-0'
+                  }`}
+                />
+
+                {/* Card Header: Roman ID & Badge */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span
-                      onClick={toggleStack}
-                      className="px-2.5 py-0.5 rounded-full bg-[#f2ca50] text-[#3c2f00] text-[10px] font-mono font-black shadow-[0_0_10px_rgba(242,202,80,0.5)] animate-bounce"
-                      title={`${remainingCount} autres cartes masquées dans cette liasse. Cliquez pour déployer.`}
+                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition-colors duration-300 ${
+                        isHovered || isSelected
+                          ? 'bg-[#f2ca50] text-[#3c2f00] shadow-[0_0_10px_rgba(242,202,80,0.4)]'
+                          : 'bg-[#f2ca50]/20 text-[#f2ca50] border border-[#f2ca50]/30'
+                      }`}
                     >
-                      +{remainingCount} SUIVANTES
+                      {card.badge}
                     </span>
-                  )}
+
+                    <span className="text-[11px] text-[#d0c5af] group-hover:text-amber-200 transition-colors font-mono">
+                      {card.accent}
+                    </span>
+                  </div>
 
                   <div
                     className={`w-7 h-7 rounded-full flex items-center justify-center font-serif font-bold text-xs transition-all duration-300 ${
-                      isHovered
-                        ? 'bg-[#f2ca50] text-[#3c2f00] shadow-[0_0_10px_rgba(242,202,80,0.5)] scale-110'
+                      isHovered || isSelected
+                        ? 'bg-[#f2ca50] text-[#3c2f00] shadow-[0_0_10px_rgba(242,202,80,0.5)] scale-105'
                         : 'bg-[#0c1424] border border-[#f2ca50]/40 text-[#f2ca50]'
                     }`}
                   >
                     {card.romanId}
                   </div>
                 </div>
-              </div>
 
-              {/* CARD TITLE / NAME (Always visible and highlighted) */}
-              <div className="my-2">
-                <div className="flex items-center gap-1.5 text-xs text-[#d4c78f] font-semibold uppercase tracking-widest mb-1 group-hover:text-[#ffe082] transition-colors">
-                  <span className="material-symbols-outlined text-sm text-[#f2ca50] transition-transform duration-300 group-hover:scale-125">
-                    {card.iconName}
-                  </span>
-                  <span>{card.itemsCount}</span>
-                </div>
-
-                <h3 className="font-serif text-base sm:text-lg font-bold text-[#ffffff] leading-tight group-hover:text-[#fff4cc] transition-colors drop-shadow-sm">
-                  {card.title}
-                </h3>
-
-                <p className="text-xs text-[#d0c5af]/85 mt-1 line-clamp-2 leading-relaxed group-hover:text-[#ffffff] transition-colors">
-                  {card.subtitle}
-                </p>
-              </div>
-
-              {/* Card Footer: Level, Details & Actions */}
-              <div className="flex items-center justify-between pt-2 border-t border-[#2e374d]/70 group-hover:border-[#f2ca50]/30 transition-colors">
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded bg-[#0a1120] text-[10px] font-bold text-[#f2ca50] border border-[#f2ca50]/40 group-hover:border-[#f2ca50]/60 transition-colors font-mono">
-                    {card.level}
-                  </span>
-                  {card.duration && (
-                    <span className="text-xs text-[#d0c5af] group-hover:text-[#fff0cc] transition-colors hidden sm:inline">
-                      {card.duration}
+                {/* Card Title & Subtitle */}
+                <div className="my-2.5">
+                  <div className="flex items-center gap-1.5 text-xs text-[#d4c78f] font-semibold uppercase tracking-widest mb-1 group-hover:text-[#ffe082] transition-colors">
+                    <span className="material-symbols-outlined text-sm text-[#f2ca50]">
+                      {card.iconName}
                     </span>
-                  )}
+                    <span>{card.itemsCount}</span>
+                  </div>
+
+                  <h3 className="font-serif text-base sm:text-lg font-bold text-[#ffffff] leading-tight group-hover:text-[#fff4cc] transition-colors">
+                    {card.title}
+                  </h3>
+
+                  <p className="text-xs text-[#d0c5af]/85 mt-1 line-clamp-2 leading-relaxed group-hover:text-[#ffffff] transition-colors">
+                    {card.subtitle}
+                  </p>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  {/* Focus Lecture shortcut for this card */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setFocusItem(card);
-                    }}
-                    className="px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1 bg-[#10192d] hover:bg-[#1a2744] text-[#ffe082] border border-[#f2ca50]/35 transition-all active:scale-95 shadow-sm"
-                    title="Lire en Mode Focus Lecture"
-                  >
-                    <span className="material-symbols-outlined text-sm">center_focus_strong</span>
-                    <span className="hidden sm:inline">Focus</span>
-                  </button>
-
-                  {/* Primary card action */}
-                  <button
-                    type="button"
-                    onClick={(e) => handleCardAction(card, e)}
-                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold tracking-wide flex items-center gap-1.5 shadow-md transition-all duration-300 active:scale-95 ${
-                      isHovered
-                        ? 'bg-gradient-to-r from-[#ffe088] via-[#f2ca50] to-[#e6b82e] text-[#2c2000] shadow-[0_0_16px_rgba(242,202,80,0.5)] scale-105'
-                        : 'bg-[#f2ca50] text-[#3c2f00] hover:bg-[#ffe088]'
-                    }`}
-                  >
-                    <span>{card.actionLabel}</span>
-                    <span className="material-symbols-outlined text-sm transition-transform duration-300 group-hover:translate-x-0.5">
-                      arrow_forward
+                {/* Card Footer: Level, Details & Actions */}
+                <div className="flex items-center justify-between pt-2.5 border-t border-[#2e374d]/70 group-hover:border-[#f2ca50]/30 transition-colors">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded bg-[#0a1120] text-[10px] font-bold text-[#f2ca50] border border-[#f2ca50]/40 font-mono">
+                      {card.level}
                     </span>
-                  </button>
+                    {card.duration && (
+                      <span className="text-xs text-[#d0c5af] group-hover:text-[#fff0cc] transition-colors hidden sm:inline">
+                        {card.duration}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {/* Focus Lecture Mode */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setFocusItem(card);
+                      }}
+                      className="px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1 bg-[#10192d] hover:bg-[#1a2744] text-[#ffe082] border border-[#f2ca50]/35 transition-all active:scale-95 shadow-sm"
+                      title="Lire en Mode Focus Lecture"
+                    >
+                      <span className="material-symbols-outlined text-sm">center_focus_strong</span>
+                      <span className="hidden sm:inline">Focus</span>
+                    </button>
+
+                    {/* Primary Action Button */}
+                    <button
+                      type="button"
+                      onClick={(e) => handleCardAction(card, e)}
+                      className="px-3.5 py-1.5 rounded-xl text-xs font-bold tracking-wide flex items-center gap-1.5 shadow-md bg-[#f2ca50] text-[#3c2f00] hover:bg-[#ffe088] active:scale-95 transition-all"
+                    >
+                      <span>{card.actionLabel}</span>
+                      <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      )}
 
       {/* 4. IMMERSIVE FULL-SCREEN "FOCUS LECTURE" MODAL */}
       {focusItem && (

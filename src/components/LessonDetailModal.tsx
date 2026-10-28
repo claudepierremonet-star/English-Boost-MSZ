@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import type { SchoolLesson, SchoolVocabularyItem } from '../data/schoolCurriculum';
 import { GRAMMAR_6E_ITEMS } from '../data/grammar6eData';
 import { SentenceStructuringExercise } from './SentenceStructuringExercise';
@@ -82,6 +82,29 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
       }
     }
   }, [lesson]);
+
+  // Hook called unconditionally before any early return
+  const filteredVocab = useMemo(() => {
+    if (!lesson?.vocabulary) return [];
+    return lesson.vocabulary.filter((w) => {
+      // Filter by type
+      if (vocabFilterType === 'noun' && !w.part_of_speech.toLowerCase().includes('n')) return false;
+      if (vocabFilterType === 'verb' && !w.part_of_speech.toLowerCase().includes('v')) return false;
+      if (vocabFilterType === 'phrase' && !w.part_of_speech.toLowerCase().includes('phr') && !w.part_of_speech.toLowerCase().includes('exp')) return false;
+
+      // Filter by search query
+      if (vocabSearchQuery.trim()) {
+        const q = vocabSearchQuery.toLowerCase();
+        return (
+          w.term.toLowerCase().includes(q) ||
+          w.translation_fr.toLowerCase().includes(q) ||
+          w.example_en.toLowerCase().includes(q) ||
+          w.example_fr.toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+  }, [lesson?.vocabulary, vocabFilterType, vocabSearchQuery]);
 
   if (!isOpen || !lesson) return null;
 
@@ -214,28 +237,6 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
 
     playNextLine();
   };
-
-  const filteredVocab = React.useMemo(() => {
-    if (!lesson?.vocabulary) return [];
-    return lesson.vocabulary.filter((w) => {
-      // Filter by type
-      if (vocabFilterType === 'noun' && !w.part_of_speech.toLowerCase().includes('n')) return false;
-      if (vocabFilterType === 'verb' && !w.part_of_speech.toLowerCase().includes('v')) return false;
-      if (vocabFilterType === 'phrase' && !w.part_of_speech.toLowerCase().includes('phr') && !w.part_of_speech.toLowerCase().includes('exp')) return false;
-
-      // Filter by search query
-      if (vocabSearchQuery.trim()) {
-        const q = vocabSearchQuery.toLowerCase();
-        return (
-          w.term.toLowerCase().includes(q) ||
-          w.translation_fr.toLowerCase().includes(q) ||
-          w.example_en.toLowerCase().includes(q) ||
-          w.example_fr.toLowerCase().includes(q)
-        );
-      }
-      return true;
-    });
-  }, [lesson?.vocabulary, vocabFilterType, vocabSearchQuery]);
 
   const tabsList: Array<{ id: LessonTab; label: string; icon: string }> = [
     { id: 'overview', label: 'Aperçu & Phrases', icon: 'format_quote' },

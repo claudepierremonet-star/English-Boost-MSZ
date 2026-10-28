@@ -3,7 +3,7 @@ import confetti from 'canvas-confetti';
 import { DualSpeakerButton } from './DualSpeakerButton';
 
 interface DailyChallengeCardProps {
-  onChallengeComplete?: (xpEarned: number) => void;
+  onChallengeComplete?: (isSuccessOrXp: number | boolean) => void;
 }
 
 export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({ onChallengeComplete }) => {
@@ -52,7 +52,9 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({ onChalle
       } catch (e) {
         console.warn('Confetti error', e);
       }
-      onChallengeComplete?.(240);
+      onChallengeComplete?.(true); // +10 points de niveau
+    } else {
+      onChallengeComplete?.(false); // -5 points de niveau
     }
   };
 
@@ -92,7 +94,7 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({ onChalle
             </span>
             <div className="flex flex-col text-right">
               <span className="text-xs text-[#f2ca50] font-bold leading-none font-mono">24 JOURS</span>
-              <span className="text-[9px] text-[#d4c78f] tracking-widest font-semibold mt-0.5">+240 XP</span>
+              <span className="text-[9px] text-[#d4c78f] tracking-widest font-semibold mt-0.5">+10 PTS / -5 PTS</span>
             </div>
           </div>
         </div>
@@ -178,8 +180,8 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({ onChalle
               </span>
               <span>
                 {isCorrect
-                  ? 'Excellente analyse philologique. « Equivocal » restitue l’art de l’ambiguïté feutrée.'
-                  : 'Nuance inexacte. « Equivocal » correspond à une ambiguïté diplomatique voulue.'}
+                  ? 'Excellente analyse philologique ! (+10 points de niveau gagnés)'
+                  : 'Nuance inexacte. « Equivocal » correspond à une ambiguïté diplomatique voulue. (-5 points déduits)'}
               </span>
             </div>
 
