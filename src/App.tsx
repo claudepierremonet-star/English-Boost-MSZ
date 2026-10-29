@@ -19,6 +19,7 @@ import { InstallAppModal } from './components/InstallAppModal';
 import { AuthModal } from './components/AuthModal';
 import { SchoolCurriculumView } from './components/SchoolCurriculumView';
 import { TwentyGamesHub } from './components/TwentyGamesHub';
+import { LeaderboardView } from './components/LeaderboardView';
 import { DiscreteWeatherBar } from './components/DiscreteWeatherBar';
 import { AmericanAccentStudioModal } from './components/AmericanAccentStudioModal';
 import { useSyncStatus } from './offline/useSyncStatus';
@@ -176,6 +177,7 @@ export default function App() {
         onLevelChange={handleLevelChange}
         onOpenThemeSelector={() => setIsThemeSelectorOpen(true)}
         onNavigateCursus={() => setActiveTab('cursus')}
+        onNavigateLeaderboard={() => setActiveTab('classement')}
         onOpenInstallModal={() => setIsInstallModalOpen(true)}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
         onOpenAccentStudio={() => setIsAccentStudioOpen(true)}
@@ -335,6 +337,41 @@ export default function App() {
               </button>
             </div>
 
+            {/* Editorial Banner for Weekly Leaderboard & Healthy Competition */}
+            <div
+              onClick={() => setActiveTab('classement')}
+              className="mx-4 sm:mx-6 my-2 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#172554]/70 via-[#101b33] to-[#1f1738]/80 border border-[#f2ca50]/50 shadow-xl flex items-center justify-between gap-4 cursor-pointer hover:border-[#f2ca50] transition-all group"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#ffe088] via-[#f2ca50] to-[#b45309] flex items-center justify-center text-[#2c1d00] shadow-md group-hover:scale-105 transition-transform shrink-0">
+                  <span className="material-symbols-outlined text-2xl font-bold">emoji_events</span>
+                </div>
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] font-mono text-[#f2ca50] font-bold uppercase tracking-widest">
+                      CLASSEMENT HEBDOMADAIRE • COMPÉTITION SAINE
+                    </span>
+                    <span className="px-2 py-0.2 rounded-full bg-[#f2ca50]/20 text-[#ffe088] text-[9px] font-mono font-bold">
+                      {(user.stats?.weeklyXp || 0).toLocaleString()} XP CETTE SEMAINE
+                    </span>
+                  </div>
+                  <h3 className="font-serif font-bold text-base sm:text-lg text-[#dce2f8] group-hover:text-[#f2ca50] transition-colors mt-0.5">
+                    Ligue d'Oxford & Émulation Académique
+                  </h3>
+                  <p className="text-xs text-[#d0c5af]/80">
+                    Comparez vos progrès hebdomadaires, grimpez sur le podium et encouragez vos condisciples apprenants.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="px-4 py-2.5 rounded-xl bg-[#f2ca50] text-[#3c2f00] font-bold text-xs uppercase tracking-wider hidden sm:flex items-center gap-1 shrink-0 group-hover:bg-[#ffe088] shadow-md"
+              >
+                <span>Voir le Top</span>
+                <span className="material-symbols-outlined text-sm">leaderboard</span>
+              </button>
+            </div>
+
             {/* Stacked Overlapping Study Cards (Manuscrits d'Étude & Collections) */}
             <StackedCards
               onOpenFolioStudy={handleOpenFolioStudy}
@@ -378,7 +415,18 @@ export default function App() {
           <div className="max-w-5xl mx-auto animate-fadeIn pt-2">
             <TwentyGamesHub
               onXpEarned={(xp) => handleChallengeComplete(xp)}
+              onPointsDeducted={(pts) => handleChallengeComplete(pts)}
               onClose={() => setActiveTab('accueil')}
+            />
+          </div>
+        )}
+
+        {activeTab === 'classement' && (
+          <div className="max-w-4xl mx-auto animate-fadeIn pt-2 px-4 sm:px-6">
+            <LeaderboardView
+              user={user}
+              onNavigateToGames={() => setActiveTab('jeux')}
+              onNavigateToPractice={() => setActiveTab('pratique')}
             />
           </div>
         )}
@@ -390,6 +438,7 @@ export default function App() {
               onResumePractice={() => setActiveTab('pratique')}
               onUpdateStudyTarget={handleUpdateStudyTarget}
               onOpenFlashcards={() => setIsFlashcardsOpen(true)}
+              onNavigateLeaderboard={() => setActiveTab('classement')}
             />
           </div>
         )}

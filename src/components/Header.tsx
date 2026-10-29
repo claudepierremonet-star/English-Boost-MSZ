@@ -11,6 +11,7 @@ interface HeaderProps {
   onLevelChange: (level: CEFRLevel) => void;
   onOpenThemeSelector?: () => void;
   onNavigateCursus?: () => void;
+  onNavigateLeaderboard?: () => void;
   onOpenInstallModal?: () => void;
   onOpenAuthModal?: () => void;
   onOpenAccentStudio?: () => void;
@@ -24,6 +25,7 @@ export const Header: React.FC<HeaderProps> = ({
   onLevelChange,
   onOpenThemeSelector,
   onNavigateCursus,
+  onNavigateLeaderboard,
   onOpenInstallModal,
   onOpenAuthModal,
   onOpenAccentStudio
@@ -110,6 +112,19 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <span className="material-symbols-outlined text-[15px]">school</span>
               <span className="font-mono text-[11px] uppercase tracking-wider">Cursus 6e-Tle</span>
+            </button>
+          )}
+
+          {/* Weekly Leaderboard quick badge */}
+          {onNavigateLeaderboard && (
+            <button
+              type="button"
+              onClick={onNavigateLeaderboard}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-[#b45309]/30 to-[#f59e0b]/20 hover:from-[#b45309]/50 hover:to-[#f59e0b]/30 border border-[#f2ca50]/50 text-xs font-bold text-[#f2ca50] hover:text-[#ffe088] transition-all active:scale-95 shadow-sm"
+              title="Consulter le classement hebdomadaire des apprenants"
+            >
+              <span className="material-symbols-outlined text-[15px] text-[#f2ca50]">emoji_events</span>
+              <span className="hidden sm:inline font-mono text-[11px]">Top Hebdo</span>
             </button>
           )}
 

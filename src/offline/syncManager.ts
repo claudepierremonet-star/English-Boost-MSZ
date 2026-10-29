@@ -194,7 +194,7 @@ class SyncManager {
       case 'UPDATE_PROFILE': {
         const profile = item.payload;
         const userRef = doc(db, 'users', targetUid);
-        await updateDoc(userRef, profile);
+        await setDoc(userRef, profile, { merge: true });
         return true;
       }
 

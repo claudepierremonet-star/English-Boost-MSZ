@@ -80,11 +80,28 @@ export interface ArcadeProgressionState {
   level: number; // 1 to 99
   unlockedMaxGameNumber: number; // 1 to 20
   completedGames: string[]; // IDs des jeux validés
+  activeSession?: {
+    gameId: string;
+    levelKey?: string;
+    questionIndex: number;
+    scoreAccumulated: number;
+    hearts: number;
+    timestamp: string;
+  } | null;
 }
 
 export const ARCADE_STORAGE_KEY = 'msz_arcade_progression_v1';
+export const ACTIVE_SESSION_STORAGE_KEY = 'msz_active_game_session';
 
 export { calculateLevel } from '../utils/levelUtils';
+import {
+  saveArcadeProgressionToIndexedDB,
+  getArcadeProgressionFromIndexedDB,
+  saveActiveSessionToIndexedDB,
+  getActiveSessionFromIndexedDB,
+  clearActiveSessionInIndexedDB
+} from '../offline/indexedDb';
+import { getLocalUserProfile, updateUserProfile } from '../firebase/client';
 
 export function calculatePlayerLevel(totalPoints: number): {
   level: number;
@@ -129,21 +146,136 @@ export function getStoredArcadeProgression(): ArcadeProgressionState {
       const level = Math.min(99, Math.max(1, Math.floor(points / 100) + 1));
       const unlockedMaxGameNumber = Math.max(1, Math.min(20, Number(parsed.unlockedMaxGameNumber) || 1));
       const completedGames = Array.isArray(parsed.completedGames) ? parsed.completedGames : [];
-      return { points, level, unlockedMaxGameNumber, completedGames };
+      return { points, level, unlockedMaxGameNumber, completedGames, activeSession: parsed.activeSession || null };
     }
   } catch (e) {
-    console.warn('Failed to load arcade progression:', e);
+    console.warn('Failed to load arcade progression from localStorage:', e);
   }
+
+  // Fallback to local user profile if present
+  try {
+    const prof = getLocalUserProfile();
+    if (prof?.arcadeProgression) {
+      return prof.arcadeProgression;
+    }
+  } catch (e) {}
+
   return { points: 0, level: 1, unlockedMaxGameNumber: 1, completedGames: [] };
 }
 
 export function saveStoredArcadeProgression(state: ArcadeProgressionState): void {
   if (typeof window === 'undefined') return;
+
+  // 1. Sauvegarde synchrone immédiate dans localStorage
   try {
     localStorage.setItem(ARCADE_STORAGE_KEY, JSON.stringify(state));
   } catch (e) {
-    console.warn('Failed to save arcade progression:', e);
+    console.warn('Failed to save arcade progression to localStorage:', e);
   }
+
+  // 2. Sauvegarde persistante dans IndexedDB (résistant au vidage du cache de session mobile)
+  saveArcadeProgressionToIndexedDB(state).catch(console.warn);
+
+  // 3. Synchronisation automatique avec le profil utilisateur et Cloud Firestore
+  try {
+    const prof = getLocalUserProfile();
+    if (prof) {
+      updateUserProfile({
+        arcadeProgression: state,
+        stats: {
+          ...prof.stats,
+          totalXp: Math.max(prof.stats?.totalXp || 0, state.points)
+        }
+      }).catch(console.warn);
+    }
+  } catch (e) {
+    console.warn('Sync notice with user profile:', e);
+  }
+}
+
+/**
+ * Hydrate la progression de jeu depuis toutes les sources de stockage (IndexedDB + Cloud Firestore + localStorage)
+ * Garantit qu'aucun point ni niveau n'est perdu lors d'un rafraîchissement.
+ */
+export async function hydrateArcadeProgressionFromStorage(): Promise<ArcadeProgressionState> {
+  let best = getStoredArcadeProgression();
+
+  // A. Vérifier IndexedDB
+  try {
+    const idbState = await getArcadeProgressionFromIndexedDB();
+    if (idbState && typeof idbState === 'object') {
+      const idbPoints = Number(idbState.points) || 0;
+      if (idbPoints > best.points || (idbState.unlockedMaxGameNumber || 1) > best.unlockedMaxGameNumber) {
+        best = {
+          points: Math.max(best.points, idbPoints),
+          level: Math.max(best.level, Number(idbState.level) || 1),
+          unlockedMaxGameNumber: Math.max(best.unlockedMaxGameNumber, Number(idbState.unlockedMaxGameNumber) || 1),
+          completedGames: Array.from(new Set([...best.completedGames, ...(idbState.completedGames || [])])),
+          activeSession: idbState.activeSession || best.activeSession || null
+        };
+      }
+    }
+  } catch (e) {
+    console.warn('IndexedDB hydration notice:', e);
+  }
+
+  // B. Vérifier le Profil Utilisateur (chargé de Firestore)
+  try {
+    const prof = getLocalUserProfile();
+    if (prof?.arcadeProgression) {
+      const profArcade = prof.arcadeProgression;
+      const profPoints = Number(profArcade.points) || 0;
+      if (profPoints > best.points || (profArcade.unlockedMaxGameNumber || 1) > best.unlockedMaxGameNumber) {
+        best = {
+          points: Math.max(best.points, profPoints),
+          level: Math.max(best.level, Number(profArcade.level) || 1),
+          unlockedMaxGameNumber: Math.max(best.unlockedMaxGameNumber, Number(profArcade.unlockedMaxGameNumber) || 1),
+          completedGames: Array.from(new Set([...best.completedGames, ...(profArcade.completedGames || [])])),
+          activeSession: profArcade.activeSession || best.activeSession || null
+        };
+      }
+    }
+  } catch (e) {}
+
+  // Recalculer le niveau de manière sûre
+  best.level = Math.min(99, Math.max(1, Math.floor(best.points / 100) + 1));
+
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem(ARCADE_STORAGE_KEY, JSON.stringify(best));
+    } catch (e) {}
+  }
+
+  return best;
+}
+
+/**
+ * Sauvegarde de l'état d'une partie en cours (Speed Match, etc.)
+ * Permet de reprendre immédiatement sans perdre aucun mot ni point en cas de refresh mobile.
+ */
+export function saveActiveGameSession(session: any): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(ACTIVE_SESSION_STORAGE_KEY, JSON.stringify(session));
+  } catch (e) {}
+  saveActiveSessionToIndexedDB(session).catch(console.warn);
+}
+
+export function getStoredActiveGameSession(): any | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(ACTIVE_SESSION_STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return null;
+}
+
+export function clearStoredActiveGameSession(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(ACTIVE_SESSION_STORAGE_KEY);
+  } catch (e) {}
+  clearActiveSessionInIndexedDB().catch(console.warn);
 }
 
 export interface MiniGameMeta {
@@ -196,7 +328,7 @@ export const TWENTY_GAMES_METADATA: MiniGameMeta[] = [
     id: 'word-scramble',
     number: 2,
     title: 'Word Scramble',
-    subtitle: 'Anagrammes en Folie',
+    subtitle: 'Anagrammes • 5 Niveaux (5 à 90 Questions • 12 Mots)',
     icon: 'extension',
     category: 'vocabulaire',
     badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
@@ -204,16 +336,17 @@ export const TWENTY_GAMES_METADATA: MiniGameMeta[] = [
     bgGradient: 'from-emerald-950/40 via-[#131b2e] to-[#0c1322]',
     difficulty: 'Facile',
     requiredLevel: 1,
-    xpReward: 30,
+    xpReward: 35,
     howToPlay: {
-      goal: 'Remets les lettres mélangées dans le bon ordre pour reconstituer le mot anglais secret.',
+      goal: 'Remets les lettres mélangées dans le bon ordre pour reconstituer 12 mots par question selon votre niveau : Débutant (5 questions), Intermédiaire (25 questions), Expert (50 questions), Expert Avancé (70 questions) ou Master Avancé (90 questions), avec chrono libre ou temps limité !',
       rules: [
-        'Lis l\'indice et la traduction française affichés en haut.',
-        'Clique sur les lettres proposées pour les insérer dans les cases vides.',
+        'Lis l\'indice contextuel et la traduction française affichés dans le cartel d\'or.',
+        'Clique sur les lettres proposées (fort contraste or et bleu nuit) pour les insérer dans les cases vides.',
         'Clique sur une lettre déjà placée pour la renvoyer dans la réserve en cas de faute.',
-        'Utilise l\'indice gratuit si tu as un trou de mémoire !'
+        'Choisis ton mode de temps : "Temps Limité" (décompte rapide) ou "Temps Écoulé" (chronomètre libre sans stress).',
+        'Complète les 12 mots de chaque question pour valider la manche et empocher les points XP !'
       ],
-      tip: 'Commence souvent par repérer les consonnes initiales typiques de l\'anglais (Th, Wh, Sh, St).'
+      tip: 'Chaque partie pioche aléatoirement dans une vaste banque lexicale pour garantir une expérience 100% renouvelée sans répétition.'
     }
   },
   {
@@ -643,6 +776,30 @@ export const TWENTY_GAMES_METADATA: MiniGameMeta[] = [
         'Survis aux 5 rounds pour terrasser le gardien et empocher 100 XP héroïques !'
       ],
       tip: 'Prends ton temps pour chaque question : aucune pénalité de temps ici, seule la précision compte !'
+    }
+  },
+  {
+    id: 'speed-math',
+    number: 21,
+    title: 'Speed Mental Math',
+    subtitle: 'Calcul Mental Rapide & Nombres en Anglais',
+    icon: 'calculate',
+    category: 'defi',
+    badgeColor: 'bg-amber-500/20 text-[#f2ca50] border-amber-500/40',
+    borderColor: 'border-[#f2ca50]/50 hover:border-[#f2ca50]',
+    bgGradient: 'from-amber-950/40 via-[#101b33] to-[#0c1322]',
+    difficulty: 'Moyen',
+    requiredLevel: 1,
+    xpReward: 45,
+    howToPlay: {
+      goal: 'Maîtrisez les astuces secrètes du calcul mental rapide tout en pratiquant les nombres et opérations formulés en anglais !',
+      rules: [
+        'Écoutez ou lisez la question arithmétique formulée en anglais (ex: "What is forty-five times eleven ?")',
+        'Découvrez l\'astuce mathématique instantanée (règle du 11, carré des nombres finissant par 5, doubler/diviser par 2, etc.)',
+        'Sélectionnez la bonne réponse numérique avant la fin du chronomètre pour marquer des points (+10 XP) et grimper de niveau !',
+        'Apprenez les bases du calcul mental rapide sous forme de jeu simple, sophistiqué et amusant.'
+      ],
+      tip: 'Pour multiplier par 11 un nombre à deux chiffres, additionnez ses chiffres et placez la somme au centre ! (Ex: 35 × 11 -> 3+5=8 -> 385).'
     }
   }
 ];
@@ -1187,14 +1344,592 @@ export const SPEED_MATCH_ROUNDS = [
   }
 ];
 
-export const WORD_SCRAMBLE_ITEMS = [
-  { word: 'FRIEND', clue: 'Une personne chère avec qui on partage tout', translation: 'Ami(e)' },
-  { word: 'SCHOOL', clue: 'Le lieu où l\'on apprend chaque jour', translation: 'École' },
-  { word: 'TRAVEL', clue: 'Explorer le monde et de nouveaux pays', translation: 'Voyager' },
-  { word: 'GARDEN', clue: 'Espace vert avec des fleurs et des arbres', translation: 'Jardin' },
-  { word: 'SUMMER', clue: 'La saison la plus chaude et ensoleillée', translation: 'Été' },
-  { word: 'CASTLE', clue: 'Grande demeure fortifiée du Moyen Âge', translation: 'Château' }
+export type WordScrambleLevelKey = 'debutant' | 'intermediaire' | 'expert' | 'expert_avance' | 'master_avance';
+
+export interface WordScrambleWord {
+  word: string;
+  clue: string;
+  translation: string;
+  category?: string;
+}
+
+export interface WordScrambleQuestion {
+  questionNumber: number;
+  totalQuestions: number;
+  words: WordScrambleWord[];
+}
+
+export interface WordScrambleLevelInfo {
+  id: WordScrambleLevelKey;
+  label: string;
+  subtitle: string;
+  requiredPlayerLevel: number;
+  questionsCount: number; // 5, 25, 50, 70, 90
+  wordsPerQuestion: number; // 12
+  timePerQuestionLimited: number;
+  xpReward: number;
+  badgeBg: string;
+  badgeBorder: string;
+  badgeText: string;
+  icon: string;
+  description: string;
+}
+
+export const WORD_SCRAMBLE_LEVELS: Record<WordScrambleLevelKey, WordScrambleLevelInfo> = {
+  debutant: {
+    id: 'debutant',
+    label: 'Débutant',
+    subtitle: '5 Questions • 12 Mots par question',
+    requiredPlayerLevel: 1,
+    questionsCount: 5,
+    wordsPerQuestion: 12,
+    timePerQuestionLimited: 60,
+    xpReward: 40,
+    badgeBg: 'bg-emerald-500/20',
+    badgeBorder: 'border-emerald-500/40',
+    badgeText: 'text-emerald-400',
+    icon: 'sentiment_satisfied',
+    description: '5 questions de 12 mots (60 mots au total). Vocabulaire essentiel (4 à 6 lettres).'
+  },
+  intermediaire: {
+    id: 'intermediaire',
+    label: 'Intermédiaire',
+    subtitle: '25 Questions • 12 Mots par question',
+    requiredPlayerLevel: 11,
+    questionsCount: 25,
+    wordsPerQuestion: 12,
+    timePerQuestionLimited: 55,
+    xpReward: 90,
+    badgeBg: 'bg-amber-500/20',
+    badgeBorder: 'border-amber-500/40',
+    badgeText: 'text-amber-400',
+    icon: 'speed',
+    description: '25 questions de 12 mots (300 mots au total). Vocabulaire usuel et du voyage (5 à 7 lettres).'
+  },
+  expert: {
+    id: 'expert',
+    label: 'Expert',
+    subtitle: '50 Questions • 12 Mots par question',
+    requiredPlayerLevel: 21,
+    questionsCount: 50,
+    wordsPerQuestion: 12,
+    timePerQuestionLimited: 50,
+    xpReward: 180,
+    badgeBg: 'bg-blue-500/20',
+    badgeBorder: 'border-blue-500/40',
+    badgeText: 'text-blue-400',
+    icon: 'workspace_premium',
+    description: '50 questions de 12 mots (600 mots au total). Vocabulaire riche et précis (6 à 8 lettres).'
+  },
+  expert_avance: {
+    id: 'expert_avance',
+    label: 'Expert Avancé',
+    subtitle: '70 Questions • 12 Mots par question',
+    requiredPlayerLevel: 31,
+    questionsCount: 70,
+    wordsPerQuestion: 12,
+    timePerQuestionLimited: 45,
+    xpReward: 300,
+    badgeBg: 'bg-purple-500/20',
+    badgeBorder: 'border-purple-500/40',
+    badgeText: 'text-purple-400',
+    icon: 'diamond',
+    description: '70 questions de 12 mots (840 mots au total). Nuances académiques et rhétoriques (7 à 9 lettres).'
+  },
+  master_avance: {
+    id: 'master_avance',
+    label: 'Master Avancé',
+    subtitle: '90 Questions • 12 Mots par question',
+    requiredPlayerLevel: 51,
+    questionsCount: 90,
+    wordsPerQuestion: 12,
+    timePerQuestionLimited: 40,
+    xpReward: 500,
+    badgeBg: 'bg-rose-500/20',
+    badgeBorder: 'border-rose-500/40',
+    badgeText: 'text-rose-400',
+    icon: 'military_tech',
+    description: '90 questions de 12 mots (1 080 mots au total). Maîtrise suprême du lexique d\'Oxford (8 à 12 lettres).'
+  }
+};
+
+// Banques de vocabulaire Word Scramble
+export const WORD_SCRAMBLE_DEBUTANT_BANK: WordScrambleWord[] = [
+  { word: 'BOOK', clue: 'Objet relié avec des pages que l\'on lit', translation: 'Livre', category: 'École' },
+  { word: 'BIRD', clue: 'Animal à plumes qui vole dans le ciel', translation: 'Oiseau', category: 'Nature' },
+  { word: 'TREE', clue: 'Végétal avec un tronc en bois et des feuilles', translation: 'Arbre', category: 'Nature' },
+  { word: 'STAR', clue: 'Point scintillant dans le ciel nocturne', translation: 'Étoile', category: 'Espace' },
+  { word: 'MOON', clue: 'Astre qui éclaire nos nuits', translation: 'Lune', category: 'Espace' },
+  { word: 'FISH', clue: 'Animal aquatique nageant dans l\'eau', translation: 'Poisson', category: 'Animaux' },
+  { word: 'DOOR', clue: 'Ouverture pour entrer dans une pièce', translation: 'Porte', category: 'Maison' },
+  { word: 'ROOM', clue: 'Espace fermé à l\'intérieur d\'une maison', translation: 'Pièce', category: 'Maison' },
+  { word: 'BLUE', clue: 'La couleur de l\'océan et du ciel dégagé', translation: 'Bleu', category: 'Couleurs' },
+  { word: 'TIME', clue: 'Ce qui s\'écoule mesuré par les horloges', translation: 'Temps', category: 'Vie' },
+  { word: 'LOVE', clue: 'Sentiment d\'affection profonde et sincère', translation: 'Amour', category: 'Émotions' },
+  { word: 'HOPE', clue: 'Attente confiante d\'un événement futur heureux', translation: 'Espoir', category: 'Émotions' },
+  { word: 'FIRE', clue: 'Flammes qui dégagent chaleur et lumière', translation: 'Feu', category: 'Éléments' },
+  { word: 'WIND', clue: 'Mouvement de l\'air qui souffle', translation: 'Vent', category: 'Météo' },
+  { word: 'RAIN', clue: 'Gouttes d\'eau tombant des nuages', translation: 'Pluie', category: 'Météo' },
+  { word: 'SNOW', clue: 'Flocons blancs tombant en hiver', translation: 'Neige', category: 'Météo' },
+  { word: 'GOLD', clue: 'Métal précieux de couleur jaune brillant', translation: 'Or', category: 'Richesses' },
+  { word: 'SHIP', clue: 'Grande embarcation naviguant sur les mers', translation: 'Navire', category: 'Voyage' },
+  { word: 'ROAD', clue: 'Voie aménagée pour circuler en voiture', translation: 'Route', category: 'Transport' },
+  { word: 'CITY', clue: 'Grande agglomération avec de nombreux immeubles', translation: 'Ville', category: 'Lieux' },
+  { word: 'PARK', clue: 'Espace vert public pour se promener', translation: 'Parc', category: 'Lieux' },
+  { word: 'LION', clue: 'Le roi des animaux de la savane', translation: 'Lion', category: 'Animaux' },
+  { word: 'BEAR', clue: 'Grand mammifère qui hiberne en hiver', translation: 'Ours', category: 'Animaux' },
+  { word: 'MILK', clue: 'Boisson blanche produite par les vaches', translation: 'Lait', category: 'Alimentation' },
+  { word: 'CAKE', clue: 'Pâtisserie sucrée partagée aux anniversaires', translation: 'Gâteau', category: 'Alimentation' },
+  { word: 'DESK', clue: 'Meuble sur lequel on écrit ou travaille', translation: 'Bureau', category: 'Maison' },
+  { word: 'SONG', clue: 'Mélodie musicale chantée avec des paroles', translation: 'Chanson', category: 'Art' },
+  { word: 'RING', clue: 'Bijou circulaire porté autour du doigt', translation: 'Bague / Anneau', category: 'Mode' },
+  { word: 'BALL', clue: 'Objet sphérique utilisé dans les sports', translation: 'Balle / Ballon', category: 'Sports' },
+  { word: 'GAME', clue: 'Activité récréative avec des règles', translation: 'Jeu', category: 'Loisirs' }
 ];
+
+export const WORD_SCRAMBLE_INTERMEDIAIRE_BANK: WordScrambleWord[] = [
+  { word: 'FRIEND', clue: 'Une personne chère avec qui on partage tout', translation: 'Ami(e)', category: 'Relations' },
+  { word: 'SCHOOL', clue: 'Le lieu où l\'on apprend chaque jour', translation: 'École', category: 'Études' },
+  { word: 'TRAVEL', clue: 'Explorer le monde et de nouveaux pays', translation: 'Voyager', category: 'Voyage' },
+  { word: 'GARDEN', clue: 'Espace vert avec des fleurs et des arbres', translation: 'Jardin', category: 'Nature' },
+  { word: 'SUMMER', clue: 'La saison la plus chaude et ensoleillée', translation: 'Été', category: 'Saisons' },
+  { word: 'WINTER', clue: 'La saison la plus froide de l\'année', translation: 'Hiver', category: 'Saisons' },
+  { word: 'SPRING', clue: 'La saison où la nature renaît et fleurit', translation: 'Printemps', category: 'Saisons' },
+  { word: 'AUTUMN', clue: 'Saison où les feuilles jaunissent et tombent', translation: 'Automne', category: 'Saisons' },
+  { word: 'CASTLE', clue: 'Grande demeure fortifiée du Moyen Âge', translation: 'Château', category: 'Histoire' },
+  { word: 'DOCTOR', clue: 'Professionnel de santé qui soigne les malades', translation: 'Médecin', category: 'Santé' },
+  { word: 'FAMILY', clue: 'Parents, enfants et proches unis', translation: 'Famille', category: 'Relations' },
+  { word: 'WINDOW', clue: 'Ouverture vitrée qui laisse entrer la lumière', translation: 'Fenêtre', category: 'Maison' },
+  { word: 'STREET', clue: 'Voie urbaine bordée de bâtiments', translation: 'Rue', category: 'Ville' },
+  { word: 'RIVER', clue: 'Cours d\'eau naturel se jetant dans la mer', translation: 'Rivière / Fleuve', category: 'Géographie' },
+  { word: 'FOREST', clue: 'Vaste étendue couverte d\'arbres denses', translation: 'Forêt', category: 'Nature' },
+  { word: 'ISLAND', clue: 'Terre entourée d\'eau de tous côtés', translation: 'Île', category: 'Géographie' },
+  { word: 'MARKET', clue: 'Lieu de commerce où l\'on vend des produits frais', translation: 'Marché', category: 'Commerce' },
+  { word: 'BRIDGE', clue: 'Construction permettant de franchir un cours d\'eau', translation: 'Pont', category: 'Architecture' },
+  { word: 'ANIMAL', clue: 'Être vivant doué de mouvement et de sensibilité', translation: 'Animal', category: 'Faune' },
+  { word: 'SILVER', clue: 'Métal précieux blanc et brillant', translation: 'Argent (métal)', category: 'Matières' },
+  { word: 'YELLOW', clue: 'Couleur du citron et des tournesols', translation: 'Jaune', category: 'Couleurs' },
+  { word: 'ORANGE', clue: 'Couleur chaude entre le rouge et le jaune', translation: 'Orange', category: 'Couleurs' },
+  { word: 'PURPLE', clue: 'Couleur noble mélange de rouge et de bleu', translation: 'Violet / Pourpre', category: 'Couleurs' },
+  { word: 'SHADOW', clue: 'Zone sombre créée par l\'interception de la lumière', translation: 'Ombre', category: 'Physique' },
+  { word: 'BREEZE', clue: 'Vent léger, doux et rafraîchissant', translation: 'Brise légère', category: 'Météo' },
+  { word: 'FLOWER', clue: 'Partie colorée et parfumée d\'une plante', translation: 'Fleur', category: 'Botanique' },
+  { word: 'PLANET', clue: 'Corps céleste gravitant autour d\'une étoile', translation: 'Planète', category: 'Astronomie' },
+  { word: 'ENERGY', clue: 'Force capable de produire un mouvement ou travail', translation: 'Énergie', category: 'Science' },
+  { word: 'TEMPLE', clue: 'Édifice sacré consacré au culte', translation: 'Temple', category: 'Culture' },
+  { word: 'CHURCH', clue: 'Édifice religieux chrétien', translation: 'Église', category: 'Architecture' }
+];
+
+export const WORD_SCRAMBLE_EXPERT_BANK: WordScrambleWord[] = [
+  { word: 'JOURNEY', clue: 'Long déplacement ou expédition vers un lieu éloigné', translation: 'Voyage / Périple', category: 'Aventure' },
+  { word: 'WEATHER', clue: 'Conditions atmosphériques à un moment donné', translation: 'Météo / Temps', category: 'Science' },
+  { word: 'MORNING', clue: 'Première partie de la journée avant midi', translation: 'Matinée', category: 'Temps' },
+  { word: 'FREEDOM', clue: 'État d\'une personne affranchie de toute contrainte', translation: 'Liberté', category: 'Philosophie' },
+  { word: 'COURAGE', clue: 'Force morale face au danger et aux épreuves', translation: 'Courage', category: 'Vertus' },
+  { word: 'WISDOM', clue: 'Connaissance profonde et jugement éclairé', translation: 'Sagesse', category: 'Philosophie' },
+  { word: 'SILENCE', clue: 'Absence totale de bruit ou de paroles', translation: 'Silence', category: 'Sensation' },
+  { word: 'PATIENCE', clue: 'Capacité à attendre calmement et sans colère', translation: 'Patience', category: 'Vertus' },
+  { word: 'BALANCE', clue: 'État d\'harmonie et d\'équilibre entre forces', translation: 'Équilibre', category: 'Concept' },
+  { word: 'HARMONY', clue: 'Accord parfait entre éléments ou sons', translation: 'Harmonie', category: 'Musique' },
+  { word: 'JUSTICE', clue: 'Principe moral de respect du droit et d\'équité', translation: 'Justice', category: 'Droit' },
+  { word: 'STRENGTH', clue: 'Puissance physique ou énergie intérieure', translation: 'Force', category: 'Corps' },
+  { word: 'THOUGHT', clue: 'Idée ou réflexion produite par l\'esprit', translation: 'Pensée', category: 'Esprit' },
+  { word: 'MYSTERY', clue: 'Chose secrète et difficile à comprendre', translation: 'Mystère', category: 'Énigme' },
+  { word: 'TRIUMPH', clue: 'Victoire éclatante et retentissante', translation: 'Triomphe', category: 'Succès' },
+  { word: 'VICTORY', clue: 'Succès remporté sur un adversaire ou une difficulté', translation: 'Victoire', category: 'Succès' },
+  { word: 'PURPOSE', clue: 'Objectif fondamental que l\'on cherche à atteindre', translation: 'But / Raison d\'être', category: 'Destin' },
+  { word: 'KINDNESS', clue: 'Bienveillance attentionnée envers autrui', translation: 'Gentillesse / Bonté', category: 'Vertus' },
+  { word: 'HONOR', clue: 'Dignité morale et sentiment de devoir', translation: 'Honneur', category: 'Valeurs' },
+  { word: 'SCIENCE', clue: 'Ensemble des connaissances fondées sur l\'étude', translation: 'Science', category: 'Savoir' },
+  { word: 'HISTORY', clue: 'Récit et étude des événements du passé humain', translation: 'Histoire', category: 'Savoir' },
+  { word: 'CULTURE', clue: 'Ensemble des coutumes, arts et savoirs d\'un peuple', translation: 'Culture', category: 'Société' },
+  { word: 'DESTINY', clue: 'Suite d\'événements qui composent la vie future', translation: 'Destin', category: 'Temps' },
+  { word: 'COMPASS', clue: 'Instrument indiquant le nord magnétique', translation: 'Boussole', category: 'Navigation' },
+  { word: 'CHALLENGE', clue: 'Défi difficile stimulant l\'effort et le courage', translation: 'Défi', category: 'Action' },
+  { word: 'DIAMOND', clue: 'Pierre précieuse la plus dure et brillante', translation: 'Diamant', category: 'Richesses' }
+];
+
+export const WORD_SCRAMBLE_EXPERT_AVANCE_BANK: WordScrambleWord[] = [
+  { word: 'KNOWLEDGE', clue: 'Savoir acquis par l\'expérience et l\'étude', translation: 'Connaissance', category: 'Érudition' },
+  { word: 'BRILLIANT', clue: 'D\'une intelligence éclatante et remarquable', translation: 'Brillant', category: 'Qualité' },
+  { word: 'DISCOVERY', clue: 'Fait de trouver ce qui était inconnu ou caché', translation: 'Découverte', category: 'Recherche' },
+  { word: 'BEAUTIFUL', clue: 'Qui suscite l\'admiration par son harmonie esthétique', translation: 'Magnifique / Beau', category: 'Esthétique' },
+  { word: 'ELOQUENCE', clue: 'Art d\'émouvoir et convaincre par la parole', translation: 'Éloquence', category: 'Rhétorique' },
+  { word: 'EXCELLENCE', clue: 'Degré éminent de perfection et de qualité', translation: 'Excellence', category: 'Prestige' },
+  { word: 'ADVENTURE', clue: 'Entreprise audacieuse pleine d\'imprévus', translation: 'Aventure', category: 'Périple' },
+  { word: 'SYMPHONY', clue: 'Grande composition orchestrale en plusieurs mouvements', translation: 'Symphonie', category: 'Musique' },
+  { word: 'REFLECTION', clue: 'Méditation approfondie sur une pensée ou image renvoyée', translation: 'Réflexion', category: 'Pensée' },
+  { word: 'PERSEVERANCE', clue: 'Ténacité constante dans l\'effort', translation: 'Persévérance', category: 'Caractère' },
+  { word: 'PHENOMENON', clue: 'Fait exceptionnel ou fait observé scientifiquement', translation: 'Phénomène', category: 'Science' },
+  { word: 'INSPIRATION', clue: 'Élan créateur qui insuffle de nouvelles idées', translation: 'Inspiration', category: 'Création' },
+  { word: 'CHAMPION', clue: 'Vainqueur d\'une épreuve sportive ou défenseur d\'une cause', translation: 'Champion', category: 'Sport' },
+  { word: 'CELEBRATION', clue: 'Fête organisée pour marquer un événement marquant', translation: 'Célébration', category: 'Fêtes' },
+  { word: 'IMAGINATION', clue: 'Faculté de concevoir des représentations nouvelles', translation: 'Imagination', category: 'Esprit' },
+  { word: 'CREATIVITY', clue: 'Capacité d\'inventer et d\'apporter du renouveau', translation: 'Créativité', category: 'Art' },
+  { word: 'LEADERSHIP', clue: 'Capacité à guider et inspirer un groupe', translation: 'Leadership', category: 'Management' },
+  { word: 'LITERATURE', clue: 'Ensemble des œuvres écrites fondées sur l\'art du style', translation: 'Littérature', category: 'Lettres' },
+  { word: 'PHILOSOPHY', clue: 'Étude critique de la pensée, du savoir et de l\'existence', translation: 'Philosophie', category: 'Humanités' },
+  { word: 'TREASURE', clue: 'Ensemble précieux d\'or, de joyaux ou de savoir', translation: 'Trésor', category: 'Mystère' }
+];
+
+export const WORD_SCRAMBLE_MASTER_BANK: WordScrambleWord[] = [
+  { word: 'EXTRAORDINARY', clue: 'Qui sort du commun et dépasse l\'ordinaire', translation: 'Extraordinaire', category: 'Prestige' },
+  { word: 'MAGNIFICENT', clue: 'D\'une splendeur grandiose et éblouissante', translation: 'Magnifique', category: 'Élégance' },
+  { word: 'RENAISSANCE', clue: 'Époque historique de renouveau des arts et lettres', translation: 'Renaissance', category: 'Histoire' },
+  { word: 'SOPHISTICATED', clue: 'Très raffiné, élégant et d\'une grande complexité', translation: 'Sophistiqué', category: 'Raffinement' },
+  { word: 'CONSCIOUSNESS', clue: 'Perception lucide de son existence et du monde', translation: 'Conscience', category: 'Esprit' },
+  { word: 'METAMORPHOSIS', clue: 'Transformation complète d\'un être ou d\'une forme', translation: 'Métamorphose', category: 'Biologie' },
+  { word: 'RESILIENCE', clue: 'Capacité à surmonter les chocs et renaître', translation: 'Résilience', category: 'Psychologie' },
+  { word: 'AUTHENTICITY', clue: 'Caractère de ce qui est vrai, pur et sans artifice', translation: 'Authenticité', category: 'Valeurs' },
+  { word: 'PHILANTHROPY', clue: 'Amour désintéressé pour l\'humanité exprimé en actes', translation: 'Philanthropie', category: 'Vertus' },
+  { word: 'PERSPECTIVE', clue: 'Point de vue ou perception de la profondeur', translation: 'Perspective', category: 'Vision' },
+  { word: 'SPECTACULAR', clue: 'Qui frappe la vue par sa beauté et son envergure', translation: 'Spectaculaire', category: 'Événement' },
+  { word: 'ARCHITECTURE', clue: 'Art de concevoir et d\'édifier des structures durables', translation: 'Architecture', category: 'Arts' },
+  { word: 'ILLUSTRATION', clue: 'Image ou exemple destiné à éclairer un propos', translation: 'Illustration', category: 'Design' },
+  { word: 'NOBILITY', clue: 'Élévation de sentiments et distinction morale', translation: 'Noblesse d\'esprit', category: 'Honneur' },
+  { word: 'CONTEMPLATION', clue: 'Observation méditative, sereine et admirative', translation: 'Contemplation', category: 'Spiritualité' },
+  { word: 'FELLOWSHIP', clue: 'Confraternité chaleureuse et partage intellectuel', translation: 'Confrérie / Camaraderie', category: 'Académie' }
+];
+
+export const WORD_SCRAMBLE_ITEMS = WORD_SCRAMBLE_INTERMEDIAIRE_BANK.slice(0, 6);
+
+/**
+ * Mélange aléatoire des lettres garantissant un ordre différent du mot d'origine
+ */
+export function scrambleLetters(word: string): string[] {
+  const letters = word.toUpperCase().split('');
+  if (letters.length <= 1) return letters;
+
+  let scrambled = [...letters];
+  let attempts = 0;
+  while (attempts < 15 && scrambled.join('') === word.toUpperCase()) {
+    scrambled = [...letters].sort(() => Math.random() - 0.5);
+    attempts++;
+  }
+  // Si après 15 tentatives le mot est identique (ex: lettres toutes identiques), swap les 2 premières
+  if (scrambled.join('') === word.toUpperCase() && scrambled.length >= 2) {
+    const temp = scrambled[0];
+    scrambled[0] = scrambled[1];
+    scrambled[1] = temp;
+  }
+  return scrambled;
+}
+
+/**
+ * Générateur dynamique de questions Word Scramble non-répétitives
+ * Chaque question contient exactement 12 MOTS
+ */
+export function generateWordScrambleQuestions(levelKey: WordScrambleLevelKey): WordScrambleQuestion[] {
+  const config = WORD_SCRAMBLE_LEVELS[levelKey] || WORD_SCRAMBLE_LEVELS.debutant;
+
+  // Sélection de la banque lexicale adaptée
+  let bank: WordScrambleWord[] = [];
+  if (levelKey === 'debutant') {
+    bank = [...WORD_SCRAMBLE_DEBUTANT_BANK];
+  } else if (levelKey === 'intermediaire') {
+    bank = [...WORD_SCRAMBLE_INTERMEDIAIRE_BANK, ...WORD_SCRAMBLE_DEBUTANT_BANK];
+  } else if (levelKey === 'expert') {
+    bank = [...WORD_SCRAMBLE_EXPERT_BANK, ...WORD_SCRAMBLE_INTERMEDIAIRE_BANK];
+  } else if (levelKey === 'expert_avance') {
+    bank = [...WORD_SCRAMBLE_EXPERT_AVANCE_BANK, ...WORD_SCRAMBLE_EXPERT_BANK];
+  } else {
+    bank = [...WORD_SCRAMBLE_MASTER_BANK, ...WORD_SCRAMBLE_EXPERT_AVANCE_BANK];
+  }
+
+  const questions: WordScrambleQuestion[] = [];
+
+  for (let qIdx = 0; qIdx < config.questionsCount; qIdx++) {
+    // Tirage aléatoire sans répétition immédiate de 12 mots
+    const shuffledBank = [...bank].sort(() => Math.random() - 0.5);
+    const chosenWords = shuffledBank.slice(0, config.wordsPerQuestion);
+
+    // Si la banque est inférieure à 12, on complète
+    while (chosenWords.length < config.wordsPerQuestion) {
+      const fallback = bank[Math.floor(Math.random() * bank.length)];
+      chosenWords.push(fallback);
+    }
+
+    questions.push({
+      questionNumber: qIdx + 1,
+      totalQuestions: config.questionsCount,
+      words: chosenWords
+    });
+  }
+
+  return questions;
+}
+
+// =====================================================================
+// SPEED MENTAL MATH (Calcul Mental Rapide & Nombres en Anglais)
+// =====================================================================
+
+export interface MentalMathProblem {
+  id: string;
+  expression: string;
+  enQuestion: string;
+  frContext: string;
+  correctAnswer: number;
+  options: number[];
+  trickTitle: string;
+  trickRule: string;
+  enAudioPhrase: string;
+  level: 'debutant' | 'intermediaire' | 'avance' | 'expert';
+}
+
+export const SPEED_MATH_PROBLEMS: MentalMathProblem[] = [
+  // Astuce du 11
+  {
+    id: 'math_11_1',
+    expression: '35 × 11',
+    enQuestion: 'What is thirty-five times eleven ?',
+    frContext: 'Multiplier par 11 en un éclair',
+    correctAnswer: 385,
+    options: [385, 375, 395, 365],
+    trickTitle: 'La Règle d\'Or du 11',
+    trickRule: 'Additionne les deux chiffres : 3 + 5 = 8. Glisse ensuite le 8 au centre : 385 !',
+    enAudioPhrase: 'Thirty-five times eleven equals three hundred and eighty-five.',
+    level: 'debutant'
+  },
+  {
+    id: 'math_11_2',
+    expression: '43 × 11',
+    enQuestion: 'What is forty-three times eleven ?',
+    frContext: 'Multiplier par 11 en un éclair',
+    correctAnswer: 473,
+    options: [463, 473, 483, 493],
+    trickTitle: 'La Règle d\'Or du 11',
+    trickRule: 'Additionne 4 + 3 = 7. Insère le 7 entre 4 et 3 : 473 !',
+    enAudioPhrase: 'Forty-three times eleven equals four hundred and seventy-three.',
+    level: 'debutant'
+  },
+  {
+    id: 'math_11_3',
+    expression: '62 × 11',
+    enQuestion: 'What is sixty-two times eleven ?',
+    frContext: 'Multiplier par 11 en un éclair',
+    correctAnswer: 682,
+    options: [672, 682, 692, 702],
+    trickTitle: 'La Règle d\'Or du 11',
+    trickRule: 'Additionne 6 + 2 = 8. Place 8 au milieu : 682 !',
+    enAudioPhrase: 'Sixty-two times eleven equals six hundred and eighty-two.',
+    level: 'intermediaire'
+  },
+  {
+    id: 'math_11_4',
+    expression: '54 × 11',
+    enQuestion: 'What is fifty-four times eleven ?',
+    frContext: 'Multiplier par 11 en un éclair',
+    correctAnswer: 594,
+    options: [584, 594, 604, 614],
+    trickTitle: 'La Règle d\'Or du 11',
+    trickRule: 'Additionne 5 + 4 = 9. Insère 9 au milieu : 594 !',
+    enAudioPhrase: 'Fifty-four times eleven equals five hundred and ninety-four.',
+    level: 'intermediaire'
+  },
+
+  // Carrés se terminant par 5
+  {
+    id: 'math_sq_1',
+    expression: '25²',
+    enQuestion: 'What is twenty-five squared ?',
+    frContext: 'Le carré des nombres finissant par 5',
+    correctAnswer: 625,
+    options: [525, 625, 675, 725],
+    trickTitle: 'Carré Magique des Nombres en 5',
+    trickRule: 'Multiplie le premier chiffre par son suivant (2 × 3 = 6) puis colle 25 à la fin : 625 !',
+    enAudioPhrase: 'Twenty-five squared equals six hundred and twenty-five.',
+    level: 'debutant'
+  },
+  {
+    id: 'math_sq_2',
+    expression: '35²',
+    enQuestion: 'What is thirty-five squared ?',
+    frContext: 'Le carré des nombres finissant par 5',
+    correctAnswer: 1225,
+    options: [1125, 1225, 1275, 1325],
+    trickTitle: 'Carré Magique des Nombres en 5',
+    trickRule: 'Multiplie 3 par (3 + 1) = 12, puis colle 25 : 1225 !',
+    enAudioPhrase: 'Thirty-five squared equals one thousand two hundred and twenty-five.',
+    level: 'intermediaire'
+  },
+  {
+    id: 'math_sq_3',
+    expression: '45²',
+    enQuestion: 'What is forty-five squared ?',
+    frContext: 'Le carré des nombres finissant par 5',
+    correctAnswer: 2025,
+    options: [1925, 2025, 2125, 2225],
+    trickTitle: 'Carré Magique des Nombres en 5',
+    trickRule: 'Multiplie 4 par 5 = 20, puis ajoute 25 : 2025 !',
+    enAudioPhrase: 'Forty-five squared equals two thousand and twenty-five.',
+    level: 'avance'
+  },
+  {
+    id: 'math_sq_4',
+    expression: '65²',
+    enQuestion: 'What is sixty-five squared ?',
+    frContext: 'Le carré des nombres finissant par 5',
+    correctAnswer: 4225,
+    options: [4125, 4225, 4325, 4425],
+    trickTitle: 'Carré Magique des Nombres en 5',
+    trickRule: 'Multiplie 6 par 7 = 42, puis ajoute 25 : 4225 !',
+    enAudioPhrase: 'Sixty-five squared equals four thousand two hundred and twenty-five.',
+    level: 'expert'
+  },
+
+  // Complément à 100
+  {
+    id: 'math_comp_1',
+    expression: '100 - 37',
+    enQuestion: 'What is one hundred minus thirty-seven ?',
+    frContext: 'Le complément instantané à 100',
+    correctAnswer: 63,
+    options: [63, 67, 73, 53],
+    trickTitle: 'Complément Immédiat à 100',
+    trickRule: 'Fais 9 - 3 = 6 pour les dizaines, et 10 - 7 = 3 pour les unités : 63 !',
+    enAudioPhrase: 'One hundred minus thirty-seven equals sixty-three.',
+    level: 'debutant'
+  },
+  {
+    id: 'math_comp_2',
+    expression: '100 - 64',
+    enQuestion: 'What is one hundred minus sixty-four ?',
+    frContext: 'Le complément instantané à 100',
+    correctAnswer: 36,
+    options: [34, 36, 44, 46],
+    trickTitle: 'Complément Immédiat à 100',
+    trickRule: '9 - 6 = 3 pour les dizaines, 10 - 4 = 6 pour les unités : 36 !',
+    enAudioPhrase: 'One hundred minus sixty-four equals thirty-six.',
+    level: 'debutant'
+  },
+  {
+    id: 'math_comp_3',
+    expression: '100 - 48',
+    enQuestion: 'What is one hundred minus forty-eight ?',
+    frContext: 'Le complément instantané à 100',
+    correctAnswer: 52,
+    options: [42, 52, 62, 58],
+    trickTitle: 'Complément Immédiat à 100',
+    trickRule: '9 - 4 = 5 pour les dizaines, 10 - 8 = 2 pour les unités : 52 !',
+    enAudioPhrase: 'One hundred minus forty-eight equals fifty-two.',
+    level: 'intermediaire'
+  },
+
+  // Doubler & Diviser par 2
+  {
+    id: 'math_dh_1',
+    expression: '16 × 25',
+    enQuestion: 'What is sixteen times twenty-five ?',
+    frContext: 'Diviser par 2 et doubler',
+    correctAnswer: 400,
+    options: [350, 400, 450, 500],
+    trickTitle: 'Diviser par 2 et Doubler',
+    trickRule: 'Prends la moitié de 16 (= 8) et double 25 (= 50). Alors 8 × 50 = 400 !',
+    enAudioPhrase: 'Sixteen times twenty-five equals four hundred.',
+    level: 'intermediaire'
+  },
+  {
+    id: 'math_dh_2',
+    expression: '14 × 50',
+    enQuestion: 'What is fourteen times fifty ?',
+    frContext: 'Diviser par 2 et multiplier par 100',
+    correctAnswer: 700,
+    options: [600, 650, 700, 750],
+    trickTitle: 'Multiplier par 50 = Moitié de 100',
+    trickRule: 'Divise 14 par 2 (= 7) puis multiplie par 100 : 700 !',
+    enAudioPhrase: 'Fourteen times fifty equals seven hundred.',
+    level: 'intermediaire'
+  },
+  {
+    id: 'math_dh_3',
+    expression: '18 × 25',
+    enQuestion: 'What is eighteen times twenty-five ?',
+    frContext: 'Diviser par 2 et doubler',
+    correctAnswer: 450,
+    options: [400, 425, 450, 475],
+    trickTitle: 'Diviser par 2 et Doubler',
+    trickRule: 'Moitié de 18 (= 9) × double de 25 (= 50) -> 9 × 50 = 450 !',
+    enAudioPhrase: 'Eighteen times twenty-five equals four hundred and fifty.',
+    level: 'avance'
+  },
+
+  // Pourcentages Rapides
+  {
+    id: 'math_pct_1',
+    expression: '15% de 80',
+    enQuestion: 'What is fifteen percent of eighty ?',
+    frContext: 'Pourcentage décomposé (10% + 5%)',
+    correctAnswer: 12,
+    options: [10, 12, 14, 16],
+    trickTitle: 'La Règle du 10% + Moitié',
+    trickRule: '10% de 80 = 8. La moitié (5%) = 4. Additionne : 8 + 4 = 12 !',
+    enAudioPhrase: 'Fifteen percent of eighty is twelve.',
+    level: 'avance'
+  },
+  {
+    id: 'math_pct_2',
+    expression: '25% de 160',
+    enQuestion: 'What is twenty-five percent of one hundred and sixty ?',
+    frContext: 'Le quart rapide',
+    correctAnswer: 40,
+    options: [30, 40, 50, 60],
+    trickTitle: 'Le Quart Instantané',
+    trickRule: '25% équivaut au quart. Divise deux fois par deux : 160 -> 80 -> 40 !',
+    enAudioPhrase: 'Twenty-five percent of one hundred and sixty is forty.',
+    level: 'intermediaire'
+  },
+  {
+    id: 'math_pct_3',
+    expression: '20% de 350',
+    enQuestion: 'What is twenty percent of three hundred and fifty ?',
+    frContext: 'Le double de 10%',
+    correctAnswer: 70,
+    options: [60, 65, 70, 75],
+    trickTitle: 'Le Double du Dix Pourcent',
+    trickRule: '10% de 350 = 35. Multiplie simplement par 2 : 35 × 2 = 70 !',
+    enAudioPhrase: 'Twenty percent of three hundred and fifty is seventy.',
+    level: 'avance'
+  },
+
+  // Multiplications proches de 10, 20, 50, 100
+  {
+    id: 'math_near_1',
+    expression: '19 × 7',
+    enQuestion: 'What is nineteen times seven ?',
+    frContext: 'Utiliser le multiple rond voisin',
+    correctAnswer: 133,
+    options: [123, 133, 143, 153],
+    trickTitle: 'L\'Arrondi Intelligent',
+    trickRule: 'Calcule 20 × 7 = 140, puis retire 7 : 140 - 7 = 133 !',
+    enAudioPhrase: 'Nineteen times seven equals one hundred and thirty-three.',
+    level: 'avance'
+  },
+  {
+    id: 'math_near_2',
+    expression: '29 × 4',
+    enQuestion: 'What is twenty-nine times four ?',
+    frContext: 'Utiliser le multiple rond voisin',
+    correctAnswer: 116,
+    options: [106, 116, 126, 136],
+    trickTitle: 'L\'Arrondi Intelligent',
+    trickRule: 'Calcule 30 × 4 = 120, puis retire 4 : 120 - 4 = 116 !',
+    enAudioPhrase: 'Twenty-nine times four equals one hundred and sixteen.',
+    level: 'expert'
+  },
+  {
+    id: 'math_near_3',
+    expression: '99 × 6',
+    enQuestion: 'What is ninety-nine times six ?',
+    frContext: 'Utiliser le multiple rond voisin',
+    correctAnswer: 594,
+    options: [584, 594, 604, 614],
+    trickTitle: 'L\'Arrondi à la Centaine',
+    trickRule: 'Fais 100 × 6 = 600, puis retranche 6 : 600 - 6 = 594 !',
+    enAudioPhrase: 'Ninety-nine times six equals five hundred and ninety-four.',
+    level: 'expert'
+  }
+];
+
 
 export const WORD_SEARCH_PUZZLE = {
   grid: [

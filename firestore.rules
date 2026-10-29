@@ -25,9 +25,10 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // User private profile document & isolated subcollections
+    // User profile document & isolated subcollections
+    // Public profile reading allowed for signed-in scholars to power the weekly leaderboard
     match /users/{userId} {
-      allow read: if isOwner(userId);
+      allow read: if isSignedIn();
       allow create: if isOwner(userId) && isValidId(userId);
       allow update: if isOwner(userId);
       allow delete: if isOwner(userId);

@@ -373,3 +373,95 @@ export async function getIndexedDBStats(): Promise<IndexedDBStats> {
     };
   }
 }
+
+/**
+ * Save arcade progression in IndexedDB metadata store for resilient offline persistence
+ */
+export async function saveArcadeProgressionToIndexedDB(progression: any): Promise<void> {
+  try {
+    const db = await getIndexedDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['metadata'], 'readwrite');
+      const store = transaction.objectStore('metadata');
+      const req = store.put({ key: 'arcade_progression', value: progression, updatedAt: new Date().toISOString() });
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch (error) {
+    console.warn('Failed to save arcade progression to IndexedDB:', error);
+  }
+}
+
+/**
+ * Retrieve arcade progression from IndexedDB metadata store
+ */
+export async function getArcadeProgressionFromIndexedDB(): Promise<any | null> {
+  try {
+    const db = await getIndexedDB();
+    return new Promise((resolve) => {
+      const transaction = db.transaction(['metadata'], 'readonly');
+      const store = transaction.objectStore('metadata');
+      const req = store.get('arcade_progression');
+      req.onsuccess = () => resolve(req.result?.value || null);
+      req.onerror = () => resolve(null);
+    });
+  } catch (error) {
+    console.warn('Failed to retrieve arcade progression from IndexedDB:', error);
+    return null;
+  }
+}
+
+/**
+ * Save in-game active session (e.g. Speed Match question index, score, hearts)
+ */
+export async function saveActiveSessionToIndexedDB(session: any): Promise<void> {
+  try {
+    const db = await getIndexedDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['metadata'], 'readwrite');
+      const store = transaction.objectStore('metadata');
+      const req = store.put({ key: 'active_game_session', value: session, updatedAt: new Date().toISOString() });
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch (error) {
+    console.warn('Failed to save active game session to IndexedDB:', error);
+  }
+}
+
+/**
+ * Retrieve active game session from IndexedDB
+ */
+export async function getActiveSessionFromIndexedDB(): Promise<any | null> {
+  try {
+    const db = await getIndexedDB();
+    return new Promise((resolve) => {
+      const transaction = db.transaction(['metadata'], 'readonly');
+      const store = transaction.objectStore('metadata');
+      const req = store.get('active_game_session');
+      req.onsuccess = () => resolve(req.result?.value || null);
+      req.onerror = () => resolve(null);
+    });
+  } catch (error) {
+    return null;
+  }
+}
+
+/**
+ * Clear active game session from IndexedDB
+ */
+export async function clearActiveSessionInIndexedDB(): Promise<void> {
+  try {
+    const db = await getIndexedDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['metadata'], 'readwrite');
+      const store = transaction.objectStore('metadata');
+      const req = store.delete('active_game_session');
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch (error) {
+    console.warn('Failed to clear active session in IndexedDB:', error);
+  }
+}
+

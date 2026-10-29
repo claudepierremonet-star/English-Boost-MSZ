@@ -12,7 +12,8 @@ import {
   XAxis,
   YAxis,
   Tooltip,
-  CartesianGrid
+  CartesianGrid,
+  ReferenceLine
 } from 'recharts';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { useSyncStatus } from '../offline/useSyncStatus';
@@ -51,6 +52,54 @@ const CustomScoreTooltip: React.FC<CustomTooltipProps> = ({ active, payload }) =
         <div className="mt-2 pt-1 border-t border-[#232a3a] text-[10px] text-[#99907c] truncate flex items-center justify-between">
           <span className="truncate max-w-[120px]">{data.module}</span>
           <span className="px-1.5 py-0.2 rounded bg-[#232a3a] text-[#f2ca50] font-mono text-[9px]">
+            {sourceLabel}
+          </span>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
+const CustomXpTooltip: React.FC<CustomTooltipProps> = ({ active, payload }) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    const sourceLabel =
+      data.source === 'firestore'
+        ? 'Cloud Firestore'
+        : data.source === 'indexeddb'
+        ? 'IndexedDB Persistant'
+        : 'Cache Local';
+
+    const isExcellence = data.xp >= 350;
+
+    return (
+      <div className="rounded-xl bg-[#070e1d]/95 border border-[#f2ca50]/60 p-3.5 shadow-2xl backdrop-blur-md min-w-[220px]">
+        <div className="flex items-center justify-between gap-3 text-[11px] text-[#d4c78f] border-b border-[#232a3a] pb-1.5 mb-2 font-mono">
+          <span className="font-bold text-[#f2ca50] flex items-center gap-1.5">
+            <span className="material-symbols-outlined text-[14px]">calendar_month</span>
+            {data.label}
+          </span>
+          <span className="text-[10px] text-[#99907c]">{data.dateKey}</span>
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-xs text-[#dce2f8] font-medium">XP Enregistrés :</span>
+          <span className="text-base font-bold text-[#f2ca50] font-mono tracking-tight">+{data.xp} XP</span>
+        </div>
+        <div className="flex items-center justify-between gap-4 text-[11px] text-[#d0c5af]/90 mt-1 font-mono">
+          <span>Régularité :</span>
+          <span className={`font-semibold flex items-center gap-1 ${isExcellence ? 'text-emerald-400' : 'text-[#f2ca50]'}`}>
+            <span>{isExcellence ? '★' : '✓'}</span>
+            <span>{isExcellence ? 'Objectif Dépassé' : 'Seuil Atteint'}</span>
+          </span>
+        </div>
+        <div className="flex items-center justify-between gap-4 text-[11px] text-[#99907c] mt-1 font-mono">
+          <span>Précision d'épreuve :</span>
+          <span className="text-[#cbd5e1] font-semibold">{data.score}%</span>
+        </div>
+        <div className="mt-2.5 pt-1.5 border-t border-[#232a3a] text-[10px] text-[#99907c] flex items-center justify-between">
+          <span className="truncate max-w-[130px]">{data.module}</span>
+          <span className="px-1.5 py-0.5 rounded bg-[#232a3a] text-[#f2ca50] font-mono text-[9px] font-bold">
             {sourceLabel}
           </span>
         </div>
@@ -163,6 +212,7 @@ interface DashboardViewProps {
   onUpdateStudyTarget: (minutes: number) => void;
   onOpenProfile?: () => void;
   onOpenFlashcards?: () => void;
+  onNavigateLeaderboard?: () => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -170,11 +220,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onResumePractice,
   onUpdateStudyTarget,
   onOpenProfile,
-  onOpenFlashcards
+  onOpenFlashcards,
+  onNavigateLeaderboard
 }) => {
   const [showAdjustModal, setShowAdjustModal] = useState<boolean>(false);
   const [selectedTarget, setSelectedTarget] = useState<number>(user.stats.studyMinutesTarget || 30);
-  const [chartMetric, setChartMetric] = useState<'score' | 'cadence'>('score');
+  const [chartMetric, setChartMetric] = useState<'xp' | 'score'>('xp');
 
   const {
     isOnline,
@@ -310,13 +361,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <motion.div
             variants={subItemVariants}
             whileHover={{ y: -2, transition: { duration: 0.15 } }}
-            className="flex items-center gap-2.5 p-2.5 rounded-xl bg-[#151b2b]/70 border border-[#4d4635]/20 hover:border-[#f2ca50]/35 transition-all shadow-sm"
+            onClick={onNavigateLeaderboard}
+            className={`flex items-center gap-2.5 p-2.5 rounded-xl bg-[#151b2b]/70 border border-[#4d4635]/20 hover:border-[#f2ca50]/50 transition-all shadow-sm ${
+              onNavigateLeaderboard ? 'cursor-pointer hover:bg-[#1a233a]' : ''
+            }`}
+            title="Voir le classement hebdomadaire complet"
           >
             <div className="w-8 h-8 rounded-full bg-[#f2ca50]/10 flex items-center justify-center shrink-0">
               <span className="material-symbols-outlined text-[#f2ca50] text-lg">bolt</span>
             </div>
             <div className="flex flex-col min-w-0">
-              <span className="text-[10px] text-[#d0c5af] uppercase tracking-wider">XP Hebdo</span>
+              <span className="text-[10px] text-[#d0c5af] uppercase tracking-wider flex items-center gap-1">
+                XP Hebdo
+                <span className="material-symbols-outlined text-[11px] text-[#f2ca50]">open_in_new</span>
+              </span>
               <span className="text-sm font-bold text-[#f2ca50] font-mono truncate">
                 {animatedWeeklyXp.toLocaleString()} XP
               </span>
@@ -326,15 +384,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <motion.div
             variants={subItemVariants}
             whileHover={{ y: -2, transition: { duration: 0.15 } }}
-            className="flex items-center gap-2.5 p-2.5 rounded-xl bg-[#151b2b]/70 border border-[#4d4635]/20 hover:border-[#d4c78f]/35 transition-all shadow-sm"
+            onClick={onNavigateLeaderboard}
+            className={`flex items-center gap-2.5 p-2.5 rounded-xl bg-[#151b2b]/70 border border-[#4d4635]/20 hover:border-[#d4c78f]/50 transition-all shadow-sm ${
+              onNavigateLeaderboard ? 'cursor-pointer hover:bg-[#1a233a]' : ''
+            }`}
+            title="Voir le classement hebdomadaire complet"
           >
             <div className="w-8 h-8 rounded-full bg-[#d4c78f]/10 flex items-center justify-center shrink-0">
               <span className="material-symbols-outlined text-[#d4c78f] text-lg">hotel_class</span>
             </div>
             <div className="flex flex-col min-w-0">
-              <span className="text-[10px] text-[#d0c5af] uppercase tracking-wider">Rang Global</span>
+              <span className="text-[10px] text-[#d0c5af] uppercase tracking-wider flex items-center gap-1">
+                Ligue Hebdo
+                <span className="material-symbols-outlined text-[11px] text-[#d4c78f]">leaderboard</span>
+              </span>
               <span className="text-sm font-bold text-[#d4c78f] font-mono truncate">
-                Top 3% Oxford
+                Ligue Oxford
               </span>
             </div>
           </motion.div>
@@ -556,15 +621,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </motion.div>
       </motion.section>
 
-      {/* 7-Day Performance & Score Evolution Section with Recharts */}
+      {/* 7-Day Performance & Weekly XP Evolution Section with Recharts */}
       <motion.section variants={dashboardCardVariants} className="w-full rounded-2xl bg-[#191f2f] p-5 shadow-xl border border-[#4d4635]/40 flex flex-col gap-3">
         {/* Section Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
           <div className="flex flex-col">
             <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-[#f2ca50] text-lg">trending_up</span>
+              <span className="material-symbols-outlined text-[#f2ca50] text-lg">
+                {chartMetric === 'xp' ? 'show_chart' : 'trending_up'}
+              </span>
               <h3 className="font-serif text-base sm:text-lg text-[#dce2f8] font-bold">
-                Évolution du Score sur 7 Jours
+                {chartMetric === 'xp' ? 'Évolution Hebdomadaire des XP & Régularité' : 'Évolution du Score sur 7 Jours'}
               </h3>
               <span
                 className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${
@@ -584,7 +651,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </span>
             </div>
             <span className="text-xs text-[#d0c5af]/80">
-              Historique des dictées, flashcards et quiz consolidé (synchronisation automatique)
+              {chartMetric === 'xp'
+                ? 'Graphique linéaire Recharts • Visualisation de la régularité et progression quotidienne des points'
+                : 'Historique des dictées, flashcards et quiz consolidé (synchronisation automatique)'}
             </span>
           </div>
 
@@ -602,29 +671,31 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </span>
             </button>
 
-            {/* Toggle between Recharts Line Chart and Cadence */}
+            {/* Toggle between Recharts Line Charts (XP Regularity vs Accuracy Score) */}
             <div className="flex items-center p-0.5 rounded-xl bg-[#070e1d] border border-[#4d4635]/40">
               <button
                 type="button"
-                onClick={() => setChartMetric('score')}
-                className={`px-3 py-1 rounded-lg text-xs font-semibold font-mono transition-all ${
-                  chartMetric === 'score'
-                    ? 'bg-[#f2ca50] text-[#3c2f00] shadow-sm'
+                onClick={() => setChartMetric('xp')}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold font-mono transition-all flex items-center gap-1 ${
+                  chartMetric === 'xp'
+                    ? 'bg-[#f2ca50] text-[#3c2f00] shadow-sm font-bold'
                     : 'text-[#d0c5af] hover:text-[#dce2f8]'
                 }`}
               >
-                Score (%)
+                <span className="material-symbols-outlined text-[14px]">bolt</span>
+                <span>XP Hebdo</span>
               </button>
               <button
                 type="button"
-                onClick={() => setChartMetric('cadence')}
-                className={`px-3 py-1 rounded-lg text-xs font-semibold font-mono transition-all ${
-                  chartMetric === 'cadence'
-                    ? 'bg-[#f2ca50] text-[#3c2f00] shadow-sm'
+                onClick={() => setChartMetric('score')}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold font-mono transition-all flex items-center gap-1 ${
+                  chartMetric === 'score'
+                    ? 'bg-[#f2ca50] text-[#3c2f00] shadow-sm font-bold'
                     : 'text-[#d0c5af] hover:text-[#dce2f8]'
                 }`}
               >
-                Volume (XP)
+                <span className="material-symbols-outlined text-[14px]">percent</span>
+                <span>Score (%)</span>
               </button>
             </div>
           </div>
@@ -632,7 +703,148 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         {/* Recharts LineChart Container with Framer Motion Entrance Animation */}
         <AnimatePresence mode="wait">
-          {chartMetric === 'score' ? (
+          {chartMetric === 'xp' ? (
+            /* RECHARTS LINE CHART FOR WEEKLY XP & REGULARITY */
+            <motion.div
+              key="chart-metric-xp-recharts"
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+              className="w-full pt-2"
+            >
+              {/* Quick Regularity & XP KPI ribbon */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pb-2.5 border-b border-[#232a3a] mb-2 font-mono text-xs">
+                <div className="flex items-center gap-1.5 text-[#d4c78f] bg-[#070e1d]/80 px-2.5 py-1.5 rounded-lg border border-[#232a3a]">
+                  <span className="material-symbols-outlined text-[15px] text-[#f2ca50]">bolt</span>
+                  <div>
+                    <span className="text-[10px] text-[#99907c] block">Total Semaine</span>
+                    <strong className="text-[#f2ca50]">
+                      {scoreData.reduce((acc, curr) => acc + curr.xp, 0).toLocaleString()} XP
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 text-[#d4c78f] bg-[#070e1d]/80 px-2.5 py-1.5 rounded-lg border border-[#232a3a]">
+                  <span className="material-symbols-outlined text-[15px] text-[#38bdf8]">calendar_view_week</span>
+                  <div>
+                    <span className="text-[10px] text-[#99907c] block">Régularité</span>
+                    <strong className="text-[#38bdf8]">
+                      {scoreData.filter((d) => d.xp > 0).length}/7 jours (
+                      {Math.round((scoreData.filter((d) => d.xp > 0).length / (scoreData.length || 7)) * 100)}%)
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 text-[#d4c78f] bg-[#070e1d]/80 px-2.5 py-1.5 rounded-lg border border-[#232a3a]">
+                  <span className="material-symbols-outlined text-[15px] text-amber-400">speed</span>
+                  <div>
+                    <span className="text-[10px] text-[#99907c] block">Moyenne / Jour</span>
+                    <strong className="text-amber-300">
+                      ~{Math.round(scoreData.reduce((acc, curr) => acc + curr.xp, 0) / (scoreData.length || 7))} XP/j
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 text-[#d4c78f] bg-[#070e1d]/80 px-2.5 py-1.5 rounded-lg border border-[#232a3a]">
+                  <span className="material-symbols-outlined text-[15px] text-emerald-400">emoji_events</span>
+                  <div>
+                    <span className="text-[10px] text-[#99907c] block">Pic Hebdo</span>
+                    <strong className="text-emerald-300">
+                      +{Math.max(0, ...scoreData.map((d) => d.xp))} XP ({scoreData.find((d) => d.xp === Math.max(0, ...scoreData.map((x) => x.xp)))?.day || 'Dim'})
+                    </strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Recharts Interactive Line Chart for XP */}
+              <motion.div
+                initial={{ opacity: 0, y: 18, scale: 0.985 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{
+                  duration: 0.85,
+                  ease: [0.16, 1, 0.3, 1],
+                  delay: 0.08
+                }}
+                className="w-full h-52 select-none"
+              >
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={scoreData.length > 0 ? scoreData : [
+                      { day: 'Lun', score: 82, xp: 280, label: 'Lundi', module: 'Dictée C1', dateKey: '', attemptsCount: 1, source: 'cache' },
+                      { day: 'Mar', score: 86, xp: 340, label: 'Mardi', module: 'Flashcards', dateKey: '', attemptsCount: 1, source: 'cache' },
+                      { day: 'Mer', score: 85, xp: 310, label: 'Mercredi', module: 'Quiz Nuances', dateKey: '', attemptsCount: 1, source: 'cache' },
+                      { day: 'Jeu', score: 94, xp: 420, label: 'Jeudi', module: 'Nuance Matrix', dateKey: '', attemptsCount: 1, source: 'cache' },
+                      { day: 'Ven', score: 89, xp: 360, label: 'Vendredi', module: 'Speaking Studio', dateKey: '', attemptsCount: 1, source: 'cache' },
+                      { day: 'Sam', score: 92, xp: 390, label: 'Samedi', module: 'Dictée C1', dateKey: '', attemptsCount: 1, source: 'cache' },
+                      { day: 'Dim', score: 96, xp: 450, label: 'Dimanche', module: 'Bretton Woods', dateKey: '', attemptsCount: 1, source: 'cache' }
+                    ]}
+                    margin={{ top: 16, right: 16, left: -10, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#232a3a" vertical={false} />
+                    <XAxis
+                      dataKey="day"
+                      stroke="#99907c"
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={{ stroke: '#2e3545' }}
+                      tick={{ fill: '#d0c5af' }}
+                    />
+                    <YAxis
+                      domain={[0, (dataMax: number) => Math.max(500, Math.ceil(dataMax * 1.15))]}
+                      unit=" XP"
+                      stroke="#99907c"
+                      fontSize={10}
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fill: '#99907c' }}
+                    />
+                    <Tooltip
+                      content={<CustomXpTooltip />}
+                      cursor={{ stroke: '#f2ca50', strokeWidth: 1.5, strokeDasharray: '4 4' }}
+                    />
+                    {/* Reference threshold line illustrating daily target regularity (300 XP) */}
+                    <ReferenceLine
+                      y={300}
+                      stroke="#38bdf8"
+                      strokeDasharray="4 4"
+                      strokeWidth={1.5}
+                      label={{
+                        value: 'Seuil Régularité (300 XP)',
+                        position: 'insideTopRight',
+                        fill: '#7dd3fc',
+                        fontSize: 10,
+                        fontWeight: 700
+                      }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="xp"
+                      name="XP Hebdo"
+                      stroke="#f2ca50"
+                      strokeWidth={3.5}
+                      dot={{ fill: '#070e1d', stroke: '#f2ca50', strokeWidth: 2.5, r: 5 }}
+                      activeDot={{ fill: '#f2ca50', stroke: '#ffe088', strokeWidth: 3, r: 8 }}
+                      isAnimationActive={true}
+                      animationDuration={950}
+                      animationEasing="ease-out"
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </motion.div>
+
+              <div className="flex flex-col sm:flex-row items-center justify-between text-[11px] text-[#99907c] pt-2 italic gap-1">
+                <span>
+                  Ligne bleue pointillée : Objectif régulier de 300 XP/j • Les points au-dessus attestent d'une assiduité remarquable.
+                </span>
+                <span className="not-italic text-emerald-400 font-mono font-semibold flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Régularité active (7/7 jours)
+                </span>
+              </div>
+            </motion.div>
+          ) : (
+            /* RECHARTS LINE CHART FOR SCORE ACCURACY */
             <motion.div
               key="chart-metric-score"
               initial={{ opacity: 0, y: 14 }}
@@ -721,58 +933,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <p className="text-[11px] text-[#99907c] text-center pt-2 italic">
                 Données issues de l'historique Firestore • Survolez chaque point pour voir le détail de l'épreuve.
               </p>
-            </motion.div>
-          ) : (
-            /* Volume / Effort Distribution View */
-            <motion.div
-              key="chart-metric-cadence"
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-              className="pt-2"
-            >
-              <div className="flex items-center justify-between text-xs pb-2 border-b border-[#232a3a] mb-2 font-mono">
-                <span className="text-[#d4c78f]">
-                  Total XP Hebdomadaire :{' '}
-                  <strong className="text-[#f2ca50]">
-                    {scoreData.reduce((acc, curr) => acc + curr.xp, 0).toLocaleString()} XP
-                  </strong>
-                </span>
-                <span className="text-[#d0c5af]">Cadence : Assiduité 7/7</span>
-              </div>
-
-              <div className="grid grid-cols-7 gap-2 items-end h-36 pt-4 pb-1 px-1">
-                {scoreData.map((bar, idx) => {
-                  const maxXp = Math.max(1, ...scoreData.map((d) => d.xp));
-                  const pct = Math.max(20, Math.round((bar.xp / maxXp) * 100));
-                  const isToday = idx === scoreData.length - 1;
-                  return (
-                    <div key={idx} className="flex flex-col items-center gap-1.5 h-full justify-end group">
-                      <motion.div
-                        initial={{ height: 0 }}
-                        animate={{ height: `${pct}%` }}
-                        transition={{ duration: 0.6, delay: idx * 0.05 }}
-                        className={`w-full max-w-[24px] rounded-t-md transition-all group-hover:scale-105 ${
-                          isToday
-                            ? 'bg-[#f2ca50] shadow-[0_0_12px_rgba(242,202,80,0.5)]'
-                            : bar.score >= 90
-                            ? 'bg-[#f2ca50]/90 shadow-[0_0_8px_rgba(242,202,80,0.3)]'
-                            : 'bg-[#f2ca50]/60'
-                        }`}
-                        title={`${bar.label} : ${bar.xp} XP (Score ${bar.score}%)`}
-                      />
-                      <span
-                        className={`text-xs font-mono ${
-                          isToday ? 'text-[#f2ca50] font-bold' : 'text-[#d0c5af]'
-                        }`}
-                      >
-                        {bar.day}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
             </motion.div>
           )}
         </AnimatePresence>

@@ -32,6 +32,21 @@ export interface AcademicBadge {
   xpReward: number;
 }
 
+export interface ArcadeProgressionState {
+  points: number;
+  level: number;
+  unlockedMaxGameNumber: number;
+  completedGames: string[];
+  activeSession?: {
+    gameId: string;
+    levelKey?: string;
+    questionIndex: number;
+    scoreAccumulated: number;
+    hearts: number;
+    timestamp: string;
+  } | null;
+}
+
 export interface UserProfile {
   uid: string;
   displayName: string;
@@ -42,6 +57,7 @@ export interface UserProfile {
   stats: UserStats;
   isAnonymous?: boolean;
   unlockedBadgeIds?: string[];
+  arcadeProgression?: ArcadeProgressionState;
 }
 
 export interface LearningAttempt {
@@ -74,3 +90,22 @@ export interface DailyChallengeState {
   score?: number;
   xpEarned?: number;
 }
+
+export type LeagueTier = 'Oxford Fellow' | 'Ligue Diamant' | 'Ligue Émeraude' | 'Ligue Saphir' | 'Ligue Améthyste';
+
+export interface LeaderboardEntry {
+  uid: string;
+  displayName: string;
+  photoURL?: string;
+  level: CEFRLevel;
+  weeklyXp: number;
+  totalXp: number;
+  streakDays: number;
+  rank: number;
+  isCurrentUser: boolean;
+  league: LeagueTier;
+  change?: 'up' | 'down' | 'same';
+  cheerCount?: number;
+  badgeLabel?: string;
+}
+

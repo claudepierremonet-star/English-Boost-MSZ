@@ -29,13 +29,26 @@ import {
   ArcadeProgressionState,
   getStoredArcadeProgression,
   saveStoredArcadeProgression,
+  hydrateArcadeProgressionFromStorage,
+  saveActiveGameSession,
+  getStoredActiveGameSession,
+  clearStoredActiveGameSession,
   calculatePlayerLevel,
   ARCADE_DIFFICULTY_TIERS,
-  ArcadeDifficultyTierKey
+  ArcadeDifficultyTierKey,
+  WordScrambleLevelKey,
+  WORD_SCRAMBLE_LEVELS,
+  generateWordScrambleQuestions,
+  WordScrambleQuestion,
+  WordScrambleWord,
+  scrambleLetters,
+  SPEED_MATH_PROBLEMS,
+  MentalMathProblem
 } from '../data/twentyGamesData';
 
 interface TwentyGamesHubProps {
   onXpEarned?: (xp: number) => void;
+  onPointsDeducted?: (pts: number) => void;
   onClose?: () => void;
 }
 
@@ -135,17 +148,38 @@ class SoundEffects {
 
 const sfx = new SoundEffects();
 
-export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({ onXpEarned, onClose }) => {
+export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({
+  onXpEarned,
+  onPointsDeducted,
+  onClose
+}) => {
   const [selectedFilter, setSelectedFilter] = useState<string>('all');
   const [activeGame, setActiveGame] = useState<MiniGameMeta | null>(null);
   const [howToPlayModal, setHowToPlayModal] = useState<MiniGameMeta | null>(null);
 
   // Progression globale (Niveau 1 à 99, +10 pts victoire, -5 pts défaite, déblocage séquentiel)
   const [progression, setProgression] = useState<ArcadeProgressionState>(() => getStoredArcadeProgression());
+  const [resumableSession, setResumableSession] = useState<any | null>(() => getStoredActiveGameSession());
   const [lockedGamePrompt, setLockedGamePrompt] = useState<MiniGameMeta | null>(null);
   const [showLevelUpCelebration, setShowLevelUpCelebration] = useState<{ newLevel: number; oldLevel: number } | null>(null);
   const [showRulesModal, setShowRulesModal] = useState<boolean>(false);
   const [pointsToast, setPointsToast] = useState<{ text: string; isGain: boolean } | null>(null);
+
+  // Hydratation asynchrone sécurisée depuis IndexedDB et Firestore au montage
+  useEffect(() => {
+    hydrateArcadeProgressionFromStorage().then((hydrated) => {
+      setProgression((prev) => {
+        if (hydrated.points > prev.points || hydrated.unlockedMaxGameNumber > prev.unlockedMaxGameNumber) {
+          return hydrated;
+        }
+        return prev;
+      });
+      const storedSess = getStoredActiveGameSession();
+      if (storedSess) {
+        setResumableSession(storedSess);
+      }
+    });
+  }, []);
 
   const levelInfo = calculatePlayerLevel(progression.points);
 
@@ -201,7 +235,7 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({ onXpEarned, onCl
     setShowWinModal(false);
   };
 
-  const handleVictory = (bonusXp: number) => {
+  const handleVictory = (bonusXp: number = 10) => {
     sfx.playWin();
     setSessionScore((prev) => prev + bonusXp);
     setStreak((prev) => prev + 1);
@@ -214,7 +248,7 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({ onXpEarned, onCl
 
     // Déblocage séquentiel du jeu suivant si le joueur a réussi son palier actuel
     let nextUnlockedMax = progression.unlockedMaxGameNumber;
-    if (activeGame && activeGame.number === progression.unlockedMaxGameNumber && progression.unlockedMaxGameNumber < 20) {
+    if (activeGame && activeGame.number === progression.unlockedMaxGameNumber && progression.unlockedMaxGameNumber < TWENTY_GAMES_METADATA.length) {
       nextUnlockedMax = progression.unlockedMaxGameNumber + 1;
     }
 
@@ -226,11 +260,14 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({ onXpEarned, onCl
       points: newPoints,
       level: newLevel,
       unlockedMaxGameNumber: nextUnlockedMax,
-      completedGames: updatedCompleted
+      completedGames: updatedCompleted,
+      activeSession: null
     };
 
     setProgression(nextState);
     saveStoredArcadeProgression(nextState);
+    clearStoredActiveGameSession();
+    setResumableSession(null);
 
     // Toast de gain
     setPointsToast({ text: '+10 Points de niveau gagnés ! (+10 pts)', isGain: true });
@@ -243,7 +280,7 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({ onXpEarned, onCl
 
     setShowWinModal(true);
     if (onXpEarned) {
-      onXpEarned(bonusXp);
+      onXpEarned(10);
     }
   };
 
@@ -256,14 +293,21 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({ onXpEarned, onCl
     const nextState: ArcadeProgressionState = {
       ...progression,
       points: newPoints,
-      level: newLevel
+      level: newLevel,
+      activeSession: null
     };
 
     setProgression(nextState);
     saveStoredArcadeProgression(nextState);
+    clearStoredActiveGameSession();
+    setResumableSession(null);
 
     setPointsToast({ text: '-5 Points déduits (Partie perdue)', isGain: false });
     setTimeout(() => setPointsToast(null), 3500);
+
+    if (onPointsDeducted) {
+      onPointsDeducted(-5);
+    }
   };
 
   const handleHeartLost = () => {
@@ -354,6 +398,73 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({ onXpEarned, onCl
                 <span className="material-symbols-outlined text-xl">close</span>
               </button>
             )}
+          </div>
+        </div>
+
+        {/* BANNIÈRE DE REPRISE DE PARTIE INTERROMPUE */}
+        {resumableSession && !activeGame && (
+          <div className="mb-4 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-emerald-950/90 via-[#102035] to-[#0c1424] border-2 border-emerald-400/60 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-3 animate-fadeIn">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center font-bold shrink-0">
+                <span className="material-symbols-outlined text-2xl">history</span>
+              </div>
+              <div>
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-400">
+                  Partie en cours sauvegardée • Aucune perte de données
+                </span>
+                <h5 className="font-serif font-bold text-white text-sm">
+                  {resumableSession.gameTitle || 'Jeu'} &bull; Question {resumableSession.questionIndex + 1}/{resumableSession.totalQuestions}
+                </h5>
+                <p className="text-[11px] text-gray-300">
+                  Score accumulé conservé : <strong className="text-amber-300">+{resumableSession.bonusScore || 0} pts</strong>
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  clearStoredActiveGameSession();
+                  setResumableSession(null);
+                }}
+                className="px-3 py-2 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] text-gray-400 text-xs font-semibold transition-colors"
+              >
+                Ignorer
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const targetGame = TWENTY_GAMES_METADATA.find((g) => g.id === resumableSession.gameId) || TWENTY_GAMES_METADATA[0];
+                  handleLaunchGame(targetGame);
+                }}
+                className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-400 to-emerald-500 text-[#0c1a10] font-black text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer"
+              >
+                <span>Reprendre ma partie</span>
+                <span className="material-symbols-outlined text-sm font-bold">play_arrow</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* INDICATEUR DE PERSISTANCE DU STOCKAGE DES DONNÉES */}
+        <div className="mb-4 px-4 py-2 rounded-2xl bg-[#0c1424] border border-emerald-500/30 flex flex-wrap items-center justify-between gap-2 shadow-sm text-xs">
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span className="font-mono text-emerald-400 font-bold text-[10px] uppercase tracking-wider">
+              Stockage Sécurisé & Persistant
+            </span>
+            <span className="text-gray-500 hidden sm:inline">&bull;</span>
+            <span className="text-gray-300 text-[11px]">
+              Points et progression enregistrés en temps réel sur <strong>Cloud Firestore</strong> & <strong>IndexedDB local</strong> (0 perte au rechargement)
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1.5 font-mono text-[11px] text-amber-300 font-bold">
+            <span className="material-symbols-outlined text-sm text-amber-400">cloud_done</span>
+            <span>{progression.points} pts synchronisés</span>
           </div>
         </div>
 
@@ -1194,7 +1305,9 @@ const ActiveGameRenderer: React.FC<ActiveGameRendererProps> = ({
     case 'speed-match':
       return <SpeedMatchGame onSuccess={onSuccess} onError={onError} speak={speak} playerLevel={playerLevel} />;
     case 'word-scramble':
-      return <WordScrambleGame onSuccess={onSuccess} onError={onError} />;
+      return <WordScrambleGame onSuccess={onSuccess} onError={onError} speak={speak} playerLevel={playerLevel} />;
+    case 'speed-math':
+      return <SpeedMentalMathGame onSuccess={onSuccess} onError={onError} speak={speak} playerLevel={playerLevel} />;
     case 'word-search':
       return <WordSearchGame onSuccess={onSuccess} onError={onError} />;
     case 'verb-master':
@@ -1248,6 +1361,12 @@ const SpeedMatchGame: React.FC<SpeedMatchGameProps> = ({ onSuccess, onError, spe
   // Mode : 'select-level' ou 'playing' ou 'level-completed'
   const [selectedLevelKey, setSelectedLevelKey] = useState<SpeedMatchLevelKey | null>(null);
 
+  // Détection d'une partie précédente interrompue (refresh / fermeture navigateur)
+  const [savedSession, setSavedSession] = useState<any | null>(() => {
+    const s = getStoredActiveGameSession();
+    return s && s.gameId === 'speed-match' ? s : null;
+  });
+
   // Questions du niveau actif
   const [questions, setQuestions] = useState<
     Array<{ questionNumber: number; totalQuestions: number; pairs: SpeedMatchPair[] }>
@@ -1288,6 +1407,36 @@ const SpeedMatchGame: React.FC<SpeedMatchGameProps> = ({ onSuccess, onError, spe
     setMaxCombo(0);
     setIsLevelFinished(false);
     setTimeLeft(config.timePerQuestion);
+
+    // Sauvegarde immédiate du démarrage de session pour survie au refresh
+    saveActiveGameSession({
+      gameId: 'speed-match',
+      gameTitle: 'Speed Match',
+      levelKey,
+      questionIndex: 0,
+      totalQuestions: newQuestions.length,
+      bonusScore: 0,
+      timestamp: new Date().toISOString()
+    });
+  };
+
+  // Reprendre la session sauvegardée exactement où le joueur s'était arrêté
+  const resumeSavedSession = () => {
+    if (!savedSession) return;
+    sfx.playPop();
+    const levelKey = (savedSession.levelKey || 'debutant') as SpeedMatchLevelKey;
+    const config = SPEED_MATCH_LEVELS[levelKey] || SPEED_MATCH_LEVELS.debutant;
+    const newQuestions = generateSpeedMatchQuestions(levelKey);
+    setSelectedLevelKey(levelKey);
+    setQuestions(newQuestions);
+    const targetQ = Math.min(newQuestions.length - 1, Math.max(0, Number(savedSession.questionIndex) || 0));
+    setCurrentQuestionIndex(targetQ);
+    setBonusScore(Number(savedSession.bonusScore) || 0);
+    setCombo(0);
+    setMaxCombo(0);
+    setIsLevelFinished(false);
+    setTimeLeft(config.timePerQuestion);
+    setSavedSession(null);
   };
 
   // Initialisation ou passage à la question suivante
@@ -1374,18 +1523,30 @@ const SpeedMatchGame: React.FC<SpeedMatchGameProps> = ({ onSuccess, onError, spe
       if (nextCombo > maxCombo) setMaxCombo(nextCombo);
 
       const points = 10 * (nextCombo > 1 ? nextCombo : 1);
-      setBonusScore((prev) => prev + points);
+      const updatedBonus = bonusScore + points;
+      setBonusScore(updatedBonus);
 
       // Si les 6 paires de la question sont validées (12 mots au total)
       if (newMatched.length === currentQ.pairs.length) {
         if (currentQuestionIndex + 1 < questions.length) {
-          // Question suivante
+          // Question suivante : Sauvegarde immédiate en temps réel
+          saveActiveGameSession({
+            gameId: 'speed-match',
+            gameTitle: 'Speed Match',
+            levelKey: selectedLevelKey,
+            questionIndex: currentQuestionIndex + 1,
+            totalQuestions: questions.length,
+            bonusScore: updatedBonus,
+            timestamp: new Date().toISOString()
+          });
+
           setTimeout(() => {
             sfx.playWin();
             setCurrentQuestionIndex((prev) => prev + 1);
           }, 500);
         } else {
           // Toutes les questions du niveau sont réussies !
+          clearStoredActiveGameSession();
           setTimeout(() => {
             sfx.playWin();
             setIsLevelFinished(true);
@@ -1410,6 +1571,48 @@ const SpeedMatchGame: React.FC<SpeedMatchGameProps> = ({ onSuccess, onError, spe
   if (!selectedLevelKey) {
     return (
       <div className="flex flex-col gap-5 py-2 select-none">
+        {/* BANNIÈRE DE REPRISE DE PARTIE EN COURS (SPEED MATCH) */}
+        {savedSession && (
+          <div className="p-4 rounded-3xl bg-gradient-to-r from-emerald-950/90 via-[#102035] to-[#0c1424] border-2 border-emerald-400/60 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-3 animate-fadeIn">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center font-bold shrink-0">
+                <span className="material-symbols-outlined text-2xl">history</span>
+              </div>
+              <div>
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-400">
+                  Partie en cours retrouvée
+                </span>
+                <h5 className="font-serif font-bold text-white text-base">
+                  Reprendre à la Question {(savedSession.questionIndex || 0) + 1} / {savedSession.totalQuestions || 5}
+                </h5>
+                <p className="text-xs text-gray-300">
+                  Palier : <strong className="text-amber-300">{SPEED_MATCH_LEVELS[savedSession.levelKey as SpeedMatchLevelKey]?.label || 'Débutant'}</strong> &bull; Score conservé : <strong className="text-emerald-400">+{savedSession.bonusScore || 0} pts</strong>
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  clearStoredActiveGameSession();
+                  setSavedSession(null);
+                }}
+                className="px-3.5 py-2 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] text-gray-400 text-xs font-semibold transition-colors"
+              >
+                Ignorer
+              </button>
+              <button
+                type="button"
+                onClick={resumeSavedSession}
+                className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-400 to-emerald-500 text-[#0c1a10] font-black text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer"
+              >
+                <span>Reprendre ma partie</span>
+                <span className="material-symbols-outlined text-base font-bold">play_arrow</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* En-tête Icone Attrayante & Titre */}
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 p-4 rounded-3xl bg-gradient-to-r from-[#141d33] via-[#101728] to-[#0c1322] border-2 border-amber-400/40 shadow-xl">
           {/* Icône Attrayante Speed Match */}
@@ -1924,86 +2127,840 @@ const SpeedMatchGame: React.FC<SpeedMatchGameProps> = ({ onSuccess, onError, spe
   );
 };
 
-// 2. WORD SCRAMBLE
-const WordScrambleGame: React.FC<{ onSuccess: () => void; onError: () => void }> = ({ onSuccess, onError }) => {
-  const item = WORD_SCRAMBLE_ITEMS[0]; // FRIEND
-  const target = item.word.split('');
-  const [placed, setPlaced] = useState<string[]>([]);
-  const [available, setAvailable] = useState<string[]>(['I', 'F', 'D', 'R', 'N', 'E']);
+// 2. WORD SCRAMBLE (Anagrammes • 5 Niveaux: Débutant 5q / Intermédiaire 25q / Expert 50q / Expert Avancé 70q / Master 90q • 12 Mots par question)
+interface WordScrambleGameProps {
+  onSuccess: () => void;
+  onError: () => void;
+  speak?: (text: string) => void;
+  playerLevel: number;
+}
 
-  const handlePickLetter = (letter: string, index: number) => {
+const WordScrambleGame: React.FC<WordScrambleGameProps> = ({ onSuccess, onError, speak, playerLevel }) => {
+  // Mode : 'select-level' | 'playing' | 'level-finished'
+  const [selectedLevelKey, setSelectedLevelKey] = useState<WordScrambleLevelKey | null>(null);
+  const [timerMode, setTimerMode] = useState<'limited' | 'elapsed'>('limited');
+
+  // Questions du niveau actif (chacune contient 12 mots)
+  const [questions, setQuestions] = useState<WordScrambleQuestion[]>([]);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [currentWordIndex, setCurrentWordIndex] = useState(0);
+
+  // Lettres du mot en cours
+  const [placedLetters, setPlacedLetters] = useState<Array<{ letter: string; originalIndex: number }>>([]);
+  const [availableLetters, setAvailableLetters] = useState<Array<{ letter: string; id: number }>>([]);
+
+  // Stats & Progression
+  const [combo, setCombo] = useState(0);
+  const [isLevelFinished, setIsLevelFinished] = useState(false);
+  const [wordSuccessAnim, setWordSuccessAnim] = useState(false);
+
+  // Chronomètre
+  const [timeLeft, setTimeLeft] = useState(60);
+  const [elapsedTime, setElapsedTime] = useState(0);
+
+  // Démarrer un niveau
+  const startLevel = (levelKey: WordScrambleLevelKey) => {
     sfx.playPop();
-    const newPlaced = [...placed, letter];
-    setPlaced(newPlaced);
-    const newAvail = [...available];
-    newAvail.splice(index, 1);
-    setAvailable(newAvail);
+    const config = WORD_SCRAMBLE_LEVELS[levelKey];
+    const generated = generateWordScrambleQuestions(levelKey);
+    setSelectedLevelKey(levelKey);
+    setQuestions(generated);
+    setCurrentQuestionIndex(0);
+    setCurrentWordIndex(0);
+    setCombo(0);
+    setIsLevelFinished(false);
+    setTimeLeft(config.timePerQuestionLimited);
+    setElapsedTime(0);
 
-    if (newPlaced.length === target.length) {
-      if (newPlaced.join('') === item.word) {
-        sfx.playCorrect();
-        setTimeout(onSuccess, 400);
+    // Initialiser premier mot
+    const firstWord = generated[0]?.words[0];
+    if (firstWord) {
+      setupWord(firstWord);
+    }
+  };
+
+  // Préparer un mot (mélange garanti non-identique)
+  const setupWord = (wordObj: WordScrambleWord) => {
+    const scrambled = scrambleLetters(wordObj.word);
+    setPlacedLetters([]);
+    setAvailableLetters(scrambled.map((letter, idx) => ({ letter, id: idx })));
+    setWordSuccessAnim(false);
+  };
+
+  // Changement de question ou de mot
+  useEffect(() => {
+    if (!selectedLevelKey || questions.length === 0 || isLevelFinished) return;
+    const currentQ = questions[currentQuestionIndex];
+    if (!currentQ) return;
+    const currentW = currentQ.words[currentWordIndex];
+    if (!currentW) return;
+    setupWord(currentW);
+  }, [selectedLevelKey, questions, currentQuestionIndex, currentWordIndex, isLevelFinished]);
+
+  // Gestion du chronomètre (temps limité ou temps écoulé)
+  useEffect(() => {
+    if (!selectedLevelKey || isLevelFinished) return;
+
+    const interval = setInterval(() => {
+      if (timerMode === 'limited') {
+        setTimeLeft((prev) => {
+          if (prev <= 1) {
+            sfx.playWrong();
+            onError();
+            return WORD_SCRAMBLE_LEVELS[selectedLevelKey].timePerQuestionLimited;
+          }
+          return prev - 1;
+        });
       } else {
+        setElapsedTime((prev) => prev + 1);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [selectedLevelKey, timerMode, isLevelFinished, currentQuestionIndex, currentWordIndex]);
+
+  // Choisir une lettre disponible
+  const handlePickLetter = (item: { letter: string; id: number }) => {
+    sfx.playPop();
+    const currentQ = questions[currentQuestionIndex];
+    const currentW = currentQ?.words[currentWordIndex];
+    if (!currentW) return;
+
+    const newPlaced = [...placedLetters, { letter: item.letter, originalIndex: item.id }];
+    setPlacedLetters(newPlaced);
+    setAvailableLetters((prev) => prev.filter((l) => l.id !== item.id));
+
+    // Si toutes les lettres sont placées, vérification
+    if (newPlaced.length === currentW.word.length) {
+      const spelledWord = newPlaced.map((p) => p.letter).join('');
+      if (spelledWord.toUpperCase() === currentW.word.toUpperCase()) {
+        sfx.playCorrect();
+        setCombo((c) => c + 1);
+        setWordSuccessAnim(true);
+        if (speak) speak(currentW.word);
+
+        setTimeout(() => {
+          // Si on est au dernier mot de la question (12 mots par question)
+          if (currentWordIndex >= 11) {
+            onSuccess(); // Gagne 10 XP
+            // Si c'est la dernière question du niveau
+            if (currentQuestionIndex >= questions.length - 1) {
+              setIsLevelFinished(true);
+            } else {
+              setCurrentQuestionIndex((q) => q + 1);
+              setCurrentWordIndex(0);
+              const nextTime = selectedLevelKey ? WORD_SCRAMBLE_LEVELS[selectedLevelKey].timePerQuestionLimited : 120;
+              setTimeLeft(nextTime);
+            }
+          } else {
+            setCurrentWordIndex((w) => w + 1);
+          }
+        }, 650);
+      } else {
+        sfx.playWrong();
         onError();
       }
     }
   };
 
-  const handleReset = () => {
-    setPlaced([]);
-    setAvailable(['I', 'F', 'D', 'R', 'N', 'E']);
+  // Retirer une lettre déjà placée pour la renvoyer aux lettres disponibles
+  const handleRemovePlacedLetter = (indexToRemove: number) => {
+    sfx.playPop();
+    const target = placedLetters[indexToRemove];
+    if (!target) return;
+
+    setPlacedLetters((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+    setAvailableLetters((prev) => [...prev, { letter: target.letter, id: target.originalIndex }].sort((a, b) => a.id - b.id));
   };
 
-  return (
-    <div className="space-y-5 text-center">
-      <div className="p-3 bg-[#0c1322] rounded-xl border border-white/5">
-        <span className="text-[10px] text-[#f2ca50] font-mono block">INDICE</span>
-        <p className="text-xs text-[#dce2f8] font-medium">{item.clue}</p>
-        <span className="text-xs text-[#99907c]">Traduction : {item.translation}</span>
-      </div>
+  // Réinitialiser le mot en cours
+  const handleResetCurrentWord = () => {
+    sfx.playPop();
+    const currentQ = questions[currentQuestionIndex];
+    const currentW = currentQ?.words[currentWordIndex];
+    if (currentW) {
+      setupWord(currentW);
+    }
+  };
 
-      {/* Slots */}
-      <div className="flex items-center justify-center gap-2">
-        {target.map((_, idx) => (
-          <div
-            key={idx}
-            className={`w-10 h-12 rounded-xl flex items-center justify-center font-mono font-bold text-lg border-2 ${
-              placed[idx]
-                ? 'bg-[#f2ca50] text-[#3c2f00] border-[#f2ca50] shadow-md'
-                : 'bg-[#191f2f] border-dashed border-[#232a3a] text-transparent'
+  // Indice gratuit : place automatiquement la première lettre manquante
+  const handleGiveHint = () => {
+    sfx.playPop();
+    const currentQ = questions[currentQuestionIndex];
+    const currentW = currentQ?.words[currentWordIndex];
+    if (!currentW) return;
+
+    const neededLetter = currentW.word[placedLetters.length];
+    if (!neededLetter) return;
+
+    const matchingAvail = availableLetters.find((a) => a.letter.toUpperCase() === neededLetter.toUpperCase());
+    if (matchingAvail) {
+      handlePickLetter(matchingAvail);
+    }
+  };
+
+  // Formater le temps écoulé (ex: 02:45)
+  const formatElapsedTime = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
+
+  // 1. ÉCRAN DE SÉLECTION DU NIVEAU
+  if (!selectedLevelKey) {
+    return (
+      <div className="space-y-6 text-slate-100">
+        <div className="text-center space-y-1.5">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black border border-[#f2ca50] text-[#f2ca50] text-xs font-mono font-bold uppercase tracking-widest shadow-md shadow-black">
+            <span className="material-symbols-outlined text-sm">extension</span>
+            Système de Niveaux • 12 Mots par Question
+          </div>
+          <h3 className="text-2xl sm:text-3xl font-serif font-black text-white">
+            Word Scramble — Anagrammes en Folie
+          </h3>
+          <p className="text-xs text-zinc-300 max-w-lg mx-auto font-sans leading-relaxed">
+            Reconstituez les mots anglais avec des lettres à fort contraste en <strong className="text-[#f2ca50] font-mono">orange (#f2ca50)</strong> sur fond sombre. Sélectionnez votre niveau avec nos boutons professionnels noirs.
+          </p>
+        </div>
+
+        {/* Sélecteur de mode de temps — Boutons noirs professionnels */}
+        <div className="flex items-center justify-center gap-2.5 p-1.5 rounded-2xl bg-black border-2 border-zinc-800 max-w-md mx-auto shadow-xl shadow-black/80">
+          <button
+            type="button"
+            onClick={() => setTimerMode('limited')}
+            className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+              timerMode === 'limited'
+                ? 'bg-black text-[#f2ca50] border-2 border-[#f2ca50] shadow-md shadow-[#f2ca50]/20'
+                : 'bg-black text-zinc-400 hover:text-white border border-zinc-900 hover:border-zinc-700'
             }`}
           >
-            {placed[idx] || '_'}
-          </div>
-        ))}
-      </div>
-
-      {/* Available letters */}
-      <div className="flex items-center justify-center gap-2 flex-wrap">
-        {available.map((letter, idx) => (
-          <button
-            key={idx}
-            type="button"
-            onClick={() => handlePickLetter(letter, idx)}
-            className="w-11 h-11 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] border border-[#232a3a] text-white font-mono font-bold text-base transition-all active:scale-95 cursor-pointer shadow"
-          >
-            {letter}
+            <span className="material-symbols-outlined text-[16px]">timer</span>
+            <span>Temps Limité (Chrono)</span>
           </button>
-        ))}
+          <button
+            type="button"
+            onClick={() => setTimerMode('elapsed')}
+            className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+              timerMode === 'elapsed'
+                ? 'bg-black text-[#f2ca50] border-2 border-[#f2ca50] shadow-md shadow-[#f2ca50]/20'
+                : 'bg-black text-zinc-400 hover:text-white border border-zinc-900 hover:border-zinc-700'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[16px]">schedule</span>
+            <span>Temps Écoulé (Sans stress)</span>
+          </button>
+        </div>
+
+        {/* Grille des 5 Niveaux — Boutons en NOIR professionnel et lisible */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 pt-1">
+          {(Object.keys(WORD_SCRAMBLE_LEVELS) as WordScrambleLevelKey[]).map((key) => {
+            const lvl = WORD_SCRAMBLE_LEVELS[key];
+            const isLocked = playerLevel < lvl.requiredPlayerLevel;
+
+            return (
+              <button
+                key={key}
+                type="button"
+                disabled={isLocked}
+                onClick={() => {
+                  if (!isLocked) startLevel(key);
+                }}
+                className={`w-full text-left relative rounded-2xl p-5 transition-all border-2 flex flex-col justify-between overflow-hidden shadow-2xl ${
+                  isLocked
+                    ? 'bg-black/90 border-zinc-900 opacity-60 cursor-not-allowed filter grayscale'
+                    : 'bg-black hover:bg-[#0a0a0c] border-zinc-800 hover:border-[#f2ca50] hover:scale-[1.01] cursor-pointer group shadow-black'
+                }`}
+              >
+                {/* Overlay cadenas si verrouillé */}
+                {isLocked && (
+                  <div className="absolute inset-0 bg-black/90 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center p-3 text-center">
+                    <div className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-700 flex items-center justify-center text-zinc-300 mb-2 shadow">
+                      <span className="material-symbols-outlined text-xl">lock</span>
+                    </div>
+                    <span className="text-xs font-mono font-bold text-zinc-200">
+                      Niveau {lvl.requiredPlayerLevel} requis
+                    </span>
+                    <span className="text-[10px] text-[#f2ca50] mt-1 font-semibold">
+                      Atteindre niveau {lvl.requiredPlayerLevel} pour débloquer
+                    </span>
+                  </div>
+                )}
+
+                <div>
+                  <div className="flex items-center justify-between mb-2.5">
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold border border-[#f2ca50]/50 bg-black text-[#f2ca50] shadow-sm">
+                      {lvl.label}
+                    </span>
+                    <span className="text-xs font-mono text-[#f2ca50] font-bold">
+                      +{lvl.xpReward} XP
+                    </span>
+                  </div>
+
+                  <h4 className="font-serif font-black text-lg text-white group-hover:text-[#f2ca50] transition-colors">
+                    {lvl.questionsCount} Questions • 12 Mots
+                  </h4>
+                  <p className="text-xs text-zinc-300 mt-1.5 font-sans leading-relaxed">
+                    {lvl.description}
+                  </p>
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-zinc-800 flex items-center justify-between text-xs font-mono">
+                  <span className="text-zinc-400">Total : {lvl.questionsCount * 12} mots</span>
+                  <div className="px-3 py-1 rounded-xl bg-black border border-[#f2ca50] text-[#f2ca50] group-hover:bg-[#f2ca50] group-hover:text-black font-bold flex items-center gap-1 transition-all shadow-sm">
+                    <span>Jouer</span>
+                    <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // 2. ÉCRAN DE VICTOIRE DU NIVEAU
+  if (isLevelFinished) {
+    const config = WORD_SCRAMBLE_LEVELS[selectedLevelKey];
+    return (
+      <div className="text-center p-8 rounded-2xl bg-black border-2 border-[#f2ca50] shadow-2xl space-y-5 animate-fadeIn max-w-xl mx-auto">
+        <div className="w-20 h-20 mx-auto rounded-full bg-black border-2 border-[#f2ca50] p-1 flex items-center justify-center shadow-xl shadow-[#f2ca50]/30 animate-bounce">
+          <span className="text-4xl">👑</span>
+        </div>
+        <div>
+          <span className="text-xs font-mono uppercase tracking-widest text-[#f2ca50] font-bold">
+            Palier Réussi avec Brio !
+          </span>
+          <h3 className="text-2xl sm:text-3xl font-serif font-black text-white mt-1">
+            Niveau {config.label} Terminé
+          </h3>
+          <p className="text-sm text-zinc-300 mt-2">
+            Vous avez déchiffré l'intégralité des <strong>{config.questionsCount} questions</strong> (soit {config.questionsCount * 12} mots au total) !
+          </p>
+        </div>
+
+        <div className="p-3 bg-black rounded-xl border border-zinc-800 inline-flex items-center gap-4 text-xs font-mono">
+          <span className="text-[#f2ca50]">🔥 Combo Max : {combo}</span>
+          <span className="text-white">⏱️ {timerMode === 'limited' ? 'Sous Chrono' : `Temps : ${formatElapsedTime(elapsedTime)}`}</span>
+          <span className="text-emerald-400 font-bold">+{config.xpReward} XP</span>
+        </div>
+
+        <div className="flex items-center justify-center gap-3 pt-2">
+          <button
+            type="button"
+            onClick={() => setSelectedLevelKey(null)}
+            className="px-5 py-2.5 rounded-xl bg-black hover:bg-[#f2ca50] text-[#f2ca50] hover:text-black border-2 border-[#f2ca50] font-bold text-xs uppercase tracking-wider shadow-lg shadow-[#f2ca50]/20 transition-all active:scale-95 cursor-pointer"
+          >
+            Choisir un autre niveau
+          </button>
+          <button
+            type="button"
+            onClick={() => startLevel(selectedLevelKey)}
+            className="px-4 py-2.5 rounded-xl bg-black hover:bg-zinc-900 text-white hover:text-[#f2ca50] border-2 border-zinc-700 hover:border-[#f2ca50] font-semibold text-xs transition-all active:scale-95 cursor-pointer"
+          >
+            Rejouer ce niveau
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // 3. ÉCRAN DE JEU EN COURS
+  const currentQ = questions[currentQuestionIndex];
+  const currentW = currentQ?.words[currentWordIndex];
+  const config = WORD_SCRAMBLE_LEVELS[selectedLevelKey];
+
+  if (!currentQ || !currentW) {
+    return <div className="text-center p-8 text-zinc-400">Chargement de la question...</div>;
+  }
+
+  const targetChars = currentW.word.split('');
+
+  return (
+    <div className="space-y-6 max-w-2xl mx-auto text-center select-none">
+      {/* Barre d'en-tête de manche */}
+      <div className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-black border-2 border-zinc-800 text-xs font-mono shadow-lg">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setSelectedLevelKey(null)}
+            className="p-1.5 rounded-xl bg-black hover:bg-zinc-900 border border-zinc-800 hover:border-[#f2ca50] text-[#f2ca50] transition-colors cursor-pointer"
+            title="Revenir au choix des niveaux"
+          >
+            <span className="material-symbols-outlined text-sm">arrow_back</span>
+          </button>
+          <span className="font-bold text-[#f2ca50]">
+            Question {currentQuestionIndex + 1} / {config.questionsCount}
+          </span>
+          <span className="text-zinc-600">•</span>
+          <span className="text-zinc-300 font-semibold">
+            Mot {currentWordIndex + 1} / 12
+          </span>
+        </div>
+
+        {/* Chronomètre haute précision */}
+        <div className="flex items-center gap-2">
+          {timerMode === 'limited' ? (
+            <div className={`flex items-center gap-1 px-3 py-1 rounded-full font-mono font-bold ${
+              timeLeft <= 10
+                ? 'bg-rose-950 text-rose-300 border-2 border-rose-500 animate-pulse'
+                : 'bg-black text-[#f2ca50] border-2 border-[#f2ca50]'
+            }`}>
+              <span className="material-symbols-outlined text-xs">timer</span>
+              <span>{timeLeft}s</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-black text-[#f2ca50] border-2 border-[#f2ca50] font-mono font-bold">
+              <span className="material-symbols-outlined text-xs">schedule</span>
+              <span>{formatElapsedTime(elapsedTime)}</span>
+            </div>
+          )}
+        </div>
       </div>
 
-      <div>
+      {/* Barre de progression des 12 mots de la question */}
+      <div className="w-full bg-black h-2.5 rounded-full overflow-hidden border border-zinc-800">
+        <div
+          className="h-full bg-[#f2ca50] transition-all duration-300 shadow-[0_0_10px_#f2ca50]"
+          style={{ width: `${((currentWordIndex) / 12) * 100}%` }}
+        />
+      </div>
+
+      {/* Cartel Indice & Traduction avec Contraste Optimal Fond Sombre / Texte Net */}
+      <div className="relative p-5 rounded-2xl bg-black border-2 border-[#f2ca50]/70 shadow-2xl text-left">
+        <div className="flex items-center justify-between mb-2">
+          <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-black border border-[#f2ca50] text-[#f2ca50] text-[11px] font-mono font-bold uppercase tracking-wider">
+            <span className="material-symbols-outlined text-[13px]">lightbulb</span>
+            Indice • {currentW.category || 'Vocabulaire'}
+          </span>
+          {speak && (
+            <button
+              type="button"
+              onClick={() => speak(currentW.word)}
+              className="p-1.5 rounded-xl bg-black hover:bg-zinc-900 border border-[#f2ca50] text-[#f2ca50] transition-colors cursor-pointer"
+              title="Écouter la prononciation anglaise"
+            >
+              <span className="material-symbols-outlined text-base">volume_up</span>
+            </button>
+          )}
+        </div>
+
+        <p className="font-serif font-bold text-base sm:text-lg text-white leading-snug">
+          {currentW.clue}
+        </p>
+
+        <div className="mt-3 pt-2.5 border-t border-zinc-800 flex items-center justify-between text-xs">
+          <span className="text-zinc-300 font-sans">
+            Sens en français : <strong className="text-[#f2ca50] font-mono font-bold text-base ml-1">{currentW.translation}</strong>
+          </span>
+          <span className="text-[11px] font-mono text-zinc-400">
+            {targetChars.length} lettres
+          </span>
+        </div>
+      </div>
+
+      {/* CASES CIBLES (Slots) — LETTRES EN ORANGE (#f2ca50) SUR FOND SOMBRE */}
+      <div className="space-y-2">
+        <div className="text-[11px] text-zinc-400 font-sans">
+          Cliquez sur les lettres disponibles • Cliquez sur une lettre pour la retirer :
+        </div>
+
+        <div className="flex items-center justify-center gap-2 sm:gap-3 flex-wrap min-h-[64px] p-3 bg-black rounded-2xl border-2 border-zinc-800 shadow-xl">
+          {targetChars.map((_, idx) => {
+            const placed = placedLetters[idx];
+
+            return (
+              <button
+                key={idx}
+                type="button"
+                disabled={!placed}
+                onClick={() => handleRemovePlacedLetter(idx)}
+                className={`w-12 h-15 sm:w-14 sm:h-17 rounded-xl flex flex-col items-center justify-center transition-all ${
+                  placed
+                    ? 'bg-black border-2 border-[#f2ca50] text-[#f2ca50] font-mono font-black text-2xl sm:text-3xl shadow-lg shadow-[#f2ca50]/25 hover:border-amber-300 hover:scale-105 cursor-pointer active:scale-95'
+                    : 'bg-[#050508] border-2 border-dashed border-[#f2ca50]/40 text-[#f2ca50]/40 font-mono text-xs'
+                }`}
+                title={placed ? 'Cliquer pour retirer cette lettre' : `Emplacement ${idx + 1}`}
+              >
+                {placed ? (
+                  <span>{placed.letter}</span>
+                ) : (
+                  <span className="text-[10px] text-zinc-600 font-mono">{idx + 1}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* LETTRES DISPONIBLES — LETTRES EN ORANGE (#f2ca50) SUR FOND SOMBRE */}
+      <div className="space-y-2">
+        <div className="text-xs text-[#f2ca50] font-mono uppercase tracking-wider font-bold">
+          Lettres Disponibles :
+        </div>
+
+        <div className="flex items-center justify-center gap-2.5 sm:gap-3.5 flex-wrap p-4 rounded-2xl bg-black border-2 border-zinc-800 shadow-xl">
+          {availableLetters.length > 0 ? (
+            availableLetters.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => handlePickLetter(item)}
+                className="w-12 h-14 sm:w-14 sm:h-16 rounded-xl bg-black hover:bg-zinc-900 border-2 border-[#f2ca50] text-[#f2ca50] hover:text-[#ffe088] font-mono font-black text-2xl sm:text-3xl shadow-lg shadow-[#f2ca50]/15 hover:shadow-[#f2ca50]/30 transition-all active:scale-90 cursor-pointer flex items-center justify-center"
+              >
+                {item.letter}
+              </button>
+            ))
+          ) : (
+            <span className="text-xs text-emerald-400 font-mono font-bold animate-pulse py-2">
+              Toutes les lettres sont placées...
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Boutons d'aide et réinitialisation — Boutons noirs professionnels */}
+      <div className="flex items-center justify-center gap-4 pt-1 text-xs">
         <button
           type="button"
-          onClick={handleReset}
-          className="text-xs text-[#99907c] hover:text-[#f2ca50] underline cursor-pointer"
+          onClick={handleGiveHint}
+          disabled={placedLetters.length >= targetChars.length}
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-black hover:bg-zinc-900 border-2 border-[#f2ca50] text-[#f2ca50] font-bold transition-all active:scale-95 disabled:opacity-40 cursor-pointer shadow-md shadow-black"
         >
-          Effacer et recommencer
+          <span className="material-symbols-outlined text-[16px]">tips_and_updates</span>
+          <span>Indice (+1 lettre)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={handleResetCurrentWord}
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-black hover:bg-zinc-900 border-2 border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white font-bold transition-all active:scale-95 cursor-pointer shadow-md shadow-black"
+        >
+          <span className="material-symbols-outlined text-[16px]">restart_alt</span>
+          <span>Effacer et recommencer</span>
         </button>
       </div>
+
+      {/* Animation flash de succès pour le mot validé */}
+      {wordSuccessAnim && (
+        <div className="p-3 rounded-xl bg-black border-2 border-emerald-500 text-emerald-400 font-bold text-xs font-mono animate-fadeIn flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40">
+          <span>✨</span>
+          <span>Mot validé avec succès ! Mot suivant...</span>
+        </div>
+      )}
     </div>
   );
 };
+
+// =====================================================================
+// SPEED MENTAL MATH (Calcul Mental Rapide & Nombres en Anglais)
+// Mini-jeu simple, sophistiqué et ludique présentant les bases du calcul mental rapide
+// =====================================================================
+
+interface SpeedMentalMathGameProps {
+  onSuccess: () => void;
+  onError: () => void;
+  speak?: (text: string) => void;
+  playerLevel: number;
+}
+
+const SpeedMentalMathGame: React.FC<SpeedMentalMathGameProps> = ({ onSuccess, onError, speak }) => {
+  const [problemIndex, setProblemIndex] = useState(0);
+  const [score, setScore] = useState(0);
+  const [streak, setStreak] = useState(0);
+  const [selectedOption, setSelectedOption] = useState<number | null>(null);
+  const [isAnswered, setIsAnswered] = useState(false);
+  const [isCorrect, setIsCorrect] = useState(false);
+  const [showTrickDetail, setShowTrickDetail] = useState(false);
+  const [activeTab, setActiveTab] = useState<'play' | 'cheatsheet'>('play');
+
+  // Timer
+  const [timeLeft, setTimeLeft] = useState(25);
+
+  const problem = SPEED_MATH_PROBLEMS[problemIndex % SPEED_MATH_PROBLEMS.length];
+
+  // Décompte
+  useEffect(() => {
+    if (isAnswered || activeTab !== 'play') return;
+    const interval = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          sfx.playWrong();
+          onError();
+          setIsAnswered(true);
+          setIsCorrect(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isAnswered, activeTab, problemIndex]);
+
+  // Prononcer la question en anglais à l'apparition
+  useEffect(() => {
+    if (problem && speak && activeTab === 'play') {
+      speak(problem.enAudioPhrase);
+    }
+  }, [problemIndex, activeTab]);
+
+  const handleSelectOption = (opt: number) => {
+    if (isAnswered) return;
+    setSelectedOption(opt);
+    setIsAnswered(true);
+
+    if (opt === problem.correctAnswer) {
+      sfx.playCorrect();
+      setIsCorrect(true);
+      setScore((s) => s + 10);
+      setStreak((st) => st + 1);
+      setShowTrickDetail(true);
+      onSuccess(); // +10 XP
+    } else {
+      sfx.playWrong();
+      setIsCorrect(false);
+      setStreak(0);
+      setShowTrickDetail(true);
+      onError(); // -5 XP
+    }
+  };
+
+  const handleNextProblem = () => {
+    sfx.playPop();
+    setIsAnswered(false);
+    setSelectedOption(null);
+    setShowTrickDetail(false);
+    setTimeLeft(25);
+    setProblemIndex((prev) => prev + 1);
+  };
+
+  return (
+    <div className="space-y-6 max-w-2xl mx-auto text-slate-100 select-none">
+      {/* Header Banner */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#0c1322] via-[#172554]/40 to-[#0c1322] border-2 border-[#f2ca50]/50 p-5 shadow-2xl text-center">
+        <div className="flex items-center justify-between mb-2">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#f2ca50]/15 border border-[#f2ca50]/40 text-[#f2ca50] text-xs font-mono font-bold uppercase tracking-widest shadow-sm">
+            <span className="material-symbols-outlined text-[15px]">calculate</span>
+            Speed Mental Math • Calcul Mental Rapide
+          </div>
+
+          {/* Onglets Jouer / Fiche Astuces */}
+          <div className="inline-flex p-0.5 rounded-xl bg-[#070b14] border border-[#232a3a]">
+            <button
+              type="button"
+              onClick={() => setActiveTab('play')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'play'
+                  ? 'bg-[#f2ca50] text-[#1e1b4b] shadow'
+                  : 'text-[#94a3b8] hover:text-white'
+              }`}
+            >
+              Défi
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('cheatsheet')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'cheatsheet'
+                  ? 'bg-[#f2ca50] text-[#1e1b4b] shadow'
+                  : 'text-[#94a3b8] hover:text-white'
+              }`}
+            >
+              Les 6 Astuces Secrètes
+            </button>
+          </div>
+        </div>
+
+        <h3 className="text-xl sm:text-2xl font-serif font-black text-white">
+          Les Secrets du Calcul Mental Rapide
+        </h3>
+        <p className="text-xs text-[#cbd5e1] max-w-lg mx-auto font-sans mt-1">
+          Maîtrisez les astuces de génie des mathématiciens d'Oxford tout en perfectionnant vos nombres et opérations en anglais.
+        </p>
+
+        {/* Stats bar */}
+        <div className="mt-4 pt-3 border-t border-[#232a3a] flex items-center justify-around text-xs font-mono">
+          <span className="text-[#f2ca50] font-bold">Score : {score} pts</span>
+          <span className="text-amber-400">🔥 Série : {streak} d'affilée</span>
+          <span className="text-[#38bdf8] flex items-center gap-1">
+            <span className="material-symbols-outlined text-[14px]">timer</span>
+            <span>{timeLeft}s</span>
+          </span>
+        </div>
+      </div>
+
+      {activeTab === 'cheatsheet' ? (
+        /* FICHE PÉDAGOGIQUE DES 6 ASTUCES SECRÈTES */
+        <div className="space-y-4 animate-fadeIn">
+          <div className="p-4 rounded-xl bg-[#070b14] border border-[#f2ca50]/40 space-y-3">
+            <h4 className="font-serif font-bold text-base text-[#f2ca50] flex items-center gap-2">
+              <span className="material-symbols-outlined">menu_book</span>
+              Guide Magistral du Calcul Mental Éclair
+            </h4>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="p-3 rounded-lg bg-[#0c1424] border border-[#232a3a]">
+                <strong className="text-[#ffe088] block font-mono">1. La Règle Magique du 11</strong>
+                <p className="text-[#cbd5e1] mt-0.5">
+                  Pour multiplier un nombre à 2 chiffres par 11 : additionnez les 2 chiffres et insérez la somme au milieu.
+                  <br /><em className="text-[#38bdf8]">Exemple : 35 × 11 ➔ 3 + 5 = 8 ➔ 385 !</em>
+                </p>
+              </div>
+
+              <div className="p-3 rounded-lg bg-[#0c1424] border border-[#232a3a]">
+                <strong className="text-[#ffe088] block font-mono">2. Le Carré des Nombres en 5</strong>
+                <p className="text-[#cbd5e1] mt-0.5">
+                  Multipliez le premier chiffre par (lui-même + 1) et collez 25 à la fin.
+                  <br /><em className="text-[#38bdf8]">Exemple : 25² ➔ 2 × 3 = 6 ➔ 625 !</em>
+                </p>
+              </div>
+
+              <div className="p-3 rounded-lg bg-[#0c1424] border border-[#232a3a]">
+                <strong className="text-[#ffe088] block font-mono">3. Complément Instantané à 100</strong>
+                <p className="text-[#cbd5e1] mt-0.5">
+                  Faites 9 moins le premier chiffre pour les dizaines, et 10 moins le second pour les unités.
+                  <br /><em className="text-[#38bdf8]">Exemple : 100 - 37 ➔ 9-3=6 et 10-7=3 ➔ 63 !</em>
+                </p>
+              </div>
+
+              <div className="p-3 rounded-lg bg-[#0c1424] border border-[#232a3a]">
+                <strong className="text-[#ffe088] block font-mono">4. Doubler et Diviser par Deux</strong>
+                <p className="text-[#cbd5e1] mt-0.5">
+                  Quand un facteur est difficile (ex: 25 ou 50), doublez-le et prenez la moitié de l'autre !
+                  <br /><em className="text-[#38bdf8]">Exemple : 16 × 25 ➔ 8 × 50 = 400 !</em>
+                </p>
+              </div>
+
+              <div className="p-3 rounded-lg bg-[#0c1424] border border-[#232a3a]">
+                <strong className="text-[#ffe088] block font-mono">5. Pourcentages Express (10% + Moitié)</strong>
+                <p className="text-[#cbd5e1] mt-0.5">
+                  Pour calculer 15% : calculez 10% (décalez la virgule), puis ajoutez sa moitié (5%).
+                  <br /><em className="text-[#38bdf8]">Exemple : 15% de 80 ➔ 8 + 4 = 12 !</em>
+                </p>
+              </div>
+
+              <div className="p-3 rounded-lg bg-[#0c1424] border border-[#232a3a]">
+                <strong className="text-[#ffe088] block font-mono">6. L'Arrondi Intelligent (19, 29, 99)</strong>
+                <p className="text-[#cbd5e1] mt-0.5">
+                  Multipliez par le nombre rond supérieur puis retirez la différence.
+                  <br /><em className="text-[#38bdf8]">Exemple : 19 × 7 ➔ (20 × 7) - 7 = 140 - 7 = 133 !</em>
+                </p>
+              </div>
+            </div>
+
+            <div className="text-center pt-2">
+              <button
+                type="button"
+                onClick={() => setActiveTab('play')}
+                className="px-5 py-2 rounded-xl bg-gradient-to-r from-[#f2ca50] to-[#e6b834] text-[#1e1b4b] font-bold text-xs uppercase tracking-wider shadow"
+              >
+                Mettre en pratique dans le Défi
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* DÉFI MATHÉMATIQUE INTERACTIF */
+        <div className="space-y-5 animate-fadeIn">
+          {/* Question Box */}
+          <div className="relative p-6 rounded-2xl bg-gradient-to-br from-[#0c1424] to-[#080d19] border-2 border-[#f2ca50]/40 shadow-xl text-center space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="px-2.5 py-0.5 rounded-full bg-[#38bdf8]/20 border border-[#38bdf8]/40 text-[#7dd3fc] text-[11px] font-mono font-bold">
+                {problem.frContext}
+              </span>
+
+              {speak && (
+                <button
+                  type="button"
+                  onClick={() => speak(problem.enAudioPhrase)}
+                  className="p-1.5 rounded-full bg-[#151f33] hover:bg-[#1e2d4a] text-[#f2ca50] transition-colors"
+                  title="Réécouter la question en anglais"
+                >
+                  <span className="material-symbols-outlined text-base">volume_up</span>
+                </button>
+              )}
+            </div>
+
+            {/* Grande Formule Mathématique */}
+            <div className="py-2">
+              <span className="font-mono font-black text-4xl sm:text-5xl text-[#f2ca50] tracking-wider drop-shadow-[0_2px_12px_rgba(242,202,80,0.3)]">
+                {problem.expression} = ?
+              </span>
+            </div>
+
+            {/* Question formulée en anglais */}
+            <p className="font-serif italic text-base sm:text-lg text-slate-200">
+              "{problem.enQuestion}"
+            </p>
+          </div>
+
+          {/* Choix Multiples (4 options) */}
+          <div className="grid grid-cols-2 gap-3">
+            {problem.options.map((opt, idx) => {
+              const isSelected = selectedOption === opt;
+              const isCorrectOpt = opt === problem.correctAnswer;
+
+              let btnStyle = 'bg-[#0e172a] hover:bg-[#182337] border-2 border-[#232a3a] text-white hover:border-[#f2ca50]/60';
+              if (isAnswered) {
+                if (isCorrectOpt) {
+                  btnStyle = 'bg-emerald-950/80 border-2 border-emerald-400 text-emerald-300 shadow-[0_0_15px_rgba(52,211,153,0.3)] font-black scale-[1.02]';
+                } else if (isSelected && !isCorrectOpt) {
+                  btnStyle = 'bg-rose-950/80 border-2 border-rose-500 text-rose-300 font-bold';
+                } else {
+                  btnStyle = 'bg-[#0a0f1d] border border-slate-800 text-slate-500 opacity-50';
+                }
+              }
+
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  disabled={isAnswered}
+                  onClick={() => handleSelectOption(opt)}
+                  className={`p-4 rounded-xl font-mono text-xl sm:text-2xl font-bold transition-all shadow-md active:scale-95 cursor-pointer ${btnStyle}`}
+                >
+                  {opt}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Révélation Pédagogique de l'Astuce de Calcul Mental */}
+          {showTrickDetail && (
+            <div className={`p-4 rounded-2xl border-2 animate-fadeIn space-y-2 ${
+              isCorrect ? 'bg-emerald-950/60 border-emerald-500/70' : 'bg-rose-950/60 border-rose-500/70'
+            }`}>
+              <div className="flex items-center justify-between">
+                <span className="font-mono font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 text-[#f2ca50]">
+                  <span className="material-symbols-outlined text-sm">psychology</span>
+                  {problem.trickTitle}
+                </span>
+                <span className="text-xs font-mono font-black text-white">
+                  Réponse exacte : {problem.correctAnswer}
+                </span>
+              </div>
+
+              <p className="text-xs text-slate-200 font-sans leading-relaxed">
+                💡 <strong className="text-white">L'astuce magique :</strong> {problem.trickRule}
+              </p>
+
+              <div className="pt-2 text-right">
+                <button
+                  type="button"
+                  onClick={handleNextProblem}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#f2ca50] to-[#e6b834] text-[#1e1b4b] font-bold text-xs uppercase tracking-wider shadow-md transition-all active:scale-95"
+                >
+                  Question Suivante ➔
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 
 // 3. WORD SEARCH (Mots Mêlés)
 const WordSearchGame: React.FC<{ onSuccess: () => void; onError?: () => void }> = ({ onSuccess }) => {

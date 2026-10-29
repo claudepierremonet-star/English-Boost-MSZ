@@ -11,7 +11,8 @@
         "photoURL": { "type": "string", "description": "Scholar avatar URL" },
         "level": { "type": "string", "enum": ["B1", "B2", "C1", "C2"], "description": "Current CEFR level" },
         "heroImageURL": { "type": "string", "description": "Editorial hero cut-out artwork URL" },
-        "stats": { "type": "object", "description": "Aggregated study metrics and streaks" }
+        "stats": { "type": "object", "description": "Aggregated study metrics and streaks" },
+        "arcadeProgression": { "type": "object", "description": "Arcade progression (level 1-99, points, unlocked games and active session)" }
       },
       "required": ["uid", "level"]
     },

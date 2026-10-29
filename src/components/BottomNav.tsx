@@ -1,6 +1,6 @@
 import React from 'react';
 
-export type TabKey = 'accueil' | 'cursus' | 'jeux' | 'pratique' | 'dashboard' | 'profil';
+export type TabKey = 'accueil' | 'cursus' | 'jeux' | 'classement' | 'pratique' | 'dashboard' | 'profil';
 
 interface BottomNavProps {
   activeTab: TabKey;
@@ -12,6 +12,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
     { key: 'accueil', label: 'Accueil', icon: 'auto_stories' },
     { key: 'cursus', label: 'Cursus', icon: 'school' },
     { key: 'jeux', label: 'Game', icon: 'sports_esports' },
+    { key: 'classement', label: 'Top XP', icon: 'leaderboard' },
     { key: 'pratique', label: 'Atelier', icon: 'menu_book' },
     { key: 'dashboard', label: 'Stats', icon: 'insights' },
     { key: 'profil', label: 'Profil', icon: 'person' }
@@ -19,7 +20,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 pb-safe bg-[#0c1322]/90 backdrop-blur-xl border-t border-[#232a3a]/80 shadow-[0_-4px_24px_rgba(0,0,0,0.6)]">
-      <div className="max-w-md mx-auto h-16 px-4 flex items-center justify-around">
+      <div className="max-w-xl mx-auto h-16 px-1.5 sm:px-4 flex items-center justify-around">
         {tabs.map((tab) => {
           const isActive = activeTab === tab.key;
           return (
@@ -27,7 +28,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
               key={tab.key}
               type="button"
               onClick={() => onTabChange(tab.key)}
-              className={`flex flex-col items-center justify-center gap-1 min-w-[56px] min-h-[48px] rounded-xl transition-all active:scale-95 ${
+              className={`flex flex-col items-center justify-center gap-1 min-w-[42px] sm:min-w-[56px] min-h-[48px] rounded-xl transition-all active:scale-95 ${
                 isActive
                   ? 'text-[#f2ca50] font-semibold'
                   : 'text-[#d0c5af]/70 hover:text-[#dce2f8]'

@@ -30,7 +30,14 @@ import {
   getDownloadURL,
   type FirebaseStorage
 } from 'firebase/storage';
-import type { UserProfile, LearningAttempt, FlashcardProgress, CEFRLevel } from './types';
+import type {
+  UserProfile,
+  LearningAttempt,
+  FlashcardProgress,
+  CEFRLevel,
+  LeaderboardEntry,
+  LeagueTier
+} from './types';
 import firebaseAppletConfig from '../../firebase-applet-config.json';
 
 // Read config from provisioned JSON with environment variable fallback
@@ -118,6 +125,12 @@ export const DEFAULT_USER_PROFILE: UserProfile = {
     studyMinutesTarget: 30,
     totalImmersionMinutes: 5200,
     lastActiveDate: new Date().toISOString().split('T')[0]
+  },
+  arcadeProgression: {
+    points: 0,
+    level: 1,
+    unlockedMaxGameNumber: 1,
+    completedGames: []
   }
 };
 
@@ -128,12 +141,30 @@ export function getLocalUserProfile(): UserProfile {
   try {
     const raw = localStorage.getItem(LOCAL_USER_KEY);
     if (raw) {
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      // Synchronize with standalone arcade storage key if present
+      const arcadeRaw = localStorage.getItem('msz_arcade_progression_v1');
+      if (arcadeRaw) {
+        try {
+          const parsedArcade = JSON.parse(arcadeRaw);
+          if (!parsed.arcadeProgression || (parsedArcade.points || 0) > (parsed.arcadeProgression.points || 0)) {
+            parsed.arcadeProgression = parsedArcade;
+          }
+        } catch (e) {}
+      }
+      return parsed;
     }
   } catch (e) {
     console.error('Error reading local user profile', e);
   }
-  return DEFAULT_USER_PROFILE;
+  const defaultProf = { ...DEFAULT_USER_PROFILE };
+  try {
+    const arcadeRaw = localStorage.getItem('msz_arcade_progression_v1');
+    if (arcadeRaw) {
+      defaultProf.arcadeProgression = JSON.parse(arcadeRaw);
+    }
+  } catch (e) {}
+  return defaultProf;
 }
 
 /**
@@ -142,6 +173,9 @@ export function getLocalUserProfile(): UserProfile {
 export function saveLocalUserProfile(profile: UserProfile): void {
   try {
     localStorage.setItem(LOCAL_USER_KEY, JSON.stringify(profile));
+    if (profile.arcadeProgression) {
+      localStorage.setItem('msz_arcade_progression_v1', JSON.stringify(profile.arcadeProgression));
+    }
   } catch (e) {
     console.error('Error saving local user profile', e);
   }
@@ -266,7 +300,44 @@ export function subscribeToAuthState(callback: (profile: UserProfile | null) => 
           const snap = await getDoc(userRef);
           if (snap.exists()) {
             const data = snap.data() as UserProfile;
+            const currentLocal = getLocalUserProfile();
+
+            // Merge arcade progression defensively: keep the highest points, level & completed games
+            const localArcade = currentLocal.arcadeProgression;
+            const firestoreArcade = data.arcadeProgression;
+            const maxPoints = Math.max(localArcade?.points || 0, firestoreArcade?.points || 0);
+            const maxLevel = Math.max(localArcade?.level || 1, firestoreArcade?.level || 1);
+            const maxUnlocked = Math.max(localArcade?.unlockedMaxGameNumber || 1, firestoreArcade?.unlockedMaxGameNumber || 1);
+            const mergedCompleted = Array.from(
+              new Set([...(localArcade?.completedGames || []), ...(firestoreArcade?.completedGames || [])])
+            );
+
+            data.arcadeProgression = {
+              points: maxPoints,
+              level: maxLevel,
+              unlockedMaxGameNumber: maxUnlocked,
+              completedGames: mergedCompleted,
+              activeSession: localArcade?.activeSession || firestoreArcade?.activeSession || null
+            };
+
+            data.stats = {
+              ...data.stats,
+              totalXp: Math.max(data.stats?.totalXp || 0, currentLocal.stats?.totalXp || 0, maxPoints),
+              weeklyXp: Math.max(data.stats?.weeklyXp || 0, currentLocal.stats?.weeklyXp || 0)
+            };
+
             saveLocalUserProfile(data);
+            saveProfileToIndexedDB(data).catch(console.warn);
+
+            // Sync to Firestore if local had higher values
+            if ((localArcade?.points || 0) > (firestoreArcade?.points || 0)) {
+              setDoc(
+                userRef,
+                { arcadeProgression: data.arcadeProgression, stats: data.stats },
+                { merge: true }
+              ).catch(console.warn);
+            }
+
             callback(data);
             return;
           }
@@ -294,7 +365,8 @@ export async function updateUserProfile(profile: Partial<UserProfile>): Promise<
     stats: {
       ...current.stats,
       ...(profile.stats || {})
-    }
+    },
+    arcadeProgression: profile.arcadeProgression || current.arcadeProgression
   };
   saveLocalUserProfile(updated);
   saveProfileToIndexedDB(updated).catch(console.warn);
@@ -302,7 +374,7 @@ export async function updateUserProfile(profile: Partial<UserProfile>): Promise<
   if (navigator.onLine && isFirebaseConfigured && db && auth?.currentUser) {
     try {
       const userRef = doc(db, 'users', auth.currentUser.uid);
-      await updateDoc(userRef, profile as Record<string, unknown>);
+      await setDoc(userRef, profile as Record<string, unknown>, { merge: true });
     } catch (e) {
       console.warn('Firestore update error, queuing sync:', e);
       await enqueueSyncOperation('UPDATE_PROFILE', profile, auth.currentUser.uid);
@@ -638,3 +710,255 @@ export async function getSevenDayScoreHistory(userId?: string): Promise<SevenDay
     recentAttempts: attempts.slice(0, 5)
   };
 }
+
+/**
+ * Editorial Oxford Scholar Benchmark for healthy peer competition
+ */
+const BENCHMARK_SCHOLARS: Array<Omit<LeaderboardEntry, 'rank' | 'isCurrentUser' | 'league'>> = [
+  {
+    uid: 'scholar_oxford_eleanor',
+    displayName: 'Eleanor Vance (Oxford Univ)',
+    photoURL: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+    level: 'C2',
+    weeklyXp: 2890,
+    totalXp: 14200,
+    streakDays: 42,
+    badgeLabel: 'Valedictorian',
+    change: 'same'
+  },
+  {
+    uid: 'scholar_cambridge_arthur',
+    displayName: 'Arthur Pendelton (Cambridge)',
+    photoURL: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+    level: 'C1',
+    weeklyXp: 2680,
+    totalXp: 11800,
+    streakDays: 29,
+    badgeLabel: 'Lexicographer',
+    change: 'up'
+  },
+  {
+    uid: 'scholar_sorbonne_helene',
+    displayName: 'Hélène de Saint-Germain (Sorbonne)',
+    photoURL: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80',
+    level: 'C1',
+    weeklyXp: 2490,
+    totalXp: 9600,
+    streakDays: 21,
+    badgeLabel: 'Grammarian',
+    change: 'same'
+  },
+  {
+    uid: 'scholar_ens_julien',
+    displayName: 'Julien Moreau (ENS Lyon)',
+    photoURL: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
+    level: 'B2',
+    weeklyXp: 2280,
+    totalXp: 8100,
+    streakDays: 18,
+    badgeLabel: 'Phonetician',
+    change: 'up'
+  },
+  {
+    uid: 'scholar_edinburgh_sophie',
+    displayName: 'Sophie Althaus (Edinburgh)',
+    photoURL: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
+    level: 'C2',
+    weeklyXp: 2140,
+    totalXp: 13500,
+    streakDays: 35,
+    badgeLabel: 'Master of Oratory',
+    change: 'down'
+  },
+  {
+    uid: 'scholar_trinity_marcus',
+    displayName: 'Marcus Thorne (Trinity Dublin)',
+    photoURL: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150&auto=format&fit=crop&q=80',
+    level: 'B2',
+    weeklyXp: 1940,
+    totalXp: 6700,
+    streakDays: 14,
+    badgeLabel: 'Essayist',
+    change: 'up'
+  },
+  {
+    uid: 'scholar_ucl_amelie',
+    displayName: 'Amélie Bernard (UCL London)',
+    photoURL: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
+    level: 'B1',
+    weeklyXp: 1720,
+    totalXp: 5400,
+    streakDays: 12,
+    badgeLabel: 'Active Scholar',
+    change: 'same'
+  },
+  {
+    uid: 'scholar_polytech_lucas',
+    displayName: 'Lucas Fontaine (Polytechnique)',
+    photoURL: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=150&auto=format&fit=crop&q=80',
+    level: 'B2',
+    weeklyXp: 1560,
+    totalXp: 4800,
+    streakDays: 9,
+    badgeLabel: 'Speed Master',
+    change: 'down'
+  },
+  {
+    uid: 'scholar_geneva_charlotte',
+    displayName: 'Charlotte Dufour (Genève)',
+    photoURL: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
+    level: 'B1',
+    weeklyXp: 1390,
+    totalXp: 3950,
+    streakDays: 8,
+    badgeLabel: 'Cadence Pro',
+    change: 'up'
+  },
+  {
+    uid: 'scholar_bordeaux_thomas',
+    displayName: 'Thomas Lemaire (Bordeaux)',
+    photoURL: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=150&auto=format&fit=crop&q=80',
+    level: 'B1',
+    weeklyXp: 1180,
+    totalXp: 3200,
+    streakDays: 6,
+    badgeLabel: 'New Challenger',
+    change: 'same'
+  }
+];
+
+function computeLeague(rank: number): LeagueTier {
+  if (rank <= 3) return 'Oxford Fellow';
+  if (rank <= 6) return 'Ligue Diamant';
+  if (rank <= 12) return 'Ligue Émeraude';
+  if (rank <= 20) return 'Ligue Saphir';
+  return 'Ligue Améthyste';
+}
+
+const LOCAL_CHEERS_KEY = 'eb_msz_peer_cheers_v1';
+
+/**
+ * Send an encouraging cheer / nod to a peer scholar
+ */
+export async function sendPeerCheer(targetUserId: string): Promise<number> {
+  try {
+    const raw = localStorage.getItem(LOCAL_CHEERS_KEY);
+    const map: Record<string, number> = raw ? JSON.parse(raw) : {};
+    map[targetUserId] = (map[targetUserId] || 0) + 1;
+    localStorage.setItem(LOCAL_CHEERS_KEY, JSON.stringify(map));
+    return map[targetUserId];
+  } catch {
+    return 1;
+  }
+}
+
+/**
+ * Retrieve cheer counts
+ */
+export function getLocalCheers(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(LOCAL_CHEERS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Fetch and construct the Weekly Leaderboard among connected learners
+ * Merges real Firestore profiles with academic peers and accurately positions the current user
+ */
+export async function fetchWeeklyLeaderboard(
+  currentUser?: UserProfile,
+  sortBy: 'weekly' | 'total' = 'weekly'
+): Promise<LeaderboardEntry[]> {
+  const activeUser = currentUser || getLocalUserProfile();
+  const rawCheers = getLocalCheers();
+  const userWeeklyXp = activeUser.stats?.weeklyXp || 0;
+  const userTotalXp = activeUser.stats?.totalXp || 0;
+
+  // Initialize pool with benchmark scholars
+  const scholarsMap = new Map<string, Omit<LeaderboardEntry, 'rank' | 'league'>>();
+
+  for (const b of BENCHMARK_SCHOLARS) {
+    scholarsMap.set(b.uid, {
+      ...b,
+      isCurrentUser: false,
+      cheerCount: rawCheers[b.uid] || 3
+    });
+  }
+
+  // Attempt to fetch real Firestore registered users if available
+  if (db && isFirebaseConfigured) {
+    try {
+      const q = query(
+        collection(db, 'users'),
+        orderBy(sortBy === 'weekly' ? 'stats.weeklyXp' : 'stats.totalXp', 'desc'),
+        limit(25)
+      );
+      const snapshot = await getDocs(q);
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data() as UserProfile;
+        if (data && docSnap.id) {
+          const isMe = docSnap.id === activeUser.uid;
+          scholarsMap.set(docSnap.id, {
+            uid: docSnap.id,
+            displayName: data.displayName || (isMe ? activeUser.displayName : 'Apprenant MSZ'),
+            photoURL: data.photoURL || activeUser.photoURL,
+            level: data.level || 'C1',
+            weeklyXp: data.stats?.weeklyXp || 0,
+            totalXp: data.stats?.totalXp || 0,
+            streakDays: data.stats?.streakDays || 1,
+            isCurrentUser: isMe,
+            badgeLabel: data.level === 'C2' ? 'Oxford Fellow' : 'Scholar',
+            change: 'same',
+            cheerCount: rawCheers[docSnap.id] || 0
+          });
+        }
+      });
+    } catch (err) {
+      console.warn('Leaderboard Firestore query deferred, using local synced peers:', err);
+    }
+  }
+
+  // Ensure current user is present with latest real stats
+  scholarsMap.set(activeUser.uid, {
+    uid: activeUser.uid,
+    displayName: `${activeUser.displayName || 'Moi-même'} (Vous)`,
+    photoURL: activeUser.photoURL,
+    level: activeUser.level || 'C1',
+    weeklyXp: userWeeklyXp,
+    totalXp: userTotalXp,
+    streakDays: activeUser.stats?.streakDays || 1,
+    isCurrentUser: true,
+    badgeLabel: userWeeklyXp > 2500 ? 'Leader Semaine' : 'Challenger',
+    change: 'up',
+    cheerCount: rawCheers[activeUser.uid] || 5
+  });
+
+  // Convert to array and sort according to requested metric
+  const list = Array.from(scholarsMap.values());
+  list.sort((a, b) => {
+    if (sortBy === 'weekly') {
+      if (b.weeklyXp !== a.weeklyXp) return b.weeklyXp - a.weeklyXp;
+      return b.totalXp - a.totalXp;
+    } else {
+      if (b.totalXp !== a.totalXp) return b.totalXp - a.totalXp;
+      return b.weeklyXp - a.weeklyXp;
+    }
+  });
+
+  // Assign ranks and academic leagues
+  const ranked: LeaderboardEntry[] = list.map((item, idx) => {
+    const rank = idx + 1;
+    return {
+      ...item,
+      rank,
+      isCurrentUser: item.uid === activeUser.uid,
+      league: computeLeague(rank)
+    };
+  });
+
+  return ranked;
+}
+
