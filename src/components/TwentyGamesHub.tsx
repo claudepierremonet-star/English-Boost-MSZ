@@ -43,7 +43,17 @@ import {
   WordScrambleWord,
   scrambleLetters,
   SPEED_MATH_PROBLEMS,
-  MentalMathProblem
+  MentalMathProblem,
+  VerbMasterLevelKey,
+  VERB_MASTER_LEVELS,
+  generateVerbMasterQuestions,
+  VerbMasterVerb,
+  VerbMasterQuestion,
+  AstroHangmanLevelKey,
+  ASTRO_HANGMAN_LEVELS,
+  generateAstroHangmanQuestions,
+  AstroHangmanWord,
+  AstroHangmanQuestion
 } from '../data/twentyGamesData';
 
 interface TwentyGamesHubProps {
@@ -1311,9 +1321,9 @@ const ActiveGameRenderer: React.FC<ActiveGameRendererProps> = ({
     case 'word-search':
       return <WordSearchGame onSuccess={onSuccess} onError={onError} />;
     case 'verb-master':
-      return <VerbMasterGame onSuccess={onSuccess} onError={onError} />;
+      return <VerbMasterGame onSuccess={onSuccess} onError={onError} speak={speak} playerLevel={playerLevel} />;
     case 'astro-hangman':
-      return <AstroHangmanGame onSuccess={onSuccess} onError={onError} />;
+      return <AstroHangmanGame onSuccess={onSuccess} onError={onError} speak={speak} playerLevel={playerLevel} />;
     case 'sentence-builder':
       return <SentenceBuilderGame onSuccess={onSuccess} onError={onError} speak={speak} />;
     case 'audio-blitz':
@@ -1633,7 +1643,7 @@ const SpeedMatchGame: React.FC<SpeedMatchGameProps> = ({ onSuccess, onError, spe
                 JEU N°1
               </span>
               <span className="inline-flex items-center px-3 py-1 rounded-lg bg-gradient-to-r from-amber-300 via-amber-400 to-yellow-400 text-black font-black text-xs uppercase tracking-wider shadow-sm border border-amber-200">
-                Traduction Éclair • 3 Niveaux
+                Traduction Éclair • 5 Niveaux
               </span>
             </div>
             <h3 className="text-2xl sm:text-3xl font-serif font-black text-orange-500 tracking-tight">
@@ -1646,11 +1656,11 @@ const SpeedMatchGame: React.FC<SpeedMatchGameProps> = ({ onSuccess, onError, spe
           </div>
         </div>
 
-        {/* Sélection des 3 Niveaux */}
+        {/* Sélection des 5 Niveaux */}
         <div>
           <h4 className="text-xs font-mono uppercase tracking-widest text-[#f2ca50] font-bold mb-3 flex items-center gap-1.5">
             <span className="material-symbols-outlined text-sm">tune</span>
-            Choisis ton palier de défi :
+            Choisis ton palier de défi (Débutant à Master Avancé) :
           </h4>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
@@ -1887,7 +1897,7 @@ const SpeedMatchGame: React.FC<SpeedMatchGameProps> = ({ onSuccess, onError, spe
               Speed Match
             </span>
             <span className="px-2 py-0.5 rounded-md bg-gradient-to-r from-amber-300 via-amber-400 to-yellow-400 text-black text-[10px] font-black tracking-tight border border-amber-200 shadow-sm">
-              Traduction Éclair • 3 Niveaux
+              Traduction Éclair • 5 Niveaux
             </span>
           </div>
           <span className="text-[11px] font-mono text-gray-400">
@@ -3020,140 +3030,1347 @@ const WordSearchGame: React.FC<{ onSuccess: () => void; onError?: () => void }> 
   );
 };
 
-// 4. VERB MASTER
-const VerbMasterGame: React.FC<{ onSuccess: () => void; onError: () => void }> = ({ onSuccess, onError }) => {
-  const item = VERB_MASTER_ITEMS[0]; // Go -> Went -> Gone
-  const [step, setStep] = useState<'preterite' | 'participle'>('preterite');
-  const [preteriteSelected, setPreteriteSelected] = useState<string | null>(null);
+// 4. VERB MASTER (Mini-Jeu n°4 - Association Verbes Éclair • 3 Niveaux • 12 Mots par question)
+interface VerbMasterGameProps {
+  onSuccess: () => void;
+  onError: () => void;
+  speak?: (text: string) => void;
+  playerLevel: number;
+}
 
-  const handlePreteriteChoice = (choice: string) => {
+const VerbMasterGame: React.FC<VerbMasterGameProps> = ({ onSuccess, onError, speak, playerLevel }) => {
+  // Mode : choix du niveau ou jeu en cours
+  const [selectedLevelKey, setSelectedLevelKey] = useState<VerbMasterLevelKey | null>(null);
+  const [timerMode, setTimerMode] = useState<'limited' | 'elapsed'>('limited');
+
+  // Reprise de session active au refresh
+  const [savedSession, setSavedSession] = useState<any | null>(() => {
+    const s = getStoredActiveGameSession();
+    return s && s.gameId === 'verb-master' ? s : null;
+  });
+
+  // Questions du niveau actif (chaque question = 12 MOTS, soit 6 paires verbe/traduction)
+  const [questions, setQuestions] = useState<VerbMasterQuestion[]>([]);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+
+  // Colonnes mélangées (6 verbes anglais à gauche 🇬🇧 + 6 traductions françaises à droite 🇫🇷 = 12 MOTS)
+  const [shuffledEn, setShuffledEn] = useState<VerbMasterVerb[]>([]);
+  const [shuffledFr, setShuffledFr] = useState<VerbMasterVerb[]>([]);
+
+  // Sélections et appariements
+  const [selectedEn, setSelectedEn] = useState<string | null>(null);
+  const [selectedFr, setSelectedFr] = useState<string | null>(null);
+  const [matched, setMatched] = useState<string[]>([]);
+  const [wrongPair, setWrongPair] = useState<{ en: string; fr: string } | null>(null);
+  const [activeVerbInfo, setActiveVerbInfo] = useState<VerbMasterVerb | null>(null);
+
+  // Progression & Chronométrage
+  const [combo, setCombo] = useState(0);
+  const [maxCombo, setMaxCombo] = useState(0);
+  const [bonusScore, setBonusScore] = useState(0);
+  const [isLevelFinished, setIsLevelFinished] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(60);
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const [pairSuccessAnim, setPairSuccessAnim] = useState<string | null>(null);
+
+  // Démarrer un niveau (tirage aléatoire non-répétitif)
+  const startLevel = (levelKey: VerbMasterLevelKey) => {
     sfx.playPop();
-    if (choice === item.preteriteCorrect) {
-      setPreteriteSelected(choice);
-      setStep('participle');
-    } else {
-      onError();
+    const config = VERB_MASTER_LEVELS[levelKey];
+    const generated = generateVerbMasterQuestions(levelKey);
+
+    setSelectedLevelKey(levelKey);
+    setQuestions(generated);
+    setCurrentQuestionIndex(0);
+    setMatched([]);
+    setSelectedEn(null);
+    setSelectedFr(null);
+    setWrongPair(null);
+    setActiveVerbInfo(null);
+    setBonusScore(0);
+    setCombo(0);
+    setMaxCombo(0);
+    setIsLevelFinished(false);
+    setTimeLeft(config.timePerQuestionLimited);
+    setElapsedTime(0);
+
+    saveActiveGameSession({
+      gameId: 'verb-master',
+      gameTitle: 'Verb Master',
+      levelKey,
+      questionIndex: 0,
+      totalQuestions: generated.length,
+      bonusScore: 0,
+      timestamp: new Date().toISOString()
+    });
+  };
+
+  // Reprendre la session sauvegardée
+  const resumeSavedSession = () => {
+    if (!savedSession) return;
+    sfx.playPop();
+    const levelKey = (savedSession.levelKey || 'debutant') as VerbMasterLevelKey;
+    const config = VERB_MASTER_LEVELS[levelKey] || VERB_MASTER_LEVELS.debutant;
+    const generated = generateVerbMasterQuestions(levelKey);
+
+    setSelectedLevelKey(levelKey);
+    setQuestions(generated);
+    const targetQ = Math.min(generated.length - 1, Math.max(0, Number(savedSession.questionIndex) || 0));
+    setCurrentQuestionIndex(targetQ);
+    setBonusScore(Number(savedSession.bonusScore) || 0);
+    setCombo(0);
+    setMaxCombo(0);
+    setIsLevelFinished(false);
+    setTimeLeft(config.timePerQuestionLimited);
+    setSavedSession(null);
+  };
+
+  // Préparer les 12 mots (6 verbes anglais à gauche, 6 traductions à droite)
+  useEffect(() => {
+    if (!selectedLevelKey || questions.length === 0 || isLevelFinished) return;
+
+    const currentQ = questions[currentQuestionIndex];
+    if (!currentQ) return;
+
+    const config = VERB_MASTER_LEVELS[selectedLevelKey];
+    const pairs = [...currentQ.pairs];
+    const enArr = [...pairs].sort(() => Math.random() - 0.5);
+    const frArr = [...pairs].sort(() => Math.random() - 0.5);
+
+    setShuffledEn(enArr);
+    setShuffledFr(frArr);
+    setMatched([]);
+    setSelectedEn(null);
+    setSelectedFr(null);
+    setWrongPair(null);
+    setActiveVerbInfo(enArr[0] || null);
+    setTimeLeft(config.timePerQuestionLimited);
+  }, [selectedLevelKey, questions, currentQuestionIndex, isLevelFinished]);
+
+  // Chronomètre de manche
+  useEffect(() => {
+    if (!selectedLevelKey || isLevelFinished) return;
+    const currentQ = questions[currentQuestionIndex];
+    if (!currentQ) return;
+    if (matched.length === currentQ.pairs.length) return;
+
+    const interval = setInterval(() => {
+      if (timerMode === 'limited') {
+        setTimeLeft((prev) => {
+          if (prev <= 1) {
+            sfx.playWrong();
+            onError();
+            const config = selectedLevelKey ? VERB_MASTER_LEVELS[selectedLevelKey] : VERB_MASTER_LEVELS.debutant;
+            return config.timePerQuestionLimited;
+          }
+          return prev - 1;
+        });
+      } else {
+        setElapsedTime((prev) => prev + 1);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [selectedLevelKey, currentQuestionIndex, matched.length, questions, isLevelFinished, timerMode, onError]);
+
+  // Clic sur un verbe anglais (gauche)
+  const handleEnClick = (verb: VerbMasterVerb) => {
+    sfx.playPop();
+    if (speak) speak(`${verb.infinitive}, ${verb.preterite}, ${verb.pastParticiple}`);
+    setSelectedEn(verb.infinitive);
+    setActiveVerbInfo(verb);
+    if (selectedFr) {
+      evaluateMatch(verb.infinitive, selectedFr);
     }
   };
 
-  const handleParticipleChoice = (choice: string) => {
+  // Clic sur une traduction française (droite)
+  const handleFrClick = (frWord: string) => {
     sfx.playPop();
-    if (choice === item.participleCorrect) {
+    setSelectedFr(frWord);
+    if (selectedEn) {
+      evaluateMatch(selectedEn, frWord);
+    }
+  };
+
+  // Évaluation de l'association anglais <-> français
+  const evaluateMatch = (enInf: string, fr: string) => {
+    const currentQ = questions[currentQuestionIndex];
+    if (!currentQ) return;
+
+    const targetPair = currentQ.pairs.find((p) => p.infinitive.toUpperCase() === enInf.toUpperCase());
+    const isCorrect = targetPair && targetPair.translation.trim().toLowerCase() === fr.trim().toLowerCase();
+
+    if (isCorrect) {
       sfx.playCorrect();
-      setTimeout(onSuccess, 400);
+      setPairSuccessAnim(enInf);
+      setTimeout(() => setPairSuccessAnim(null), 800);
+
+      const newMatched = [...matched, enInf];
+      setMatched(newMatched);
+      setSelectedEn(null);
+      setSelectedFr(null);
+      setWrongPair(null);
+
+      const nextCombo = combo + 1;
+      setCombo(nextCombo);
+      if (nextCombo > maxCombo) setMaxCombo(nextCombo);
+
+      const points = 10 * (nextCombo > 1 ? nextCombo : 1);
+      const updatedBonus = bonusScore + points;
+      setBonusScore(updatedBonus);
+
+      // Si les 6 paires de la question sont validées (12 mots)
+      if (newMatched.length === currentQ.pairs.length) {
+        if (currentQuestionIndex + 1 < questions.length) {
+          saveActiveGameSession({
+            gameId: 'verb-master',
+            gameTitle: 'Verb Master',
+            levelKey: selectedLevelKey,
+            questionIndex: currentQuestionIndex + 1,
+            totalQuestions: questions.length,
+            bonusScore: updatedBonus,
+            timestamp: new Date().toISOString()
+          });
+
+          setTimeout(() => {
+            sfx.playWin();
+            setCurrentQuestionIndex((prev) => prev + 1);
+          }, 600);
+        } else {
+          // Niveau complété dans son intégralité !
+          clearStoredActiveGameSession();
+          setTimeout(() => {
+            sfx.playWin();
+            setIsLevelFinished(true);
+            onSuccess(); // +10 XP
+          }, 600);
+        }
+      }
     } else {
-      onError();
+      sfx.playWrong();
+      onError(); // -5 XP
+      setWrongPair({ en: enInf, fr });
+      setCombo(0);
+      setTimeout(() => {
+        setSelectedEn(null);
+        setSelectedFr(null);
+        setWrongPair(null);
+      }, 700);
     }
   };
+
+  const formatElapsedTime = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
+
+  // 1. ÉCRAN DE SÉLECTION DU NIVEAU (3 Niveaux • Boutons noirs et orange haute lisibilité)
+  if (!selectedLevelKey) {
+    return (
+      <div className="space-y-6 text-slate-100 select-none">
+        {/* Bannière de reprise si session trouvée */}
+        {savedSession && (
+          <div className="p-4 rounded-3xl bg-black border-2 border-emerald-400 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-3 animate-fadeIn">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-black border border-emerald-400 text-emerald-400 flex items-center justify-center font-bold shrink-0">
+                <span className="material-symbols-outlined text-2xl">history</span>
+              </div>
+              <div>
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-400">
+                  Partie en cours retrouvée
+                </span>
+                <h5 className="font-serif font-black text-white text-base">
+                  Reprendre à la Question {(savedSession.questionIndex || 0) + 1} / {savedSession.totalQuestions || 5}
+                </h5>
+                <p className="text-xs text-zinc-300">
+                  Niveau : <strong className="text-[#f2ca50]">{VERB_MASTER_LEVELS[savedSession.levelKey as VerbMasterLevelKey]?.label || 'Débutant'}</strong> &bull; Score : <strong className="text-emerald-400">+{savedSession.bonusScore || 0} pts</strong>
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  clearStoredActiveGameSession();
+                  setSavedSession(null);
+                }}
+                className="px-3.5 py-2 rounded-xl bg-black hover:bg-zinc-900 border border-zinc-700 text-zinc-400 text-xs font-semibold cursor-pointer"
+              >
+                Ignorer
+              </button>
+              <button
+                type="button"
+                onClick={resumeSavedSession}
+                className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-black hover:bg-[#f2ca50] text-[#f2ca50] hover:text-black border-2 border-[#f2ca50] font-black text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-95"
+              >
+                <span>Reprendre ma partie</span>
+                <span className="material-symbols-outlined text-sm font-bold">play_arrow</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="text-center space-y-1.5">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black border border-[#f2ca50] text-[#f2ca50] text-xs font-mono font-bold uppercase tracking-widest shadow-md shadow-black">
+            <span className="material-symbols-outlined text-sm">auto_fix_high</span>
+            Jeu N°4 • 5 Niveaux • 12 Mots par Question
+          </div>
+          <h3 className="text-2xl sm:text-3xl font-serif font-black text-white">
+            Verb Master — Association Verbes Éclair
+          </h3>
+          <p className="text-xs text-zinc-300 max-w-lg mx-auto font-sans leading-relaxed">
+            Associez chaque verbe anglais à sa traduction française le plus rapidement possible. Lettres en <strong className="text-[#f2ca50] font-mono">orange (#f2ca50)</strong> sur fond sombre pour une lisibilité parfaite.
+          </p>
+        </div>
+
+        {/* Sélecteur de chronomètre — Boutons noirs professionnels */}
+        <div className="flex items-center justify-center gap-2.5 p-1.5 rounded-2xl bg-black border-2 border-zinc-800 max-w-md mx-auto shadow-xl">
+          <button
+            type="button"
+            onClick={() => setTimerMode('limited')}
+            className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              timerMode === 'limited'
+                ? 'bg-black text-[#f2ca50] border-2 border-[#f2ca50] shadow-md shadow-[#f2ca50]/20'
+                : 'bg-black text-zinc-400 hover:text-white border border-zinc-900'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[16px]">timer</span>
+            <span>Temps Limité (Chrono)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setTimerMode('elapsed')}
+            className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              timerMode === 'elapsed'
+                ? 'bg-black text-[#f2ca50] border-2 border-[#f2ca50] shadow-md shadow-[#f2ca50]/20'
+                : 'bg-black text-zinc-400 hover:text-white border border-zinc-900'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[16px]">schedule</span>
+            <span>Temps Écoulé (Sans stress)</span>
+          </button>
+        </div>
+
+        {/* Grille des 5 Niveaux : Débutant, Intermédiaire, Expert, Expert Avancé, Master */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 pt-1">
+          {(Object.keys(VERB_MASTER_LEVELS) as VerbMasterLevelKey[]).map((key) => {
+            const lvl = VERB_MASTER_LEVELS[key];
+            const isLocked = playerLevel < lvl.requiredPlayerLevel;
+
+            return (
+              <button
+                key={key}
+                type="button"
+                disabled={isLocked}
+                onClick={() => {
+                  if (!isLocked) startLevel(key);
+                }}
+                className={`w-full text-left relative rounded-2xl p-5 transition-all border-2 flex flex-col justify-between overflow-hidden shadow-2xl ${
+                  isLocked
+                    ? 'bg-black/90 border-zinc-900 opacity-60 cursor-not-allowed filter grayscale'
+                    : 'bg-black hover:bg-[#0a0a0c] border-zinc-800 hover:border-[#f2ca50] hover:scale-[1.01] cursor-pointer group shadow-black'
+                }`}
+              >
+                {/* Overlay cadenas si verrouillé */}
+                {isLocked && (
+                  <div className="absolute inset-0 bg-black/90 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center p-3 text-center">
+                    <div className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-700 flex items-center justify-center text-zinc-300 mb-2 shadow">
+                      <span className="material-symbols-outlined text-xl">lock</span>
+                    </div>
+                    <span className="text-xs font-mono font-bold text-zinc-200">
+                      Niveau {lvl.requiredPlayerLevel} requis
+                    </span>
+                    <span className="text-[10px] text-[#f2ca50] mt-1 font-semibold">
+                      Atteindre niveau {lvl.requiredPlayerLevel} pour débloquer
+                    </span>
+                  </div>
+                )}
+
+                <div>
+                  <div className="flex items-center justify-between mb-2.5">
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold border border-[#f2ca50]/50 bg-black text-[#f2ca50] shadow-sm">
+                      {lvl.label}
+                    </span>
+                    <span className="text-xs font-mono text-[#f2ca50] font-bold">
+                      +{lvl.xpReward} XP
+                    </span>
+                  </div>
+
+                  <h4 className="font-serif font-black text-lg text-white group-hover:text-[#f2ca50] transition-colors">
+                    {lvl.questionsCount} Questions • 12 Mots
+                  </h4>
+                  <p className="text-xs text-zinc-300 mt-1.5 font-sans leading-relaxed">
+                    {lvl.description}
+                  </p>
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-zinc-800 flex items-center justify-between text-xs font-mono">
+                  <span className="text-zinc-400">Total : {lvl.questionsCount * 12} mots</span>
+                  <div className="px-3 py-1 rounded-xl bg-black border border-[#f2ca50] text-[#f2ca50] group-hover:bg-[#f2ca50] group-hover:text-black font-bold flex items-center gap-1 transition-all shadow-sm">
+                    <span>Jouer</span>
+                    <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // 2. ÉCRAN DE VICTOIRE DU NIVEAU
+  if (isLevelFinished) {
+    const config = VERB_MASTER_LEVELS[selectedLevelKey];
+    const totalWords = config.questionsCount * 12;
+
+    return (
+      <div className="text-center p-8 rounded-2xl bg-black border-2 border-[#f2ca50] shadow-2xl space-y-5 animate-fadeIn max-w-xl mx-auto select-none">
+        <div className="w-20 h-20 mx-auto rounded-full bg-black border-2 border-[#f2ca50] p-1 flex items-center justify-center shadow-xl shadow-[#f2ca50]/30 animate-bounce">
+          <span className="text-4xl">👑</span>
+        </div>
+        <div>
+          <span className="text-xs font-mono uppercase tracking-widest text-[#f2ca50] font-bold">
+            Palier Réussi avec Brio !
+          </span>
+          <h3 className="text-2xl sm:text-3xl font-serif font-black text-white mt-1">
+            Niveau {config.label} Terminé
+          </h3>
+          <p className="text-sm text-zinc-300 mt-2">
+            Tu as brillamment associé l'intégralité des <strong>{config.questionsCount} questions</strong> (soit {totalWords} mots au total) !
+          </p>
+        </div>
+
+        <div className="p-3 bg-black rounded-xl border border-zinc-800 inline-flex items-center gap-4 text-xs font-mono">
+          <span className="text-[#f2ca50]">🔥 Combo Max : x{maxCombo}</span>
+          <span className="text-white">⏱️ {timerMode === 'limited' ? 'Sous Chrono' : `Temps : ${formatElapsedTime(elapsedTime)}`}</span>
+          <span className="text-emerald-400 font-bold">+{config.xpReward} XP</span>
+        </div>
+
+        <div className="flex items-center justify-center gap-3 pt-2">
+          <button
+            type="button"
+            onClick={() => setSelectedLevelKey(null)}
+            className="px-5 py-2.5 rounded-xl bg-black hover:bg-[#f2ca50] text-[#f2ca50] hover:text-black border-2 border-[#f2ca50] font-bold text-xs uppercase tracking-wider shadow-lg shadow-[#f2ca50]/20 transition-all active:scale-95 cursor-pointer"
+          >
+            Choisir un autre niveau
+          </button>
+          <button
+            type="button"
+            onClick={() => startLevel(selectedLevelKey)}
+            className="px-4 py-2.5 rounded-xl bg-black hover:bg-zinc-900 text-white hover:text-[#f2ca50] border-2 border-zinc-700 hover:border-[#f2ca50] font-semibold text-xs transition-all active:scale-95 cursor-pointer"
+          >
+            Rejouer ce niveau
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // 3. ÉCRAN DE JEU EN COURS (Association de 12 mots : 6 verbes anglais 🇬🇧 à gauche + 6 traductions 🇫🇷 à droite)
+  const currentQ = questions[currentQuestionIndex];
+  const config = VERB_MASTER_LEVELS[selectedLevelKey];
+
+  if (!currentQ) {
+    return <div className="text-center p-8 text-zinc-400">Chargement de la question...</div>;
+  }
 
   return (
-    <div className="space-y-4 text-center">
-      <div className="p-4 bg-[#0c1322] rounded-2xl border border-rose-500/30">
-        <span className="text-[10px] text-rose-400 font-mono uppercase block">INFINITIF DONNÉ</span>
-        <h4 className="font-serif font-black text-2xl text-white mt-1">
-          {item.infinitive}
-        </h4>
-        <span className="text-xs text-[#99907c]">({item.translation})</span>
+    <div className="space-y-5 max-w-2xl mx-auto text-center select-none">
+      {/* Barre d'en-tête de manche */}
+      <div className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-black border-2 border-zinc-800 text-xs font-mono shadow-lg">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setSelectedLevelKey(null)}
+            className="p-1.5 rounded-xl bg-black hover:bg-zinc-900 border border-zinc-800 hover:border-[#f2ca50] text-[#f2ca50] transition-colors cursor-pointer"
+            title="Revenir au choix des niveaux"
+          >
+            <span className="material-symbols-outlined text-sm">arrow_back</span>
+          </button>
+          <span className="font-bold text-[#f2ca50]">
+            Question {currentQuestionIndex + 1} / {config.questionsCount}
+          </span>
+          <span className="text-zinc-600">•</span>
+          <span className="text-zinc-300 font-semibold">
+            Paires {matched.length} / 6 (12 mots)
+          </span>
+        </div>
+
+        {/* Chronomètre & Combo */}
+        <div className="flex items-center gap-2">
+          {combo > 1 && (
+            <span className="px-2 py-0.5 rounded-lg bg-black text-[#f2ca50] border border-[#f2ca50] font-bold text-xs animate-bounce">
+              🔥 x{combo}
+            </span>
+          )}
+
+          {timerMode === 'limited' ? (
+            <div className={`flex items-center gap-1 px-3 py-1 rounded-full font-mono font-bold ${
+              timeLeft <= 10
+                ? 'bg-rose-950 text-rose-300 border-2 border-rose-500 animate-pulse'
+                : 'bg-black text-[#f2ca50] border-2 border-[#f2ca50]'
+            }`}>
+              <span className="material-symbols-outlined text-xs">timer</span>
+              <span>{timeLeft}s</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-black text-[#f2ca50] border-2 border-[#f2ca50] font-mono font-bold">
+              <span className="material-symbols-outlined text-xs">schedule</span>
+              <span>{formatElapsedTime(elapsedTime)}</span>
+            </div>
+          )}
+        </div>
       </div>
 
-      {step === 'preterite' ? (
-        <div className="space-y-2">
-          <p className="text-xs text-[#f2ca50] font-bold">Étape 1 : Choisis le Prétérit</p>
-          <div className="grid grid-cols-3 gap-2">
-            {item.preteriteOptions.map((opt) => (
-              <button
-                key={opt}
-                type="button"
-                onClick={() => handlePreteriteChoice(opt)}
-                className="py-3 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] border border-[#232a3a] font-bold text-xs text-white"
-              >
-                {opt}
-              </button>
-            ))}
+      {/* Barre de progression des 6 paires de la question */}
+      <div className="w-full bg-black h-2.5 rounded-full overflow-hidden border border-zinc-800">
+        <div
+          className="h-full bg-[#f2ca50] transition-all duration-300 shadow-[0_0_10px_#f2ca50]"
+          style={{ width: `${(matched.length / 6) * 100}%` }}
+        />
+      </div>
+
+      {/* Cartel Trio de Conjugaison (Infinitif • Prétérit • Participe Passé) — Haute Lisibilité */}
+      <div className="p-4 rounded-2xl bg-black border-2 border-[#f2ca50]/70 shadow-2xl text-left">
+        <div className="flex items-center justify-between mb-2">
+          <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-black border border-[#f2ca50] text-[#f2ca50] text-[11px] font-mono font-bold uppercase tracking-wider">
+            <span className="material-symbols-outlined text-[13px]">school</span>
+            Formes du Verbe Actif
+          </span>
+          {activeVerbInfo && speak && (
+            <button
+              type="button"
+              onClick={() => speak(`${activeVerbInfo.infinitive}, ${activeVerbInfo.preterite}, ${activeVerbInfo.pastParticiple}`)}
+              className="p-1.5 rounded-xl bg-black hover:bg-zinc-900 border border-[#f2ca50] text-[#f2ca50] transition-colors cursor-pointer"
+              title="Écouter les 3 formes verbales en anglais"
+            >
+              <span className="material-symbols-outlined text-base">volume_up</span>
+            </button>
+          )}
+        </div>
+
+        {activeVerbInfo ? (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-center py-1">
+            <div className="p-2.5 rounded-xl bg-black border-2 border-[#f2ca50] shadow-md">
+              <span className="text-[10px] text-zinc-300 font-mono font-bold uppercase block mb-0.5">1. Infinitif</span>
+              <strong className="text-xl font-mono font-black text-[#f2ca50] tracking-wide">
+                {activeVerbInfo.infinitive}
+              </strong>
+            </div>
+            <div className="p-2.5 rounded-xl bg-black border-2 border-amber-400 shadow-md">
+              <span className="text-[10px] text-zinc-300 font-mono font-bold uppercase block mb-0.5">2. Prétérit</span>
+              <strong className="text-xl font-mono font-black text-amber-300 tracking-wide">
+                {activeVerbInfo.preterite}
+              </strong>
+            </div>
+            <div className="p-2.5 rounded-xl bg-black border-2 border-emerald-400 shadow-md">
+              <span className="text-[10px] text-zinc-300 font-mono font-bold uppercase block mb-0.5">3. Participe Passé</span>
+              <strong className="text-xl font-mono font-black text-emerald-300 tracking-wide">
+                {activeVerbInfo.pastParticiple}
+              </strong>
+            </div>
+          </div>
+        ) : (
+          <div className="py-2.5 text-center text-xs text-zinc-300 font-medium">
+            Cliquez sur un verbe anglais pour afficher ses 3 formes complètes.
+          </div>
+        )}
+      </div>
+
+      {/* Grille des 12 MOTS : 6 verbes anglais à gauche 🇬🇧 + 6 traductions à droite 🇫🇷 */}
+      <div className="space-y-2">
+        <div className="text-xs font-mono uppercase tracking-wider text-[#f2ca50] font-bold text-left flex items-center justify-between">
+          <span>Associez chaque verbe anglais à son équivalent français :</span>
+          <span className="text-zinc-300 text-[11px] font-bold">{matched.length}/6 paires (12 mots)</span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 p-3.5 bg-black rounded-2xl border-2 border-zinc-800 shadow-2xl">
+          {/* Colonne Gauche : 6 Verbes Anglais (🇬🇧) — LETTRES ORANGE #f2ca50 SUR FOND NOIR */}
+          <div className="space-y-2">
+            <span className="text-[11px] font-mono font-bold text-[#f2ca50] uppercase tracking-widest block text-left">
+              🇬🇧 Verbes Anglais
+            </span>
+
+            {shuffledEn.map((verb) => {
+              const isMatched = matched.includes(verb.infinitive);
+              const isSelected = selectedEn === verb.infinitive;
+              const isWrong = wrongPair && wrongPair.en === verb.infinitive;
+
+              return (
+                <button
+                  key={verb.infinitive}
+                  type="button"
+                  disabled={isMatched}
+                  onClick={() => handleEnClick(verb)}
+                  className={`w-full py-3.5 px-3 rounded-xl transition-all border-2 text-left flex items-center justify-between font-mono font-black text-base sm:text-lg cursor-pointer ${
+                    isMatched
+                      ? 'bg-[#064e3b] border-2 border-[#34d399] text-[#34d399] opacity-80 cursor-default shadow-sm'
+                      : isWrong
+                      ? 'bg-[#7f1d1d] border-2 border-[#ef4444] text-[#ffffff] animate-shake'
+                      : isSelected
+                      ? 'bg-[#f2ca50] border-2 border-white text-black ring-4 ring-[#ffe088]/80 shadow-[0_0_20px_rgba(242,202,80,0.8)] scale-[1.03]'
+                      : 'bg-black hover:bg-zinc-900 border-2 border-[#f2ca50] text-[#f2ca50] hover:text-[#ffe088] shadow-md shadow-black'
+                  }`}
+                >
+                  <span className="truncate">{verb.infinitive}</span>
+                  {isMatched ? (
+                    <span className="material-symbols-outlined text-base text-[#34d399]">check_circle</span>
+                  ) : (
+                    <span className="material-symbols-outlined text-xs text-[#f2ca50]/80">touch_app</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Colonne Droite : 6 Traductions Françaises (🇫🇷) — LETTRES CYAN #38bdf8 SUR FOND SOMBRE */}
+          <div className="space-y-2">
+            <span className="text-[11px] font-mono font-bold text-[#38bdf8] uppercase tracking-widest block text-left">
+              🇫🇷 Traductions Françaises
+            </span>
+
+            {shuffledFr.map((verb) => {
+              const isMatched = matched.includes(verb.infinitive);
+              const isSelected = selectedFr === verb.translation;
+              const isWrong = wrongPair && wrongPair.fr === verb.translation;
+
+              return (
+                <button
+                  key={verb.infinitive}
+                  type="button"
+                  disabled={isMatched}
+                  onClick={() => handleFrClick(verb.translation)}
+                  className={`w-full py-3.5 px-3 rounded-xl transition-all border-2 text-left flex items-center justify-between font-bold text-sm sm:text-base cursor-pointer ${
+                    isMatched
+                      ? 'bg-[#064e3b] border-2 border-[#34d399] text-[#34d399] opacity-80 cursor-default shadow-sm'
+                      : isWrong
+                      ? 'bg-[#7f1d1d] border-2 border-[#ef4444] text-[#ffffff] animate-shake'
+                      : isSelected
+                      ? 'bg-[#38bdf8] border-2 border-white text-black ring-4 ring-[#38bdf8]/80 shadow-[0_0_20px_rgba(56,189,248,0.8)] scale-[1.03]'
+                      : 'bg-[#081226] hover:bg-[#0f1f3d] border-2 border-[#38bdf8] text-[#38bdf8] hover:text-white shadow-md shadow-black'
+                  }`}
+                >
+                  <span className="truncate">{verb.translation}</span>
+                  {isMatched && (
+                    <span className="material-symbols-outlined text-base text-[#34d399]">check_circle</span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
-      ) : (
-        <div className="space-y-2">
-          <p className="text-xs text-emerald-400 font-bold">
-            ✓ Prétérit : {preteriteSelected} | Étape 2 : Choisis le Participe Passé
-          </p>
-          <div className="grid grid-cols-3 gap-2">
-            {item.participleOptions.map((opt) => (
-              <button
-                key={opt}
-                type="button"
-                onClick={() => handleParticipleChoice(opt)}
-                className="py-3 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] border border-[#232a3a] font-bold text-xs text-white"
-              >
-                {opt}
-              </button>
-            ))}
-          </div>
+      </div>
+
+      {/* Animation flash de succès pour la paire validée */}
+      {pairSuccessAnim && (
+        <div className="p-2.5 rounded-xl bg-black border-2 border-emerald-500 text-emerald-400 font-bold text-xs font-mono animate-fadeIn flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40">
+          <span>✨</span>
+          <span>Paire validée : {pairSuccessAnim} ! Mot suivant...</span>
         </div>
       )}
     </div>
   );
 };
 
-// 5. ASTRO HANGMAN
-const AstroHangmanGame: React.FC<{ onSuccess: () => void; onError: () => void }> = ({ onSuccess, onError }) => {
-  const item = HANGMAN_WORDS[0]; // PLANET
-  const [guessed, setGuessed] = useState<string[]>([]);
+// 5. ASTRO HANGMAN (Pendu Cosmique • 5 Niveaux • 12 Mots par Question)
+interface AstroHangmanGameProps {
+  onSuccess: () => void;
+  onError: () => void;
+  speak?: (text: string) => void;
+  playerLevel: number;
+}
+
+const AstroHangmanGame: React.FC<AstroHangmanGameProps> = ({ onSuccess, onError, speak, playerLevel }) => {
+  // Sélection du niveau et mode de chronomètre
+  const [selectedLevelKey, setSelectedLevelKey] = useState<AstroHangmanLevelKey | null>(null);
+  const [timerMode, setTimerMode] = useState<'limited' | 'elapsed'>('limited');
+
+  // Reprise de session active en cas de rafraîchissement
+  const [savedSession, setSavedSession] = useState<any | null>(() => {
+    const s = getStoredActiveGameSession();
+    return s && s.gameId === 'astro-hangman' ? s : null;
+  });
+
+  // Questions du niveau actif (Chaque question = 12 MOTS)
+  const [questions, setQuestions] = useState<AstroHangmanQuestion[]>([]);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [currentWordIndex, setCurrentWordIndex] = useState(0); // 0 à 11
+
+  // État du mot en cours
+  const [guessedLetters, setGuessedLetters] = useState<string[]>([]);
+  const [mistakes, setMistakes] = useState(0); // Maximum 6 erreurs permises par mot
+  const maxMistakes = 6;
+  const [wordSuccessAnim, setWordSuccessAnim] = useState(false);
+  const [wordFailedAnim, setWordFailedAnim] = useState(false);
+
+  // Progression & Chronomètre
+  const [combo, setCombo] = useState(0);
+  const [maxCombo, setMaxCombo] = useState(0);
+  const [bonusScore, setBonusScore] = useState(0);
+  const [isLevelFinished, setIsLevelFinished] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(55);
+  const [elapsedTime, setElapsedTime] = useState(0);
+
+  // Clavier virtuel (A-Z)
   const keyboard = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
-  const handleGuess = (letter: string) => {
+  // Démarrer un niveau (génération aléatoire non-répétitive)
+  const startLevel = (levelKey: AstroHangmanLevelKey) => {
     sfx.playPop();
-    const next = [...guessed, letter];
-    setGuessed(next);
-    if (!item.word.includes(letter)) {
-      onError();
+    const config = ASTRO_HANGMAN_LEVELS[levelKey];
+    const generated = generateAstroHangmanQuestions(levelKey);
+
+    setSelectedLevelKey(levelKey);
+    setQuestions(generated);
+    setCurrentQuestionIndex(0);
+    setCurrentWordIndex(0);
+    setGuessedLetters([]);
+    setMistakes(0);
+    setBonusScore(0);
+    setCombo(0);
+    setMaxCombo(0);
+    setIsLevelFinished(false);
+    setTimeLeft(config.timePerWordLimited);
+    setElapsedTime(0);
+    setWordSuccessAnim(false);
+    setWordFailedAnim(false);
+
+    saveActiveGameSession({
+      gameId: 'astro-hangman',
+      gameTitle: 'Astro Hangman',
+      levelKey,
+      questionIndex: 0,
+      totalQuestions: generated.length,
+      bonusScore: 0,
+      timestamp: new Date().toISOString()
+    });
+  };
+
+  // Reprendre une partie sauvegardée
+  const resumeSavedSession = () => {
+    if (!savedSession) return;
+    sfx.playPop();
+    const levelKey = (savedSession.levelKey || 'debutant') as AstroHangmanLevelKey;
+    const config = ASTRO_HANGMAN_LEVELS[levelKey] || ASTRO_HANGMAN_LEVELS.debutant;
+    const generated = generateAstroHangmanQuestions(levelKey);
+
+    setSelectedLevelKey(levelKey);
+    setQuestions(generated);
+    const targetQ = Math.min(generated.length - 1, Math.max(0, Number(savedSession.questionIndex) || 0));
+    setCurrentQuestionIndex(targetQ);
+    setCurrentWordIndex(0);
+    setGuessedLetters([]);
+    setMistakes(0);
+    setBonusScore(Number(savedSession.bonusScore) || 0);
+    setCombo(0);
+    setMaxCombo(0);
+    setIsLevelFinished(false);
+    setTimeLeft(config.timePerWordLimited);
+    setSavedSession(null);
+  };
+
+  // Configuration du mot courant lors des changements d'index
+  useEffect(() => {
+    if (!selectedLevelKey || questions.length === 0 || isLevelFinished) return;
+    const currentQ = questions[currentQuestionIndex];
+    if (!currentQ) return;
+    const currentW = currentQ.words[currentWordIndex];
+    if (!currentW) return;
+
+    setGuessedLetters([]);
+    setMistakes(0);
+    setWordSuccessAnim(false);
+    setWordFailedAnim(false);
+    const config = ASTRO_HANGMAN_LEVELS[selectedLevelKey];
+    setTimeLeft(config.timePerWordLimited);
+  }, [selectedLevelKey, questions, currentQuestionIndex, currentWordIndex, isLevelFinished]);
+
+  // Chronomètre de mot
+  useEffect(() => {
+    if (!selectedLevelKey || isLevelFinished || wordSuccessAnim || wordFailedAnim) return;
+
+    const interval = setInterval(() => {
+      if (timerMode === 'limited') {
+        setTimeLeft((prev) => {
+          if (prev <= 1) {
+            handleTimeExpired();
+            const config = ASTRO_HANGMAN_LEVELS[selectedLevelKey];
+            return config.timePerWordLimited;
+          }
+          return prev - 1;
+        });
+      } else {
+        setElapsedTime((prev) => prev + 1);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [selectedLevelKey, timerMode, isLevelFinished, wordSuccessAnim, wordFailedAnim, currentQuestionIndex, currentWordIndex]);
+
+  // Expiration du temps limite
+  const handleTimeExpired = () => {
+    sfx.playWrong();
+    onError();
+    handleWordFailed();
+  };
+
+  // Échec d'un mot (oxygène épuisé ou temps écoulé)
+  const handleWordFailed = () => {
+    const currentQ = questions[currentQuestionIndex];
+    const currentW = currentQ?.words[currentWordIndex];
+    if (!currentW) return;
+
+    setWordFailedAnim(true);
+    setCombo(0);
+    if (speak) speak(currentW.word);
+
+    setTimeout(() => {
+      moveToNextWord();
+    }, 1200);
+  };
+
+  // Passage au mot suivant ou à la question suivante (12 mots par question)
+  const moveToNextWord = () => {
+    const config = ASTRO_HANGMAN_LEVELS[selectedLevelKey || 'debutant'];
+    // Si c'est le 12e mot de la question (index 11)
+    if (currentWordIndex >= 11) {
+      onSuccess(); // Gagne 10 XP pour la question validée
+      // Si c'est la dernière question du niveau
+      if (currentQuestionIndex >= questions.length - 1) {
+        clearStoredActiveGameSession();
+        setIsLevelFinished(true);
+      } else {
+        const nextQ = currentQuestionIndex + 1;
+        setCurrentQuestionIndex(nextQ);
+        setCurrentWordIndex(0);
+        saveActiveGameSession({
+          gameId: 'astro-hangman',
+          gameTitle: 'Astro Hangman',
+          levelKey: selectedLevelKey,
+          questionIndex: nextQ,
+          totalQuestions: questions.length,
+          bonusScore,
+          timestamp: new Date().toISOString()
+        });
+      }
     } else {
-      const allFound = item.word.split('').every((l) => next.includes(l));
-      if (allFound) {
-        sfx.playCorrect();
-        setTimeout(onSuccess, 400);
+      setCurrentWordIndex((w) => w + 1);
+    }
+  };
+
+  // Proposition d'une lettre (via clic souris ou touche clavier)
+  const handleGuess = (letter: string) => {
+    const char = letter.toUpperCase();
+    if (guessedLetters.includes(char) || wordSuccessAnim || wordFailedAnim) return;
+
+    sfx.playPop();
+    const currentQ = questions[currentQuestionIndex];
+    const currentW = currentQ?.words[currentWordIndex];
+    if (!currentW) return;
+
+    const targetClean = currentW.word.toUpperCase().replace(/[^A-Z]/g, '');
+    const nextGuessed = [...guessedLetters, char];
+    setGuessedLetters(nextGuessed);
+
+    if (targetClean.includes(char)) {
+      // Lettre présente
+      sfx.playCorrect();
+      // Vérifier si toutes les lettres uniques ont été trouvées
+      const isComplete = targetClean.split('').every((l) => nextGuessed.includes(l));
+      if (isComplete) {
+        sfx.playWin();
+        const nextCombo = combo + 1;
+        setCombo(nextCombo);
+        if (nextCombo > maxCombo) setMaxCombo(nextCombo);
+        setBonusScore((b) => b + 15 * nextCombo);
+        setWordSuccessAnim(true);
+
+        if (speak) speak(currentW.word);
+
+        setTimeout(() => {
+          moveToNextWord();
+        }, 800);
+      }
+    } else {
+      // Lettre absente : perte d'une unité d'oxygène
+      sfx.playWrong();
+      const nextMistakes = mistakes + 1;
+      setMistakes(nextMistakes);
+
+      if (nextMistakes >= maxMistakes) {
+        onError(); // Perte d'un cœur
+        handleWordFailed();
       }
     }
   };
 
-  return (
-    <div className="space-y-4 text-center">
-      <div className="p-3 bg-[#0c1322] rounded-xl border border-indigo-500/20">
-        <span className="text-[10px] text-indigo-400 font-mono block">INDICE DE MISSION</span>
-        <p className="text-xs text-[#dce2f8]">{item.hint}</p>
-      </div>
+  // Gestion du clavier physique (Touches A-Z)
+  useEffect(() => {
+    if (!selectedLevelKey || isLevelFinished) return;
 
-      <div className="flex items-center justify-center gap-2 py-3">
-        {item.word.split('').map((char, idx) => (
-          <div
-            key={idx}
-            className="w-9 h-11 border-b-2 border-[#f2ca50] flex items-center justify-center font-mono font-black text-xl text-white"
-          >
-            {guessed.includes(char) ? char : ''}
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const key = e.key.toUpperCase();
+      if (/^[A-Z]$/.test(key)) {
+        handleGuess(key);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedLevelKey, guessedLetters, isLevelFinished, wordSuccessAnim, wordFailedAnim, currentQuestionIndex, currentWordIndex]);
+
+  // Indice cosmique : révèle la première lettre non trouvée
+  const handleHint = () => {
+    sfx.playPop();
+    const currentQ = questions[currentQuestionIndex];
+    const currentW = currentQ?.words[currentWordIndex];
+    if (!currentW) return;
+
+    const unrevealed = currentW.word.toUpperCase().split('').find((l) => /^[A-Z]$/.test(l) && !guessedLetters.includes(l));
+    if (unrevealed) {
+      handleGuess(unrevealed);
+    }
+  };
+
+  // Formatage du temps
+  const formatTime = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
+
+  // 1. ÉCRAN DE SÉLECTION DU NIVEAU (5 Niveaux avec boutons professionnels noirs)
+  if (!selectedLevelKey) {
+    return (
+      <div className="space-y-6 text-slate-100 select-none">
+        {/* En-tête du jeu */}
+        <div className="text-center space-y-1.5">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black border border-[#f2ca50] text-[#f2ca50] text-xs font-mono font-bold uppercase tracking-widest shadow-md shadow-black">
+            <span className="material-symbols-outlined text-sm">rocket_launch</span>
+            Pendu Cosmique • 5 Niveaux • 12 Mots par Question
           </div>
-        ))}
+          <h3 className="text-2xl sm:text-3xl font-serif font-black text-white">
+            Astro Hangman — Mission Spatiale
+          </h3>
+          <p className="text-xs text-zinc-300 max-w-lg mx-auto font-sans leading-relaxed">
+            Associez chaque mot anglais à sa traduction française. Visualisation ultra-nette avec lettres en <strong className="text-[#f2ca50] font-mono">orange (#f2ca50)</strong> sur fond sombre, sans aucun reflet blanc.
+          </p>
+        </div>
+
+        {/* Bannière de reprise de session */}
+        {savedSession && (
+          <div className="p-4 rounded-3xl bg-black border-2 border-emerald-400 text-left flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xl">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-black border border-emerald-400 text-emerald-400 flex items-center justify-center font-bold shrink-0">
+                <span className="material-symbols-outlined text-2xl">history</span>
+              </div>
+              <div>
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-400">
+                  Mission en cours retrouvée
+                </span>
+                <h5 className="font-serif font-bold text-white text-base">
+                  Reprendre à la Question {(savedSession.questionIndex || 0) + 1} / {savedSession.totalQuestions || 5}
+                </h5>
+                <p className="text-xs text-zinc-300">
+                  Niveau : <strong className="text-[#f2ca50]">{ASTRO_HANGMAN_LEVELS[savedSession.levelKey as AstroHangmanLevelKey]?.label || 'Débutant'}</strong> &bull; Score : <strong className="text-emerald-400">+{savedSession.bonusScore || 0} pts</strong>
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={resumeSavedSession}
+                className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-black border-2 border-emerald-400 text-emerald-400 hover:bg-emerald-400 hover:text-black font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-md"
+              >
+                Reprendre
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  clearStoredActiveGameSession();
+                  setSavedSession(null);
+                }}
+                className="p-2 rounded-xl bg-black hover:bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                title="Ignorer la sauvegarde"
+              >
+                <span className="material-symbols-outlined text-sm">delete</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Sélecteur de mode de temps */}
+        <div className="flex items-center justify-center gap-2.5 p-1.5 rounded-2xl bg-black border-2 border-zinc-800 max-w-md mx-auto shadow-xl shadow-black/80">
+          <button
+            type="button"
+            onClick={() => setTimerMode('limited')}
+            className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              timerMode === 'limited'
+                ? 'bg-black text-[#f2ca50] border-2 border-[#f2ca50] shadow-md shadow-[#f2ca50]/20'
+                : 'bg-black text-zinc-400 hover:text-white border border-zinc-900 hover:border-zinc-700'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[16px]">timer</span>
+            <span>Temps Limité (Chrono)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setTimerMode('elapsed')}
+            className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              timerMode === 'elapsed'
+                ? 'bg-black text-[#f2ca50] border-2 border-[#f2ca50] shadow-md shadow-[#f2ca50]/20'
+                : 'bg-black text-zinc-400 hover:text-white border border-zinc-900 hover:border-zinc-700'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[16px]">schedule</span>
+            <span>Temps Écoulé (Sans stress)</span>
+          </button>
+        </div>
+
+        {/* Grille des 5 Niveaux avec boutons professionnels noirs */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 pt-1">
+          {(Object.keys(ASTRO_HANGMAN_LEVELS) as AstroHangmanLevelKey[]).map((key) => {
+            const lvl = ASTRO_HANGMAN_LEVELS[key];
+            const isLocked = playerLevel < lvl.requiredPlayerLevel;
+
+            return (
+              <button
+                key={key}
+                type="button"
+                disabled={isLocked}
+                onClick={() => {
+                  if (!isLocked) startLevel(key);
+                }}
+                className={`w-full text-left relative rounded-2xl p-5 transition-all border-2 flex flex-col justify-between overflow-hidden shadow-2xl ${
+                  isLocked
+                    ? 'bg-black/90 border-zinc-900 opacity-60 cursor-not-allowed filter grayscale'
+                    : 'bg-black hover:bg-[#0a0a0c] border-zinc-800 hover:border-[#f2ca50] hover:scale-[1.01] cursor-pointer group shadow-black'
+                }`}
+              >
+                {/* Overlay cadenas si verrouillé */}
+                {isLocked && (
+                  <div className="absolute inset-0 bg-black/90 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center p-3 text-center">
+                    <div className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-700 flex items-center justify-center text-zinc-300 mb-2 shadow">
+                      <span className="material-symbols-outlined text-xl">lock</span>
+                    </div>
+                    <span className="text-xs font-mono font-bold text-zinc-200">
+                      Niveau {lvl.requiredPlayerLevel} requis
+                    </span>
+                    <span className="text-[10px] text-[#f2ca50] mt-1 font-semibold">
+                      Atteindre niveau {lvl.requiredPlayerLevel} pour débloquer
+                    </span>
+                  </div>
+                )}
+
+                <div>
+                  <div className="flex items-center justify-between mb-2.5">
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold border border-[#f2ca50]/50 bg-black text-[#f2ca50] shadow-sm">
+                      {lvl.label}
+                    </span>
+                    <span className="text-xs font-mono text-[#f2ca50] font-bold">
+                      +{lvl.xpReward} XP
+                    </span>
+                  </div>
+
+                  <h4 className="font-serif font-black text-lg text-white mb-1 group-hover:text-[#f2ca50] transition-colors">
+                    {lvl.questionsCount} Questions • 12 Mots
+                  </h4>
+                  <p className="text-xs text-zinc-400 font-sans leading-relaxed line-clamp-2">
+                    {lvl.description}
+                  </p>
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-zinc-800 flex items-center justify-between text-xs font-mono">
+                  <span className="text-zinc-400">Total : {lvl.questionsCount * 12} mots</span>
+                  <div className="px-3 py-1 rounded-xl bg-black border border-[#f2ca50] text-[#f2ca50] group-hover:bg-[#f2ca50] group-hover:text-black font-bold flex items-center gap-1 transition-all shadow-sm">
+                    <span>Jouer</span>
+                    <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // 2. ÉCRAN DE VICTOIRE DU NIVEAU
+  if (isLevelFinished) {
+    const config = ASTRO_HANGMAN_LEVELS[selectedLevelKey];
+    const totalWords = config.questionsCount * 12;
+
+    return (
+      <div className="text-center p-8 rounded-2xl bg-black border-2 border-[#f2ca50] shadow-2xl space-y-5 animate-fadeIn max-w-xl mx-auto select-none">
+        <div className="w-20 h-20 mx-auto rounded-full bg-black border-2 border-[#f2ca50] p-1 flex items-center justify-center shadow-xl shadow-[#f2ca50]/30 animate-bounce">
+          <span className="text-4xl">🚀</span>
+        </div>
+        <div>
+          <span className="text-xs font-mono uppercase tracking-widest text-[#f2ca50] font-bold">
+            Mission Spatiale Accomplie !
+          </span>
+          <h3 className="text-2xl sm:text-3xl font-serif font-black text-white mt-1">
+            Niveau {config.label} Terminé
+          </h3>
+          <p className="text-sm text-zinc-300 mt-2">
+            Tu as brillamment résolu l'ensemble des <strong>{config.questionsCount} questions</strong> (soit {totalWords} mots au total) sans rupture d'oxygène !
+          </p>
+        </div>
+
+        <div className="p-3 bg-black rounded-xl border border-zinc-800 inline-flex items-center gap-4 text-xs font-mono">
+          <span className="text-[#f2ca50]">🔥 Combo Max : x{maxCombo}</span>
+          <span className="text-white">⏱️ {timerMode === 'limited' ? 'Mode Chrono' : `Temps : ${formatTime(elapsedTime)}`}</span>
+          <span className="text-emerald-400 font-bold">+{config.xpReward} XP</span>
+        </div>
+
+        <div className="flex items-center justify-center gap-3 pt-2">
+          <button
+            type="button"
+            onClick={() => setSelectedLevelKey(null)}
+            className="px-5 py-2.5 rounded-xl bg-black hover:bg-[#f2ca50] text-[#f2ca50] hover:text-black border-2 border-[#f2ca50] font-bold text-xs uppercase tracking-wider shadow-lg shadow-[#f2ca50]/20 transition-all active:scale-95 cursor-pointer"
+          >
+            Choisir un autre niveau
+          </button>
+          <button
+            type="button"
+            onClick={() => startLevel(selectedLevelKey)}
+            className="px-4 py-2.5 rounded-xl bg-black hover:bg-zinc-900 text-white hover:text-[#f2ca50] border-2 border-zinc-700 hover:border-[#f2ca50] font-semibold text-xs transition-all active:scale-95 cursor-pointer"
+          >
+            Rejouer ce niveau
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // 3. ÉCRAN DE JEU EN COURS (Pendu Cosmique • 12 Mots par Question)
+  const currentQ = questions[currentQuestionIndex];
+  const config = ASTRO_HANGMAN_LEVELS[selectedLevelKey];
+  const currentW = currentQ?.words[currentWordIndex];
+
+  if (!currentQ || !currentW) {
+    return <div className="text-center p-8 text-zinc-400">Initialisation de la mission spatiale...</div>;
+  }
+
+  const targetChars = currentW.word.toUpperCase().split('');
+  const remainingOxygen = Math.max(0, maxMistakes - mistakes);
+
+  return (
+    <div className="space-y-4 max-w-2xl mx-auto text-center select-none">
+      {/* Barre d'en-tête de manche */}
+      <div className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-black border-2 border-zinc-800 text-xs font-mono shadow-lg">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setSelectedLevelKey(null)}
+            className="p-1.5 rounded-xl bg-black hover:bg-zinc-900 border border-zinc-800 hover:border-[#f2ca50] text-[#f2ca50] transition-colors cursor-pointer"
+            title="Revenir au choix des niveaux"
+          >
+            <span className="material-symbols-outlined text-sm">arrow_back</span>
+          </button>
+          <span className="font-bold text-[#f2ca50]">
+            Question {currentQuestionIndex + 1} / {config.questionsCount}
+          </span>
+          <span className="text-zinc-600">•</span>
+          <span className="text-zinc-300 font-semibold">
+            Mot {currentWordIndex + 1} / 12
+          </span>
+        </div>
+
+        {/* Combo & Chrono */}
+        <div className="flex items-center gap-2">
+          {combo > 1 && (
+            <span className="px-2 py-0.5 rounded-lg bg-black text-[#f2ca50] border border-[#f2ca50] font-bold text-xs animate-bounce">
+              🔥 x{combo}
+            </span>
+          )}
+
+          {timerMode === 'limited' ? (
+            <div className={`flex items-center gap-1 px-3 py-1 rounded-full font-mono font-bold ${
+              timeLeft <= 10
+                ? 'bg-rose-950 text-rose-300 border-2 border-rose-500 animate-pulse'
+                : 'bg-black text-[#f2ca50] border-2 border-[#f2ca50]'
+            }`}>
+              <span className="material-symbols-outlined text-xs">timer</span>
+              <span>{timeLeft}s</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-black text-[#f2ca50] border-2 border-[#f2ca50] font-mono font-bold">
+              <span className="material-symbols-outlined text-xs">schedule</span>
+              <span>{formatTime(elapsedTime)}</span>
+            </div>
+          )}
+        </div>
       </div>
 
-      <div className="flex flex-wrap gap-1.5 justify-center max-w-sm mx-auto">
-        {keyboard.map((l) => {
-          const used = guessed.includes(l);
-          return (
-            <button
-              key={l}
-              disabled={used}
-              type="button"
-              onClick={() => handleGuess(l)}
-              className={`w-7 h-7 rounded-lg text-xs font-mono font-bold transition-all ${
-                used
-                  ? 'opacity-20 bg-gray-800 text-gray-500'
-                  : 'bg-[#191f2f] hover:bg-[#232a3a] text-white border border-[#232a3a]'
-              }`}
-            >
-              {l}
-            </button>
-          );
-        })}
+      {/* Jauge de progression des 12 mots de la question */}
+      <div className="w-full bg-black h-2.5 rounded-full overflow-hidden border border-zinc-800">
+        <div
+          className="h-full bg-[#f2ca50] transition-all duration-300 shadow-[0_0_10px_#f2ca50]"
+          style={{ width: `${((currentWordIndex) / 12) * 100}%` }}
+        />
       </div>
+
+      {/* Jauge d'oxygène / Cosmonaute (6 unités maximum) */}
+      <div className="p-3 rounded-2xl bg-black border-2 border-zinc-800 flex items-center justify-between text-xs font-mono shadow-md">
+        <div className="flex items-center gap-2">
+          <span className="material-symbols-outlined text-[#f2ca50] text-base">air</span>
+          <span className="text-zinc-400">Réserve d'Oxygène :</span>
+          <span className={`font-bold ${
+            remainingOxygen <= 2 ? 'text-rose-400 animate-pulse' : 'text-emerald-400'
+          }`}>
+            {remainingOxygen} / {maxMistakes}
+          </span>
+        </div>
+
+        {/* Bulles d'oxygène visualisées */}
+        <div className="flex items-center gap-1">
+          {Array.from({ length: maxMistakes }).map((_, i) => (
+            <div
+              key={i}
+              className={`w-4 h-4 rounded-full border transition-all ${
+                i < remainingOxygen
+                  ? 'bg-emerald-500 border-emerald-300 shadow-[0_0_6px_#10b981]'
+                  : 'bg-zinc-900 border-zinc-700 opacity-40'
+              }`}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Cartel d'indice contextuel & Traduction française (Haute Lisibilité) */}
+      <div className="p-4 rounded-2xl bg-black border-2 border-[#f2ca50] shadow-2xl text-left">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-black border border-[#f2ca50] text-[#f2ca50] text-[11px] font-mono font-bold uppercase tracking-wider">
+            <span className="material-symbols-outlined text-[13px]">translate</span>
+            Traduction & Association Française
+          </span>
+          {currentW && speak && (
+            <button
+              type="button"
+              onClick={() => speak(currentW.word)}
+              className="p-1.5 rounded-xl bg-black hover:bg-zinc-900 border border-[#f2ca50] text-[#f2ca50] transition-colors cursor-pointer"
+              title="Prononcer le mot anglais"
+            >
+              <span className="material-symbols-outlined text-base">volume_up</span>
+            </button>
+          )}
+        </div>
+
+        <div className="mt-2 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1">
+          <div className="text-base sm:text-lg font-serif font-black text-white">
+            🇫🇷 Traduction : <span className="text-[#f2ca50] underline underline-offset-4">{currentW.translation}</span>
+          </div>
+          {currentW.category && (
+            <span className="text-[11px] font-mono text-zinc-400">
+              Thème : {currentW.category}
+            </span>
+          )}
+        </div>
+
+        <p className="text-xs text-zinc-300 mt-1 italic font-sans">
+          💡 Indice de mission : {currentW.hint}
+        </p>
+      </div>
+
+      {/* LETTRES DU MOT MYSTÈRE — HAUT CONTRASTE ORANGE #f2ca50 SUR FOND NOIR */}
+      <div className="p-4 rounded-2xl bg-black border-2 border-zinc-800 shadow-2xl">
+        <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-2.5 py-2">
+          {targetChars.map((char, idx) => {
+            const isRevealed = guessedLetters.includes(char) || wordSuccessAnim || wordFailedAnim;
+            const isLetter = /^[A-Z]$/.test(char);
+
+            if (!isLetter) {
+              return (
+                <div key={idx} className="w-8 h-12 flex items-center justify-center font-mono font-black text-xl text-zinc-400">
+                  {char}
+                </div>
+              );
+            }
+
+            return (
+              <div
+                key={idx}
+                className={`w-10 h-13 sm:w-12 sm:h-15 rounded-xl flex items-center justify-center font-mono font-black text-2xl sm:text-3xl transition-all border-2 ${
+                  isRevealed
+                    ? wordSuccessAnim
+                      ? 'bg-black border-2 border-emerald-400 text-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.5)] scale-105'
+                      : wordFailedAnim
+                      ? 'bg-black border-2 border-rose-500 text-rose-400'
+                      : 'bg-black border-2 border-[#f2ca50] text-[#f2ca50] shadow-md shadow-[#f2ca50]/20'
+                    : 'bg-black border-2 border-zinc-700 text-transparent'
+                }`}
+              >
+                {isRevealed ? char : ''}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Actions rapides : Indice et Passer */}
+        <div className="mt-3 flex items-center justify-center gap-3">
+          <button
+            type="button"
+            onClick={handleHint}
+            className="px-3.5 py-1.5 rounded-xl bg-black hover:bg-zinc-900 border border-zinc-700 hover:border-[#f2ca50] text-[#f2ca50] font-mono font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+          >
+            <span className="material-symbols-outlined text-sm">lightbulb</span>
+            <span>Révéler une lettre</span>
+          </button>
+        </div>
+      </div>
+
+      {/* CLAVIER VIRTUEL A-Z — LETTRES BLANCHES ET ÉTAT CONTRASTÉ SUR FOND NOIR */}
+      <div className="p-3.5 rounded-2xl bg-black border-2 border-zinc-800 shadow-2xl">
+        <div className="text-[11px] font-mono text-zinc-400 uppercase tracking-wider mb-2.5 flex items-center justify-between">
+          <span>Clavier Virtuel (Touches directes A-Z) :</span>
+          <span className="text-zinc-500">Ou tapez sur votre clavier physique</span>
+        </div>
+
+        <div className="grid grid-cols-7 sm:grid-cols-9 gap-1.5 max-w-lg mx-auto">
+          {keyboard.map((letter) => {
+            const isGuessed = guessedLetters.includes(letter);
+            const isTarget = currentW.word.toUpperCase().includes(letter);
+
+            return (
+              <button
+                key={letter}
+                disabled={isGuessed || wordSuccessAnim || wordFailedAnim}
+                type="button"
+                onClick={() => handleGuess(letter)}
+                className={`h-10 sm:h-11 rounded-xl text-sm font-mono font-black transition-all cursor-pointer flex items-center justify-center border-2 ${
+                  isGuessed
+                    ? isTarget
+                      ? 'bg-emerald-950 border-2 border-emerald-400 text-emerald-300 font-black cursor-default shadow-sm'
+                      : 'bg-rose-950/70 border-2 border-rose-800 text-rose-500 line-through opacity-50 cursor-default'
+                    : 'bg-black hover:bg-zinc-900 border-zinc-700 hover:border-[#f2ca50] text-white hover:text-[#f2ca50] active:scale-95 shadow-md shadow-black'
+                }`}
+              >
+                {letter}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Flash d'information mot validé */}
+      {wordSuccessAnim && (
+        <div className="p-2.5 rounded-xl bg-black border-2 border-emerald-500 text-emerald-400 font-bold text-xs font-mono animate-fadeIn flex items-center justify-center gap-2 shadow-lg">
+          <span>✨</span>
+          <span>Mot validé : {currentW.word} ({currentW.translation}) ! Mot suivant...</span>
+        </div>
+      )}
+
+      {wordFailedAnim && (
+        <div className="p-2.5 rounded-xl bg-black border-2 border-rose-500 text-rose-400 font-bold text-xs font-mono animate-fadeIn flex items-center justify-center gap-2 shadow-lg">
+          <span>⚠️</span>
+          <span>Le mot était : {currentW.word} ({currentW.translation}). Sas sécurisé !</span>
+        </div>
+      )}
     </div>
   );
 };

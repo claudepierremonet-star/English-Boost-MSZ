@@ -106,7 +106,7 @@ export function downloadCurriculumJson() {
   const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(schoolData, null, 2));
   const downloadAnchor = document.createElement('a');
   downloadAnchor.setAttribute('href', dataStr);
-  downloadAnchor.setAttribute('download', 'english_boost_mz_70_lecons.json');
+  downloadAnchor.setAttribute('download', 'english_boost_mz_200_lecons.json');
   document.body.appendChild(downloadAnchor);
   downloadAnchor.click();
   downloadAnchor.remove();
@@ -115,7 +115,7 @@ export function downloadCurriculumJson() {
 export function downloadCurriculumCsv() {
   const downloadAnchor = document.createElement('a');
   downloadAnchor.setAttribute('href', '/data/index_lecons.csv');
-  downloadAnchor.setAttribute('download', 'index_pedagogique_70_lecons.csv');
+  downloadAnchor.setAttribute('download', 'index_pedagogique_200_lecons.csv');
   document.body.appendChild(downloadAnchor);
   downloadAnchor.click();
   downloadAnchor.remove();

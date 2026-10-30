@@ -7,6 +7,7 @@ import { StackedCards } from './components/StackedCards';
 import { DailyChallengeCard } from './components/DailyChallengeCard';
 import { CabinetCuriosities } from './components/CabinetCuriosities';
 import { DashboardView } from './components/DashboardView';
+import { ProgressHistorySection } from './components/ProgressHistorySection';
 import { PracticeView } from './components/PracticeView';
 import { DictationModal } from './components/DictationModal';
 import { FlashcardsModal } from './components/FlashcardsModal';
@@ -282,7 +283,7 @@ export default function App() {
                       CURSUS OFFICIEL 6E ➔ TERMINALE
                     </span>
                     <span className="px-2 py-0.2 rounded-full bg-emerald-500/20 text-emerald-400 text-[9px] font-mono font-bold">
-                      70 LEÇONS COMPLÈTES
+                      200 LEÇONS COMPLÈTES
                     </span>
                   </div>
                   <h3 className="font-serif font-bold text-base sm:text-lg text-[#dce2f8] group-hover:text-[#f2ca50] transition-colors mt-0.5">
@@ -432,7 +433,7 @@ export default function App() {
         )}
 
         {activeTab === 'dashboard' && (
-          <div className="max-w-4xl mx-auto animate-fadeIn pt-2">
+          <div className="max-w-4xl mx-auto animate-fadeIn pt-2 space-y-6">
             <DashboardView
               user={user}
               onResumePractice={() => setActiveTab('pratique')}
@@ -440,6 +441,8 @@ export default function App() {
               onOpenFlashcards={() => setIsFlashcardsOpen(true)}
               onNavigateLeaderboard={() => setActiveTab('classement')}
             />
+            {/* Section 'Mon historique de progression' sous le composant DashboardView */}
+            <ProgressHistorySection user={user} />
           </div>
         )}
 

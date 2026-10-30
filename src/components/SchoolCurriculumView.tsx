@@ -59,7 +59,7 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
                 school
               </span>
               <span className="text-[10px] text-[#d4c78f] uppercase tracking-widest font-bold">
-                Base Pédagogique Intégrale • 70 Leçons
+                Base Pédagogique Intégrale • 200 Leçons
               </span>
             </div>
 
@@ -80,7 +80,7 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
               className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#d4af37] via-[#f2ca50] to-[#cca639] text-[#3c2f00] font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-[#f2ca50]/15 hover:brightness-110 active:scale-95 transition-all"
             >
               <span className="material-symbols-outlined text-base">folder_zip</span>
-              <span>Pack Pédagogique 70 Leçons</span>
+              <span>Pack Pédagogique 200 Leçons</span>
             </button>
 
             <span className="text-[10px] text-center text-[#99907c] font-mono">
@@ -424,10 +424,10 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
                   <span className="material-symbols-outlined text-[#f2ca50] text-xl">data_object</span>
                   <div>
                     <h5 className="font-bold text-xs text-[#dce2f8]">
-                      Fichier JSON Intégral (english_boost_mz_curriculum.json)
+                      Fichier JSON Intégral (english_boost_mz_200_lecons.json)
                     </h5>
                     <p className="text-[11px] text-[#99907c]">
-                      70 leçons, 560 mots de vocabulaire, grammaire, dialogues & quiz (~712 Ko)
+                      200 leçons structurées, plus de 1 600 termes sonorisés, grammaire, dialogues & quiz (~2,2 Mo)
                     </p>
                   </div>
                 </div>

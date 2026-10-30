@@ -303,7 +303,7 @@ export const TWENTY_GAMES_METADATA: MiniGameMeta[] = [
     id: 'speed-match',
     number: 1,
     title: 'Speed Match',
-    subtitle: 'Traduction Éclair • 3 Niveaux',
+    subtitle: 'Traduction Éclair • 5 Niveaux',
     icon: 'bolt',
     category: 'traduction',
     badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
@@ -313,7 +313,7 @@ export const TWENTY_GAMES_METADATA: MiniGameMeta[] = [
     requiredLevel: 1,
     xpReward: 35,
     howToPlay: {
-      goal: 'Associe chaque mot anglais à sa traduction française le plus rapidement possible. Choisis parmi 3 niveaux : Débutant (5 séries), Intermédiaire (25 séries) ou Avancé (50 séries) avec 12 mots (6 paires) par série !',
+      goal: 'Associe chaque mot anglais à sa traduction française le plus rapidement possible. Choisis parmi 5 niveaux : Débutant (5 séries), Intermédiaire (15 séries), Expert (25 séries), Expert Avancé (35 séries) ou Master Avancé (50 séries) avec 12 mots (6 paires) par série !',
       rules: [
         '12 mots sont disposés sur le plateau : 6 mots anglais à gauche (🇬🇧) et 6 traductions françaises à droite (🇫🇷).',
         'Clique sur un mot anglais pour entendre sa prononciation audio et le sélectionner.',
@@ -377,8 +377,8 @@ export const TWENTY_GAMES_METADATA: MiniGameMeta[] = [
     id: 'verb-master',
     number: 4,
     title: 'Verb Master',
-    subtitle: 'Chasse aux Verbes Irréguliers',
-    icon: 'sports_martial_arts',
+    subtitle: 'Association Verbes Éclair • 5 Niveaux (12 Mots par Question)',
+    icon: 'auto_fix_high',
     category: 'verbes',
     badgeColor: 'bg-rose-500/20 text-rose-300 border-rose-500/30',
     borderColor: 'border-rose-500/40 hover:border-rose-400',
@@ -387,38 +387,40 @@ export const TWENTY_GAMES_METADATA: MiniGameMeta[] = [
     requiredLevel: 3,
     xpReward: 40,
     howToPlay: {
-      goal: 'Maîtrise les 3 formes des verbes irréguliers anglais (Infinitif, Prétérit, Participe Passé).',
+      goal: 'Associe chaque verbe anglais à sa traduction française le plus rapidement possible. Choisis parmi 5 niveaux : Débutant (5 questions), Intermédiaire (25 questions), Expert (50 questions), Expert Avancé (70 questions) et Master (90 questions) avec 12 mots (6 paires) par question !',
       rules: [
-        'L\'infinitif et sa traduction s\'affichent à l\'écran.',
-        'Sélectionne le Prétérit correct parmi les 3 propositions.',
-        'Puis sélectionne le Participe Passé adéquat pour achever la combinaison.',
-        'Enchaîne 5 verbes consécutifs sans faillir pour remporter le badge "Master of Tenses".'
+        '12 mots sont disposés sur le plateau : 6 verbes anglais à gauche (🇬🇧) et 6 traductions françaises à droite (🇫🇷).',
+        'Clique sur un verbe anglais pour entendre sa prononciation audio et révéler ses 3 formes (Infinitif, Prétérit, Participe Passé).',
+        'Clique immédiatement sur sa correspondance française pour valider la paire en vert éclatant.',
+        'Contraste maximal : lettres en orange (#f2ca50) lumineuses pour l\'anglais et bleu électrique (#38bdf8) pour le français sur fond noir profond pour une visibilité totale.',
+        'Chaque partie pioche aléatoirement dans une vaste banque lexicale pour éviter toute répétition !'
       ],
-      tip: 'Mémorise les familles sonores (ex: sing / sang / sung, ring / rang / rung).'
+      tip: 'Repère les familles de verbes et écoute attentivement leur prononciation pour booster ton multiplicateur combo !'
     }
   },
   {
     id: 'astro-hangman',
     number: 5,
     title: 'Astro Hangman',
-    subtitle: 'Pendu Cosmique',
+    subtitle: 'Pendu Cosmique • 5 Niveaux (12 Mots par Question)',
     icon: 'rocket_launch',
     category: 'vocabulaire',
     badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
     borderColor: 'border-indigo-500/40 hover:border-indigo-400',
     bgGradient: 'from-indigo-950/40 via-[#131b2e] to-[#0c1322]',
-    difficulty: 'Facile',
+    difficulty: 'Moyen',
     requiredLevel: 4,
-    xpReward: 35,
+    xpReward: 40,
     howToPlay: {
-      goal: 'Devine le mot mystère lettre par lettre avant que la jauge d\'oxygène du cosmonaute ne tombe à zéro.',
+      goal: 'Devine chaque mot anglais lettre par lettre et associe-le à sa traduction française le plus rapidement possible. Choisis parmi 5 niveaux : Débutant (5 questions), Intermédiaire (25 questions), Expert (50 questions), Expert Avancé (70 questions) et Master (90 questions), avec 12 mots par question !',
       rules: [
-        'Clique sur les touches du clavier virtuel pour proposer une lettre.',
-        'Si la lettre est présente, elle s\'affiche dans le mot.',
-        'Si elle est absente, votre astronaute perd 1 unité d\'oxygène (maximum 6 erreurs permises).',
-        'Trouve le mot complet pour sauver la mission spatiale !'
+        'Lis l\'indice et la traduction française affichés dans le cartel d\'or spatial.',
+        'Propose les lettres au clavier virtuel ou physique. Lettres en orange (#f2ca50) ultra-lisibles sur fond sombre avec un contraste total.',
+        'Attention à la réserve d\'oxygène cosmique : maximum 6 erreurs autorisées par mot avant déclenchement du sas de secours.',
+        'Chaque mot découvert déclenche la prononciation audio en anglais et valide l\'association bilingue.',
+        'Complète les 12 mots de la question pour engranger les points d\'expérience XP et débloquer les niveaux supérieurs !'
       ],
-      tip: 'Propose d\'abord les voyelles les plus fréquentes de l\'anglais (E, A, O, I) puis les consonnes R, T, N, S.'
+      tip: 'Chaque partie pioche aléatoirement dans une vaste banque lexicale pour garantir une aventure spatiale toujours unique sans répétition.'
     }
   },
   {
@@ -868,7 +870,7 @@ export const SPEED_MATCH_LEVELS: Record<string, SpeedMatchLevelInfo> = {
   },
   professionnel: {
     id: 'professionnel',
-    label: 'Professionnel',
+    label: 'Expert',
     subtitle: 'Niveau 21 à 30 • Métiers & Monde',
     requiredPlayerLevel: 21,
     questionsCount: 25,
@@ -884,7 +886,7 @@ export const SPEED_MATCH_LEVELS: Record<string, SpeedMatchLevelInfo> = {
   },
   pro: {
     id: 'pro',
-    label: 'Pro',
+    label: 'Expert Avancé',
     subtitle: 'Niveau 31 à 50 • Réflexes & Cadence',
     requiredPlayerLevel: 31,
     questionsCount: 35,
@@ -900,7 +902,7 @@ export const SPEED_MATCH_LEVELS: Record<string, SpeedMatchLevelInfo> = {
   },
   expert: {
     id: 'expert',
-    label: 'Expert',
+    label: 'Master Avancé',
     subtitle: 'Niveau 51 à 99 • Défi Maître Suprême',
     requiredPlayerLevel: 51,
     questionsCount: 50,
@@ -1951,6 +1953,384 @@ export const WORD_SEARCH_PUZZLE = {
   ]
 };
 
+// =====================================================================
+// VERB MASTER (Mini-Jeu n°4) — 3 Niveaux • 12 Mots par Question
+// Débutant (5 questions), Intermédiaire (25 questions), Avancé (50 questions)
+// =====================================================================
+
+export type VerbMasterLevelKey = 'debutant' | 'intermediaire' | 'expert' | 'expert_avance' | 'master';
+
+export interface VerbMasterVerb {
+  infinitive: string;
+  preterite: string;
+  pastParticiple: string;
+  translation: string;
+  category?: string;
+  hint?: string;
+}
+
+export interface VerbMasterLevelInfo {
+  id: VerbMasterLevelKey;
+  label: string;
+  subtitle: string;
+  requiredPlayerLevel: number;
+  questionsCount: number; // 5, 25, 50, 70, 90
+  wordsPerQuestion: number; // 12 mots (6 paires)
+  pairsPerQuestion: number; // 6 paires
+  timePerQuestionLimited: number;
+  xpReward: number;
+  badgeBg: string;
+  badgeBorder: string;
+  badgeText: string;
+  icon: string;
+  description: string;
+}
+
+export const VERB_MASTER_LEVELS: Record<VerbMasterLevelKey, VerbMasterLevelInfo> = {
+  debutant: {
+    id: 'debutant',
+    label: 'Débutant',
+    subtitle: '5 Questions • 12 Mots (6 paires) par question (60 mots)',
+    requiredPlayerLevel: 1,
+    questionsCount: 5,
+    wordsPerQuestion: 12,
+    pairsPerQuestion: 6,
+    timePerQuestionLimited: 60,
+    xpReward: 40,
+    badgeBg: 'bg-emerald-500/20',
+    badgeBorder: 'border-emerald-500/40',
+    badgeText: 'text-emerald-400',
+    icon: 'sentiment_satisfied',
+    description: '5 questions de 12 mots (60 mots au total). Verbes anglais du quotidien et leurs formes irrégulières fondamentales.'
+  },
+  intermediaire: {
+    id: 'intermediaire',
+    label: 'Intermédiaire',
+    subtitle: '25 Questions • 12 Mots (6 paires) par question (300 mots)',
+    requiredPlayerLevel: 11,
+    questionsCount: 25,
+    wordsPerQuestion: 12,
+    pairsPerQuestion: 6,
+    timePerQuestionLimited: 50,
+    xpReward: 90,
+    badgeBg: 'bg-amber-500/20',
+    badgeBorder: 'border-amber-500/40',
+    badgeText: 'text-amber-400',
+    icon: 'speed',
+    description: '25 questions de 12 mots (300 mots au total). Verbes d\'action, de communication, d\'exploration et de négociation.'
+  },
+  expert: {
+    id: 'expert',
+    label: 'Expert',
+    subtitle: '50 Questions • 12 Mots (6 paires) par question (600 mots)',
+    requiredPlayerLevel: 21,
+    questionsCount: 50,
+    wordsPerQuestion: 12,
+    pairsPerQuestion: 6,
+    timePerQuestionLimited: 45,
+    xpReward: 180,
+    badgeBg: 'bg-blue-500/20',
+    badgeBorder: 'border-blue-500/40',
+    badgeText: 'text-blue-400',
+    icon: 'workspace_premium',
+    description: '50 questions de 12 mots (600 mots au total). Verbes irréguliers précis, contextes professionnels et nuances dynamiques.'
+  },
+  expert_avance: {
+    id: 'expert_avance',
+    label: 'Expert Avancé',
+    subtitle: '70 Questions • 12 Mots (6 paires) par question (840 mots)',
+    requiredPlayerLevel: 31,
+    questionsCount: 70,
+    wordsPerQuestion: 12,
+    pairsPerQuestion: 6,
+    timePerQuestionLimited: 40,
+    xpReward: 300,
+    badgeBg: 'bg-purple-500/20',
+    badgeBorder: 'border-purple-500/40',
+    badgeText: 'text-purple-400',
+    icon: 'diamond',
+    description: '70 questions de 12 mots (840 mots au total). Verbes rhétoriques, verbes à particule soutenus et tournures d\'excellence.'
+  },
+  master: {
+    id: 'master',
+    label: 'Master',
+    subtitle: '90 Questions • 12 Mots (6 paires) par question (1 080 mots)',
+    requiredPlayerLevel: 51,
+    questionsCount: 90,
+    wordsPerQuestion: 12,
+    pairsPerQuestion: 6,
+    timePerQuestionLimited: 35,
+    xpReward: 500,
+    badgeBg: 'bg-rose-500/20',
+    badgeBorder: 'border-rose-500/40',
+    badgeText: 'text-rose-400',
+    icon: 'military_tech',
+    description: '90 questions de 12 mots (1 080 mots au total). Verbes littéraires rares, verbes archaïques et maîtrise absolue du lexique d\'Oxford.'
+  }
+};
+
+// Banque Débutant (Verbes indispensables de base - 45 verbes)
+export const VERB_MASTER_DEBUTANT_BANK: VerbMasterVerb[] = [
+  { infinitive: 'Be', preterite: 'Was / Were', pastParticiple: 'Been', translation: 'Être', category: 'Essentiel' },
+  { infinitive: 'Have', preterite: 'Had', pastParticiple: 'Had', translation: 'Avoir', category: 'Essentiel' },
+  { infinitive: 'Do', preterite: 'Did', pastParticiple: 'Done', translation: 'Faire', category: 'Essentiel' },
+  { infinitive: 'Go', preterite: 'Went', pastParticiple: 'Gone', translation: 'Aller', category: 'Mouvement' },
+  { infinitive: 'Come', preterite: 'Came', pastParticiple: 'Come', translation: 'Venir', category: 'Mouvement' },
+  { infinitive: 'See', preterite: 'Saw', pastParticiple: 'Seen', translation: 'Voir', category: 'Sens' },
+  { infinitive: 'Hear', preterite: 'Heard', pastParticiple: 'Heard', translation: 'Entendre', category: 'Sens' },
+  { infinitive: 'Take', preterite: 'Took', pastParticiple: 'Taken', translation: 'Prendre', category: 'Action' },
+  { infinitive: 'Give', preterite: 'Gave', pastParticiple: 'Given', translation: 'Donner', category: 'Action' },
+  { infinitive: 'Make', preterite: 'Made', pastParticiple: 'Made', translation: 'Fabriquer', category: 'Action' },
+  { infinitive: 'Get', preterite: 'Got', pastParticiple: 'Got / Gotten', translation: 'Obtenir', category: 'Action' },
+  { infinitive: 'Say', preterite: 'Said', pastParticiple: 'Said', translation: 'Dire', category: 'Parole' },
+  { infinitive: 'Tell', preterite: 'Told', pastParticiple: 'Told', translation: 'Raconter', category: 'Parole' },
+  { infinitive: 'Speak', preterite: 'Spoke', pastParticiple: 'Spoken', translation: 'Parler', category: 'Parole' },
+  { infinitive: 'Think', preterite: 'Thought', pastParticiple: 'Thought', translation: 'Penser', category: 'Esprit' },
+  { infinitive: 'Know', preterite: 'Knew', pastParticiple: 'Known', translation: 'Savoir', category: 'Esprit' },
+  { infinitive: 'Understand', preterite: 'Understood', pastParticiple: 'Understood', translation: 'Comprendre', category: 'Esprit' },
+  { infinitive: 'Feel', preterite: 'Felt', pastParticiple: 'Felt', translation: 'Ressentir', category: 'Émotion' },
+  { infinitive: 'Find', preterite: 'Found', pastParticiple: 'Found', translation: 'Trouver', category: 'Découverte' },
+  { infinitive: 'Put', preterite: 'Put', pastParticiple: 'Put', translation: 'Mettre / Poser', category: 'Action' },
+  { infinitive: 'Leave', preterite: 'Left', pastParticiple: 'Left', translation: 'Partir / Quitter', category: 'Mouvement' },
+  { infinitive: 'Bring', preterite: 'Brought', pastParticiple: 'Brought', translation: 'Apporter', category: 'Action' },
+  { infinitive: 'Begin', preterite: 'Began', pastParticiple: 'Begun', translation: 'Commencer', category: 'Temps' },
+  { infinitive: 'Keep', preterite: 'Kept', pastParticiple: 'Kept', translation: 'Garder', category: 'Action' },
+  { infinitive: 'Hold', preterite: 'Held', pastParticiple: 'Held', translation: 'Tenir', category: 'Action' },
+  { infinitive: 'Write', preterite: 'Wrote', pastParticiple: 'Written', translation: 'Écrire', category: 'École' },
+  { infinitive: 'Read', preterite: 'Read', pastParticiple: 'Read', translation: 'Lire', category: 'École' },
+  { infinitive: 'Stand', preterite: 'Stood', pastParticiple: 'Stood', translation: 'Se tenir debout', category: 'Corps' },
+  { infinitive: 'Sit', preterite: 'Sat', pastParticiple: 'Sat', translation: 'S\'asseoir', category: 'Corps' },
+  { infinitive: 'Run', preterite: 'Ran', pastParticiple: 'Run', translation: 'Courir', category: 'Sport' },
+  { infinitive: 'Pay', preterite: 'Paid', pastParticiple: 'Paid', translation: 'Payer', category: 'Commerce' },
+  { infinitive: 'Buy', preterite: 'Bought', pastParticiple: 'Bought', translation: 'Acheter', category: 'Commerce' },
+  { infinitive: 'Sell', preterite: 'Sold', pastParticiple: 'Sold', translation: 'Vendre', category: 'Commerce' },
+  { infinitive: 'Eat', preterite: 'Ate', pastParticiple: 'Eaten', translation: 'Manger', category: 'Alimentation' },
+  { infinitive: 'Drink', preterite: 'Drank', pastParticiple: 'Drunk', translation: 'Boire', category: 'Alimentation' },
+  { infinitive: 'Sleep', preterite: 'Slept', pastParticiple: 'Slept', translation: 'Dormir', category: 'Vie' },
+  { infinitive: 'Drive', preterite: 'Drove', pastParticiple: 'Driven', translation: 'Conduire', category: 'Voyage' },
+  { infinitive: 'Fly', preterite: 'Flew', pastParticiple: 'Flown', translation: 'Voler', category: 'Voyage' },
+  { infinitive: 'Wear', preterite: 'Wore', pastParticiple: 'Worn', translation: 'Porter (vêtement)', category: 'Mode' },
+  { infinitive: 'Win', preterite: 'Won', pastParticiple: 'Won', translation: 'Gagner', category: 'Succès' },
+  { infinitive: 'Lose', preterite: 'Lost', pastParticiple: 'Lost', translation: 'Perdre', category: 'Succès' },
+  { infinitive: 'Fall', preterite: 'Fell', pastParticiple: 'Fallen', translation: 'Tomber', category: 'Mouvement' },
+  { infinitive: 'Send', preterite: 'Sent', pastParticiple: 'Sent', translation: 'Envoyer', category: 'Communication' },
+  { infinitive: 'Break', preterite: 'Broke', pastParticiple: 'Broken', translation: 'Casser', category: 'Action' },
+  { infinitive: 'Teach', preterite: 'Taught', pastParticiple: 'Taught', translation: 'Enseigner', category: 'Savoir' }
+];
+
+// Banque Intermédiaire (Verbes réguliers et irréguliers avancés - 50 verbes)
+export const VERB_MASTER_INTERMEDIAIRE_BANK: VerbMasterVerb[] = [
+  { infinitive: 'Become', preterite: 'Became', pastParticiple: 'Become', translation: 'Devenir', category: 'Changement' },
+  { infinitive: 'Choose', preterite: 'Chose', pastParticiple: 'Chosen', translation: 'Choisir', category: 'Décision' },
+  { infinitive: 'Build', preterite: 'Built', pastParticiple: 'Built', translation: 'Construire', category: 'Action' },
+  { infinitive: 'Catch', preterite: 'Caught', pastParticiple: 'Caught', translation: 'Attraper', category: 'Action' },
+  { infinitive: 'Deal', preterite: 'Dealt', pastParticiple: 'Dealt', translation: 'Négocier / Traiter', category: 'Affaires' },
+  { infinitive: 'Dream', preterite: 'Dreamt / Dreamed', pastParticiple: 'Dreamt / Dreamed', translation: 'Rêver', category: 'Esprit' },
+  { infinitive: 'Feed', preterite: 'Fed', pastParticiple: 'Fed', translation: 'Nourrir', category: 'Soin' },
+  { infinitive: 'Fight', preterite: 'Fought', pastParticiple: 'Fought', translation: 'Combattre', category: 'Courage' },
+  { infinitive: 'Forgive', preterite: 'Forgave', pastParticiple: 'Forgiven', translation: 'Pardonner', category: 'Vertus' },
+  { infinitive: 'Freeze', preterite: 'Froze', pastParticiple: 'Frozen', translation: 'Geler', category: 'Nature' },
+  { infinitive: 'Grow', preterite: 'Grew', pastParticiple: 'Grown', translation: 'Grandir / Cultiver', category: 'Nature' },
+  { infinitive: 'Hide', preterite: 'Hid', pastParticiple: 'Hidden', translation: 'Cacher', category: 'Mystère' },
+  { infinitive: 'Hit', preterite: 'Hit', pastParticiple: 'Hit', translation: 'Frapper', category: 'Action' },
+  { infinitive: 'Hurt', preterite: 'Hurt', pastParticiple: 'Hurt', translation: 'Blesser', category: 'Santé' },
+  { infinitive: 'Lead', preterite: 'Led', pastParticiple: 'Led', translation: 'Mener / Guider', category: 'Leadership' },
+  { infinitive: 'Lend', preterite: 'Lent', pastParticiple: 'Lent', translation: 'Prêter', category: 'Échange' },
+  { infinitive: 'Light', preterite: 'Lit', pastParticiple: 'Lit', translation: 'Allumer / Éclairer', category: 'Éléments' },
+  { infinitive: 'Ride', preterite: 'Rode', pastParticiple: 'Ridden', translation: 'Chevaucher / Rouler', category: 'Transport' },
+  { infinitive: 'Rise', preterite: 'Rose', pastParticiple: 'Risen', translation: 'S\'élever', category: 'Mouvement' },
+  { infinitive: 'Shake', preterite: 'Shook', pastParticiple: 'Shaken', translation: 'Secouer', category: 'Action' },
+  { infinitive: 'Shine', preterite: 'Shone', pastParticiple: 'Shone', translation: 'Briller', category: 'Lumière' },
+  { infinitive: 'Shoot', preterite: 'Shot', pastParticiple: 'Shot', translation: 'Tirer (projectile)', category: 'Action' },
+  { infinitive: 'Show', preterite: 'Showed', pastParticiple: 'Shown', translation: 'Montrer', category: 'Vision' },
+  { infinitive: 'Shut', preterite: 'Shut', pastParticiple: 'Shut', translation: 'Fermer', category: 'Action' },
+  { infinitive: 'Sink', preterite: 'Sank', pastParticiple: 'Sunk', translation: 'Couler / Sombrer', category: 'Eau' },
+  { infinitive: 'Slide', preterite: 'Slid', pastParticiple: 'Slid', translation: 'Glisser', category: 'Mouvement' },
+  { infinitive: 'Smell', preterite: 'Smelt', pastParticiple: 'Smelt', translation: 'Sentir (odeur)', category: 'Sens' },
+  { infinitive: 'Spend', preterite: 'Spent', pastParticiple: 'Spent', translation: 'Dépenser / Passer du temps', category: 'Temps' },
+  { infinitive: 'Spill', preterite: 'Spilt', pastParticiple: 'Spilt', translation: 'Renverser', category: 'Action' },
+  { infinitive: 'Split', preterite: 'Split', pastParticiple: 'Split', translation: 'Diviser / Séparer', category: 'Action' },
+  { infinitive: 'Spread', preterite: 'Spread', pastParticiple: 'Spread', translation: 'Répandre / Diffuser', category: 'Action' },
+  { infinitive: 'Steal', preterite: 'Stole', pastParticiple: 'Stolen', translation: 'Dérober / Voler', category: 'Justice' },
+  { infinitive: 'Stick', preterite: 'Stuck', pastParticiple: 'Stuck', translation: 'Coller / Rester coincé', category: 'Matière' },
+  { infinitive: 'Strike', preterite: 'Struck', pastParticiple: 'Struck', translation: 'Frapper / Déclencher', category: 'Action' },
+  { infinitive: 'Sweep', preterite: 'Swept', pastParticiple: 'Swept', translation: 'Balayer', category: 'Action' },
+  { infinitive: 'Swim', preterite: 'Swam', pastParticiple: 'Swum', translation: 'Nager', category: 'Sport' },
+  { infinitive: 'Swing', preterite: 'Swung', pastParticiple: 'Swung', translation: 'Se balancer', category: 'Mouvement' },
+  { infinitive: 'Tear', preterite: 'Tore', pastParticiple: 'Torn', translation: 'Déchirer', category: 'Action' },
+  { infinitive: 'Throw', preterite: 'Threw', pastParticiple: 'Thrown', translation: 'Lancer / Jeter', category: 'Action' },
+  { infinitive: 'Wake', preterite: 'Woke', pastParticiple: 'Woken', translation: 'Réveiller', category: 'Vie' },
+  { infinitive: 'Bend', preterite: 'Bent', pastParticiple: 'Bent', translation: 'Courber / Plier', category: 'Corps' },
+  { infinitive: 'Blow', preterite: 'Blew', pastParticiple: 'Blown', translation: 'Souffler', category: 'Vent' },
+  { infinitive: 'Dig', preterite: 'Dug', pastParticiple: 'Dug', translation: 'Creuser', category: 'Terre' },
+  { infinitive: 'Cost', preterite: 'Cost', pastParticiple: 'Cost', translation: 'Coûter', category: 'Commerce' },
+  { infinitive: 'Draw', preterite: 'Drew', pastParticiple: 'Drawn', translation: 'Dessiner / Tirer', category: 'Art' }
+];
+
+// Banque Avancée (Nuances littéraires et académiques - 50 verbes)
+export const VERB_MASTER_AVANCE_BANK: VerbMasterVerb[] = [
+  { infinitive: 'Arise', preterite: 'Arose', pastParticiple: 'Arisen', translation: 'Survenir / Émerger', category: 'Philosophie' },
+  { infinitive: 'Bear', preterite: 'Bore', pastParticiple: 'Borne', translation: 'Endurer / Porter', category: 'Vertus' },
+  { infinitive: 'Behold', preterite: 'Beheld', pastParticiple: 'Beheld', translation: 'Contempler', category: 'Vision' },
+  { infinitive: 'Beseech', preterite: 'Besought', pastParticiple: 'Besought', translation: 'Supplier', category: 'Rhétorique' },
+  { infinitive: 'Bid', preterite: 'Bade / Bid', pastParticiple: 'Bidden / Bid', translation: 'Ordonner / Offrir', category: 'Action' },
+  { infinitive: 'Breed', preterite: 'Bred', pastParticiple: 'Bred', translation: 'Engendrer / Élever', category: 'Nature' },
+  { infinitive: 'Cling', preterite: 'Clung', pastParticiple: 'Clung', translation: 'S\'accrocher', category: 'Ténacité' },
+  { infinitive: 'Dwell', preterite: 'Dwelt', pastParticiple: 'Dwelt', translation: 'Demeurer / Habiter', category: 'Lieu' },
+  { infinitive: 'Flee', preterite: 'Fled', pastParticiple: 'Fled', translation: 'Fuir', category: 'Mouvement' },
+  { infinitive: 'Forbid', preterite: 'Forbade', pastParticiple: 'Forbidden', translation: 'Interdire', category: 'Loi' },
+  { infinitive: 'Foresee', preterite: 'Foresaw', pastParticiple: 'Foreseen', translation: 'Prévoir / Pressentir', category: 'Vision' },
+  { infinitive: 'Forsake', preterite: 'Forsook', pastParticiple: 'Forsaken', translation: 'Abandonner', category: 'Destin' },
+  { infinitive: 'Grind', preterite: 'Ground', pastParticiple: 'Ground', translation: 'Broyer / Moudre', category: 'Matière' },
+  { infinitive: 'Kneel', preterite: 'Knelt', pastParticiple: 'Knelt', translation: 'S\'agenouiller', category: 'Corps' },
+  { infinitive: 'Overcome', preterite: 'Overcame', pastParticiple: 'Overcome', translation: 'Surmonter / Triompher', category: 'Succès' },
+  { infinitive: 'Overtake', preterite: 'Overtook', pastParticiple: 'Overtaken', translation: 'Dépasser / Rattraper', category: 'Course' },
+  { infinitive: 'Plead', preterite: 'Pled / Pleaded', pastParticiple: 'Pled / Pleaded', translation: 'Plaider', category: 'Droit' },
+  { infinitive: 'Prove', preterite: 'Proved', pastParticiple: 'Proven / Proved', translation: 'Prouver / Démontrer', category: 'Science' },
+  { infinitive: 'Seek', preterite: 'Sought', pastParticiple: 'Sought', translation: 'Chercher / Quêter', category: 'Recherche' },
+  { infinitive: 'Shed', preterite: 'Shed', pastParticiple: 'Shed', translation: 'Verser (larmes) / Répandre', category: 'Émotion' },
+  { infinitive: 'Shrink', preterite: 'Shrank', pastParticiple: 'Shrunk', translation: 'Rétrécir / Reculer', category: 'Dimension' },
+  { infinitive: 'Slay', preterite: 'Slew', pastParticiple: 'Slain', translation: 'Terrasser / Vaincre', category: 'Épopée' },
+  { infinitive: 'Spin', preterite: 'Spun', pastParticiple: 'Spun', translation: 'Tournoyer / Filer', category: 'Mouvement' },
+  { infinitive: 'Spring', preterite: 'Sprang', pastParticiple: 'Sprung', translation: 'Jaillir / Bondir', category: 'Énergie' },
+  { infinitive: 'Stride', preterite: 'Strode', pastParticiple: 'Stridden', translation: 'Marcher à grands pas', category: 'Élégance' },
+  { infinitive: 'Strive', preterite: 'Strove', pastParticiple: 'Striven', translation: 'S\'efforcer / Lutter', category: 'Excellence' },
+  { infinitive: 'Swear', preterite: 'Swore', pastParticiple: 'Sworn', translation: 'Jurer / Prêter serment', category: 'Honneur' },
+  { infinitive: 'Thrust', preterite: 'Thrust', pastParticiple: 'Thrust', translation: 'Pousser avec force', category: 'Action' },
+  { infinitive: 'Tread', preterite: 'Trod', pastParticiple: 'Trodden', translation: 'Fouler aux pieds', category: 'Chemin' },
+  { infinitive: 'Undergo', preterite: 'Underwent', pastParticiple: 'Undergone', translation: 'Subir / Éprouver', category: 'Épreuve' },
+  { infinitive: 'Undertake', preterite: 'Undertook', pastParticiple: 'Undertaken', translation: 'Entreprendre', category: 'Projet' },
+  { infinitive: 'Uphold', preterite: 'Upheld', pastParticiple: 'Upheld', translation: 'Soutenir / Défendre', category: 'Justice' },
+  { infinitive: 'Weave', preterite: 'Wove', pastParticiple: 'Woven', translation: 'Tisser', category: 'Art' },
+  { infinitive: 'Weep', preterite: 'Wept', pastParticiple: 'Wept', translation: 'Pleurer', category: 'Émotion' },
+  { infinitive: 'Wind', preterite: 'Wound', pastParticiple: 'Wound', translation: 'Enrouler / Serpent', category: 'Mouvement' },
+  { infinitive: 'Withdraw', preterite: 'Withdrew', pastParticiple: 'Withdrawn', translation: 'Retirer / Se replier', category: 'Stratégie' },
+  { infinitive: 'Withhold', preterite: 'Withheld', pastParticiple: 'Withheld', translation: 'Retenir / Refuser', category: 'Droit' },
+  { infinitive: 'Withstand', preterite: 'Withstood', pastParticiple: 'Withstood', translation: 'Résister à', category: 'Résilience' },
+];
+
+// Banque Expert (Verbes à forte valeur ajoutée, négociations et affaires - 20 verbes)
+export const VERB_MASTER_EXPERT_BANK: VerbMasterVerb[] = [
+  { infinitive: 'Appraise', preterite: 'Appraised', pastParticiple: 'Appraised', translation: 'Évaluer / Estimer', category: 'Affaires' },
+  { infinitive: 'Advocate', preterite: 'Advocated', pastParticiple: 'Advocated', translation: 'Préconiser / Défendre', category: 'Rhétorique' },
+  { infinitive: 'Broadcast', preterite: 'Broadcast', pastParticiple: 'Broadcast', translation: 'Diffuser / Émettre', category: 'Médias' },
+  { infinitive: 'Cast', preterite: 'Cast', pastParticiple: 'Cast', translation: 'Jeter / Distribuer les rôles', category: 'Action' },
+  { infinitive: 'Conceive', preterite: 'Conceived', pastParticiple: 'Conceived', translation: 'Concevoir / Imaginer', category: 'Création' },
+  { infinitive: 'Consolidate', preterite: 'Consolidated', pastParticiple: 'Consolidated', translation: 'Renforcer / Consolider', category: 'Management' },
+  { infinitive: 'Disclose', preterite: 'Disclosed', pastParticiple: 'Disclosed', translation: 'Divulguer / Révéler', category: 'Légalité' },
+  { infinitive: 'Endeavor', preterite: 'Endeavored', pastParticiple: 'Endeavored', translation: 'S\'efforcer / Tenter', category: 'Action' },
+  { infinitive: 'Envisage', preterite: 'Envisaged', pastParticiple: 'Envisaged', translation: 'Envisager / Prévoir', category: 'Vision' },
+  { infinitive: 'Fulfill', preterite: 'Fulfilled', pastParticiple: 'Fulfilled', translation: 'Accomplir / Réaliser', category: 'Succès' },
+  { infinitive: 'Incur', preterite: 'Incurred', pastParticiple: 'Incurred', translation: 'S\'exposer à / Subir', category: 'Affaires' },
+  { infinitive: 'Mitigate', preterite: 'Mitigated', pastParticiple: 'Mitigated', translation: 'Atténuer / Tempérer', category: 'Stratégie' },
+  { infinitive: 'Negotiate', preterite: 'Negotiated', pastParticiple: 'Negotiated', translation: 'Négocier', category: 'Commerce' },
+  { infinitive: 'Perceive', preterite: 'Perceived', pastParticiple: 'Perceived', translation: 'Percevoir / Discerner', category: 'Sens' },
+  { infinitive: 'Reconcile', preterite: 'Reconciled', pastParticiple: 'Reconciled', translation: 'Concilier / Rapprocher', category: 'Diplomatie' },
+  { infinitive: 'Relinquish', preterite: 'Relinquished', pastParticiple: 'Relinquished', translation: 'Abandonner / Renoncer', category: 'Décision' },
+  { infinitive: 'Surpass', preterite: 'Surpassed', pastParticiple: 'Surpassed', translation: 'Dépasser / Exceller', category: 'Prestige' },
+  { infinitive: 'Thrive', preterite: 'Throve / Thrived', pastParticiple: 'Thriven / Thrived', translation: 'Prospérer / S\'épanouir', category: 'Succès' },
+  { infinitive: 'Underwrite', preterite: 'Underwrote', pastParticiple: 'Underwritten', translation: 'Souscrire / Garantir', category: 'Finance' },
+  { infinitive: 'Vindicate', preterite: 'Vindicated', pastParticiple: 'Vindicated', translation: 'Réhabiliter / Justifier', category: 'Justice' }
+];
+
+// Banque Expert Avancé (Verbes académiques, diplomatie et littérature - 15 verbes)
+export const VERB_MASTER_EXPERT_AVANCE_BANK: VerbMasterVerb[] = [
+  { infinitive: 'Articulate', preterite: 'Articulated', pastParticiple: 'Articulated', translation: 'Exprimer clairement', category: 'Éloquence' },
+  { infinitive: 'Beget', preterite: 'Begot', pastParticiple: 'Begotten', translation: 'Engendrer / Générer', category: 'Origines' },
+  { infinitive: 'Bereave', preterite: 'Bereft', pastParticiple: 'Bereft', translation: 'Priver / Dépouiller', category: 'Émotion' },
+  { infinitive: 'Coerce', preterite: 'Coerced', pastParticiple: 'Coerced', translation: 'Contraindre / Forcer', category: 'Droit' },
+  { infinitive: 'Delineate', preterite: 'Delineated', pastParticiple: 'Delineated', translation: 'Tracer / Décrire avec soin', category: 'Précision' },
+  { infinitive: 'Dispel', preterite: 'Dispelled', pastParticiple: 'Dispelled', translation: 'Dissiper (doutes)', category: 'Esprit' },
+  { infinitive: 'Elucidate', preterite: 'Elucidated', pastParticiple: 'Elucidated', translation: 'Élucider / Éclaircir', category: 'Savoir' },
+  { infinitive: 'Engender', preterite: 'Engendered', pastParticiple: 'Engendered', translation: 'Susciter / Causer', category: 'Causalité' },
+  { infinitive: 'Exemplify', preterite: 'Exemplified', pastParticiple: 'Exemplified', translation: 'Illustrer / Incarner', category: 'Rhétorique' },
+  { infinitive: 'Extrapolate', preterite: 'Extrapolated', pastParticiple: 'Extrapolated', translation: 'Déduire / Extrapoler', category: 'Logique' },
+  { infinitive: 'Galvanize', preterite: 'Galvanized', pastParticiple: 'Galvanized', translation: 'Électriser / Motiver', category: 'Leadership' },
+  { infinitive: 'Instigate', preterite: 'Instigated', pastParticiple: 'Instigated', translation: 'Déclencher / Instiguer', category: 'Action' },
+  { infinitive: 'Manifest', preterite: 'Manifested', pastParticiple: 'Manifested', translation: 'Manifester / Révéler', category: 'Présence' },
+  { infinitive: 'Nullify', preterite: 'Nullified', pastParticiple: 'Nullified', translation: 'Annuler / Rendre caduc', category: 'Loi' },
+  { infinitive: 'Propitiate', preterite: 'Propitiated', pastParticiple: 'Propitiated', translation: 'Se concilier / Apaiser', category: 'Diplomatie' }
+];
+
+// Banque Master (Verbes de haute distinction stylistique Oxford - 14 verbes)
+export const VERB_MASTER_MASTER_BANK: VerbMasterVerb[] = [
+  { infinitive: 'Ameliorate', preterite: 'Ameliorated', pastParticiple: 'Ameliorated', translation: 'Améliorer grandement', category: 'Excellence' },
+  { infinitive: 'Assuage', preterite: 'Assuaged', pastParticiple: 'Assuaged', translation: 'Calmer / Adoucir', category: 'Sagesse' },
+  { infinitive: 'Chasten', preterite: 'Chastened', pastParticiple: 'Chastened', translation: 'Assagir / Modérer', category: 'Caractère' },
+  { infinitive: 'Corroborate', preterite: 'Corroborated', pastParticiple: 'Corroborated', translation: 'Confirmer / Étayer', category: 'Preuve' },
+  { infinitive: 'Dissemble', preterite: 'Dissembled', pastParticiple: 'Dissembled', translation: 'Dissimuler / Feindre', category: 'Subtilité' },
+  { infinitive: 'Embellish', preterite: 'Embellished', pastParticiple: 'Embellished', translation: 'Enjoliver / Embellir', category: 'Esthétique' },
+  { infinitive: 'Eradicate', preterite: 'Eradicated', pastParticiple: 'Eradicated', translation: 'Éradiquer / Déraciner', category: 'Résolution' },
+  { infinitive: 'Exacerbate', preterite: 'Exacerbated', pastParticiple: 'Exacerbated', translation: 'Aggraver / Envenimer', category: 'Tension' },
+  { infinitive: 'Juxtapose', preterite: 'Juxtaposed', pastParticiple: 'Juxtaposed', translation: 'Juxtaposer / Confronter', category: 'Style' },
+  { infinitive: 'Obviate', preterite: 'Obviated', pastParticiple: 'Obviated', translation: 'Parer à / Éviter', category: 'Stratégie' },
+  { infinitive: 'Perpetuate', preterite: 'Perpetuated', pastParticiple: 'Perpetuated', translation: 'Perpétuer', category: 'Mémoire' },
+  { infinitive: 'Prevaricate', preterite: 'Prevaricated', pastParticiple: 'Prevaricated', translation: 'Équivoquer / Tergiverser', category: 'Rhétorique' },
+  { infinitive: 'Substantiate', preterite: 'Substantiated', pastParticiple: 'Substantiated', translation: 'Justifier par des faits', category: 'Science' },
+  { infinitive: 'Transcend', preterite: 'Transcended', pastParticiple: 'Transcended', translation: 'Transcender / Dépasser', category: 'Élévation' }
+];
+
+export interface VerbMasterQuestion {
+  questionNumber: number;
+  totalQuestions: number;
+  pairs: VerbMasterVerb[]; // Exactement 6 verbes (6 paires = 12 MOTS)
+}
+
+/**
+ * Génère les séries de questions pour Verb Master (12 MOTS par question)
+ * Débutant: 5 questions, Intermédiaire: 25 questions, Expert: 50 questions,
+ * Expert Avancé: 70 questions, Master: 90 questions
+ * Tirage aléatoire sans répétition
+ */
+export function generateVerbMasterQuestions(levelKey: VerbMasterLevelKey): VerbMasterQuestion[] {
+  const config = VERB_MASTER_LEVELS[levelKey] || VERB_MASTER_LEVELS.debutant;
+
+  let pool: VerbMasterVerb[] = [];
+  if (levelKey === 'debutant') {
+    pool = [...VERB_MASTER_DEBUTANT_BANK];
+  } else if (levelKey === 'intermediaire') {
+    pool = [...VERB_MASTER_INTERMEDIAIRE_BANK, ...VERB_MASTER_DEBUTANT_BANK];
+  } else if (levelKey === 'expert') {
+    pool = [...VERB_MASTER_EXPERT_BANK, ...VERB_MASTER_AVANCE_BANK, ...VERB_MASTER_INTERMEDIAIRE_BANK];
+  } else if (levelKey === 'expert_avance') {
+    pool = [...VERB_MASTER_EXPERT_AVANCE_BANK, ...VERB_MASTER_EXPERT_BANK, ...VERB_MASTER_AVANCE_BANK];
+  } else {
+    pool = [...VERB_MASTER_MASTER_BANK, ...VERB_MASTER_EXPERT_AVANCE_BANK, ...VERB_MASTER_EXPERT_BANK];
+  }
+
+  const shuffledPool = [...pool].sort(() => Math.random() - 0.5);
+  const questions: VerbMasterQuestion[] = [];
+  let poolIdx = 0;
+
+  for (let q = 1; q <= config.questionsCount; q++) {
+    const roundPairs: VerbMasterVerb[] = [];
+    const usedInf = new Set<string>();
+
+    while (roundPairs.length < config.pairsPerQuestion) {
+      if (poolIdx >= shuffledPool.length) {
+        shuffledPool.sort(() => Math.random() - 0.5);
+        poolIdx = 0;
+      }
+      const candidate = shuffledPool[poolIdx];
+      poolIdx++;
+
+      if (!usedInf.has(candidate.infinitive)) {
+        usedInf.add(candidate.infinitive);
+        roundPairs.push(candidate);
+      }
+    }
+
+    questions.push({
+      questionNumber: q,
+      totalQuestions: config.questionsCount,
+      pairs: roundPairs
+    });
+  }
+
+  return questions;
+}
+
+// Rétrocompatibilité avec l'ancien composant
 export const VERB_MASTER_ITEMS = [
   {
     infinitive: 'Go',
@@ -1967,33 +2347,342 @@ export const VERB_MASTER_ITEMS = [
     preteriteCorrect: 'Saw',
     participleOptions: ['Seen', 'Saw', 'Seeing'],
     participleCorrect: 'Seen'
-  },
-  {
-    infinitive: 'Write',
-    translation: 'Écrire',
-    preteriteOptions: ['Wrote', 'Written', 'Writed'],
-    preteriteCorrect: 'Wrote',
-    participleOptions: ['Written', 'Wrote', 'Writing'],
-    participleCorrect: 'Written'
-  },
-  {
-    infinitive: 'Take',
-    translation: 'Prendre',
-    preteriteOptions: ['Took', 'Taken', 'Taked'],
-    preteriteCorrect: 'Took',
-    participleOptions: ['Taken', 'Took', 'Taking'],
-    participleCorrect: 'Taken'
-  },
-  {
-    infinitive: 'Eat',
-    translation: 'Manger',
-    preteriteOptions: ['Ate', 'Eaten', 'Eated'],
-    preteriteCorrect: 'Ate',
-    participleOptions: ['Eaten', 'Ate', 'Eating'],
-    participleCorrect: 'Eaten'
   }
 ];
 
+// =====================================================================
+// ASTRO HANGMAN (Mini-Jeu n°5) — Pendu Cosmique • 5 Niveaux • 12 Mots par Question
+// Débutant (5 questions), Intermédiaire (25 questions), Expert (50 questions),
+// Expert Avancé (70 questions), Master (90 questions)
+// =====================================================================
+
+export type AstroHangmanLevelKey = 'debutant' | 'intermediaire' | 'expert' | 'expert_avance' | 'master';
+
+export interface AstroHangmanWord {
+  word: string;
+  translation: string;
+  hint: string;
+  category?: string;
+}
+
+export interface AstroHangmanQuestion {
+  questionNumber: number;
+  totalQuestions: number;
+  words: AstroHangmanWord[]; // Exactement 12 mots par question
+}
+
+export interface AstroHangmanLevelInfo {
+  id: AstroHangmanLevelKey;
+  label: string;
+  subtitle: string;
+  requiredPlayerLevel: number;
+  questionsCount: number; // 5, 25, 50, 70, 90
+  wordsPerQuestion: number; // 12 mots par question
+  timePerWordLimited: number;
+  xpReward: number;
+  badgeBg: string;
+  badgeBorder: string;
+  badgeText: string;
+  icon: string;
+  description: string;
+}
+
+export const ASTRO_HANGMAN_LEVELS: Record<AstroHangmanLevelKey, AstroHangmanLevelInfo> = {
+  debutant: {
+    id: 'debutant',
+    label: 'Débutant',
+    subtitle: '5 Questions • 12 Mots par question (60 mots)',
+    requiredPlayerLevel: 1,
+    questionsCount: 5,
+    wordsPerQuestion: 12,
+    timePerWordLimited: 55,
+    xpReward: 40,
+    badgeBg: 'bg-emerald-500/20',
+    badgeBorder: 'border-emerald-500/40',
+    badgeText: 'text-emerald-400',
+    icon: 'sentiment_satisfied',
+    description: '5 questions de 12 mots (60 mots au total). Espace, ciel, nature et objets du quotidien.'
+  },
+  intermediaire: {
+    id: 'intermediaire',
+    label: 'Intermédiaire',
+    subtitle: '25 Questions • 12 Mots par question (300 mots)',
+    requiredPlayerLevel: 11,
+    questionsCount: 25,
+    wordsPerQuestion: 12,
+    timePerWordLimited: 50,
+    xpReward: 90,
+    badgeBg: 'bg-amber-500/20',
+    badgeBorder: 'border-amber-500/40',
+    badgeText: 'text-amber-400',
+    icon: 'speed',
+    description: '25 questions de 12 mots (300 mots au total). Vaisseaux, instruments, exploration et sciences.'
+  },
+  expert: {
+    id: 'expert',
+    label: 'Expert',
+    subtitle: '50 Questions • 12 Mots par question (600 mots)',
+    requiredPlayerLevel: 21,
+    questionsCount: 50,
+    wordsPerQuestion: 12,
+    timePerWordLimited: 45,
+    xpReward: 180,
+    badgeBg: 'bg-blue-500/20',
+    badgeBorder: 'border-blue-500/40',
+    badgeText: 'text-blue-400',
+    icon: 'workspace_premium',
+    description: '50 questions de 12 mots (600 mots au total). Phénomènes cosmiques, physique et navigation orbitale.'
+  },
+  expert_avance: {
+    id: 'expert_avance',
+    label: 'Expert Avancé',
+    subtitle: '70 Questions • 12 Mots par question (840 mots)',
+    requiredPlayerLevel: 31,
+    questionsCount: 70,
+    wordsPerQuestion: 12,
+    timePerWordLimited: 40,
+    xpReward: 300,
+    badgeBg: 'bg-purple-500/20',
+    badgeBorder: 'border-purple-500/40',
+    badgeText: 'text-purple-400',
+    icon: 'diamond',
+    description: '70 questions de 12 mots (840 mots au total). Astrophysique théorique, haute technologie et lexique érudit.'
+  },
+  master: {
+    id: 'master',
+    label: 'Master',
+    subtitle: '90 Questions • 12 Mots par question (1 080 mots)',
+    requiredPlayerLevel: 51,
+    questionsCount: 90,
+    wordsPerQuestion: 12,
+    timePerWordLimited: 35,
+    xpReward: 500,
+    badgeBg: 'bg-rose-500/20',
+    badgeBorder: 'border-rose-500/40',
+    badgeText: 'text-rose-400',
+    icon: 'military_tech',
+    description: '90 questions de 12 mots (1 080 mots au total). Cosmologie de pointe et maîtrise suprême du vocabulaire Oxford.'
+  }
+};
+
+// Banques lexicales volumineuses pour renouvellement sans répétition
+export const ASTRO_HANGMAN_DEBUTANT_BANK: AstroHangmanWord[] = [
+  { word: 'STAR', translation: 'Étoile', hint: 'Astre scintillant dans la voûte céleste nocturne', category: 'Astronomie' },
+  { word: 'MOON', translation: 'Lune', hint: 'Satellite naturel qui illumine nos nuits terrestres', category: 'Astronomie' },
+  { word: 'SUN', translation: 'Soleil', hint: 'Étoile centrale de notre système qui nous chauffe', category: 'Astronomie' },
+  { word: 'EARTH', translation: 'Terre', hint: 'Notre planète bleue berceau de la vie', category: 'Astronomie' },
+  { word: 'ROCKET', translation: 'Fusée', hint: 'Engin spatial propulsé vers les étoiles', category: 'Engins' },
+  { word: 'ORBIT', translation: 'Orbite', hint: 'Trajectoire circulaire fermée autour d\'un astre', category: 'Physique' },
+  { word: 'PLANET', translation: 'Planète', hint: 'Grand corps céleste gravitant autour du soleil', category: 'Astronomie' },
+  { word: 'SKY', translation: 'Ciel', hint: 'Voûte visible au-dessus de nos têtes', category: 'Nature' },
+  { word: 'LIGHT', translation: 'Lumière', hint: 'Rayonnement visible qui éclaire les ténèbres', category: 'Physique' },
+  { word: 'COMET', translation: 'Comète', hint: 'Boule de glace céleste avec une traînée lumineuse', category: 'Astronomie' },
+  { word: 'SPACE', translation: 'Espace', hint: 'Étendue infinie au-delà de l\'atmosphère', category: 'Cosmos' },
+  { word: 'NIGHT', translation: 'Nuit', hint: 'Période d\'obscurité entre coucher et lever du soleil', category: 'Temps' },
+  { word: 'CLOUD', translation: 'Nuage', hint: 'Amas de gouttelettes flottant dans l\'air', category: 'Météo' },
+  { word: 'WATER', translation: 'Eau', hint: 'Liquide vital indispensable à la vie extraterrestre', category: 'Éléments' },
+  { word: 'FIRE', translation: 'Feu', hint: 'Flammes incandescentes des moteurs spatiaux', category: 'Éléments' },
+  { word: 'WIND', translation: 'Vent', hint: 'Courant de gaz soufflant dans l\'atmosphère', category: 'Météo' },
+  { word: 'DUST', translation: 'Poussière', hint: 'Grains minuscules formant les anneaux cosmiques', category: 'Matière' },
+  { word: 'LASER', translation: 'Laser', hint: 'Faisceau lumineux rectiligne ultra-concentré', category: 'Technologie' },
+  { word: 'ROBOT', translation: 'Robot', hint: 'Machine automatique explorant le sol martien', category: 'Technologie' },
+  { word: 'ALIEN', translation: 'Extraterrestre', hint: 'Être hypothétique venu d\'un autre monde', category: 'Science-Fiction' },
+  { word: 'SPEED', translation: 'Vitesse', hint: 'Allure à laquelle se déplace un vaisseau', category: 'Physique' },
+  { word: 'FLASH', translation: 'Éclair', hint: 'Brève lueur vive et soudaine', category: 'Optique' },
+  { word: 'RADIO', translation: 'Radio', hint: 'Ondes captées par les antennes terrestres', category: 'Télécoms' },
+  { word: 'RADAR', translation: 'Radar', hint: 'Appareil qui détecte la position des débris', category: 'Navigation' },
+  { word: 'PILOT', translation: 'Pilote', hint: 'Commandant aux commandes de la navette', category: 'Métiers' },
+  { word: 'HERO', translation: 'Héros', hint: 'Pionnier courageux explorant l\'inconnu', category: 'Caractère' },
+  { word: 'TEAM', translation: 'Équipe', hint: 'Groupe soudé préparant la mission spatiale', category: 'Coopération' },
+  { word: 'DREAM', translation: 'Rêve', hint: 'Aspiration poétique à toucher les étoiles', category: 'Poésie' },
+  { word: 'METAL', translation: 'Métal', hint: 'Alliage robuste du blindage orbital', category: 'Matériaux' },
+  { word: 'GLASS', translation: 'Verre', hint: 'Hublot blindé offrant une vue sur la Terre', category: 'Matériaux' },
+  { word: 'POWER', translation: 'Puissance', hint: 'Force motrice phénoménale au décollage', category: 'Énergie' },
+  { word: 'SYSTEM', translation: 'Système', hint: 'Ensemble coordonné d\'éléments en synergie', category: 'Ingénierie' },
+  { word: 'ENGINE', translation: 'Moteur', hint: 'Propulseur brûlant le carburant spatial', category: 'Mécanique' },
+  { word: 'SOLAR', translation: 'Solaire', hint: 'Relatif au rayonnement de notre étoile', category: 'Énergie' },
+  { word: 'LUNAR', translation: 'Lunaire', hint: 'Qui se rapporte au sol et à l\'orbite de la Lune', category: 'Espace' },
+  { word: 'SUIT', translation: 'Combinaison', hint: 'Tenue pressurisée pour survivre dans le vide', category: 'Équipement' },
+  { word: 'MASK', translation: 'Masque', hint: 'Protection respiratoire faciale de cosmonaute', category: 'Sécurité' },
+  { word: 'TANK', translation: 'Réservoir', hint: 'Bonbonne contenant les réserves d\'oxygène', category: 'Équipement' },
+  { word: 'OXYGEN', translation: 'Oxygène', hint: 'Gaz vital maintenu dans la cabine de vol', category: 'Chimie' },
+  { word: 'FORCE', translation: 'Force', hint: 'Interaction poussant ou retenant un corps', category: 'Physique' },
+  { word: 'BEAM', translation: 'Rayon', hint: 'Ligne d\'ondes lumineuses traversant le vide', category: 'Optique' },
+  { word: 'LAUNCH', translation: 'Lancement', hint: 'Mise à feu et départ solennel du lanceur', category: 'Mission' },
+  { word: 'LAND', translation: 'Atterrir', hint: 'Poser délicatement les pieds sur Mars ou la Lune', category: 'Manœuvre' },
+  { word: 'SAFE', translation: 'En sécurité', hint: 'Mission sans avarie ni perte de pression', category: 'Statut' },
+  { word: 'SIGNAL', translation: 'Signal', hint: 'Bip électromagnétique transmis vers la Terre', category: 'Communication' }
+];
+
+export const ASTRO_HANGMAN_INTERMEDIAIRE_BANK: AstroHangmanWord[] = [
+  { word: 'GALAXY', translation: 'Galaxie', hint: 'Gigantesque ensemble spiralé de milliards d\'étoiles', category: 'Cosmologie' },
+  { word: 'ASTRONAUT', translation: 'Astronaute', hint: 'Explorateur qualifié pour voyager dans le cosmos', category: 'Métiers' },
+  { word: 'GRAVITY', translation: 'Gravité', hint: 'Attraction invisible maintenant les astres en orbite', category: 'Physique' },
+  { word: 'SATELLITE', translation: 'Satellite', hint: 'Sonde artificielle en orbite pour les transmissions', category: 'Technologie' },
+  { word: 'ECLIPSE', translation: 'Éclipse', hint: 'Occultation totale ou partielle d\'un astre par un autre', category: 'Phénomènes' },
+  { word: 'TELESCOPE', translation: 'Télescope', hint: 'Instrument optique pointé vers les confins de l\'univers', category: 'Optique' },
+  { word: 'UNIVERSE', translation: 'Univers', hint: 'Ensemble de toute la matière, l\'énergie et l\'espace', category: 'Cosmos' },
+  { word: 'METEOR', translation: 'Météore', hint: 'Étoile filante se désintégrant dans l\'atmosphère', category: 'Astronomie' },
+  { word: 'SHUTTLE', translation: 'Navette', hint: 'Véhicule spatial réutilisable pouvant revenir sur Terre', category: 'Vaisseaux' },
+  { word: 'MISSION', translation: 'Mission', hint: 'Objectif scientifique assigné à l\'équipage', category: 'Expédition' },
+  { word: 'CAPSULE', translation: 'Capsule', hint: 'Module habitable rentrant dans l\'atmosphère sous parachute', category: 'Vaisseaux' },
+  { word: 'STATION', translation: 'Station', hint: 'Grand avant-poste spatial permanent en orbite basse', category: 'Infrastructures' },
+  { word: 'VOYAGER', translation: 'Voyageur', hint: 'Sonde pionnière ayant quitté notre système solaire', category: 'Historique' },
+  { word: 'NEBULA', translation: 'Nébuleuse', hint: 'Nuage interstellaire coloré où naissent de nouvelles étoiles', category: 'Astrophysique' },
+  { word: 'CRATER', translation: 'Cratère', hint: 'Dépression circulaire causée par l\'impact d\'une météorite', category: 'Géologie' },
+  { word: 'HORIZON', translation: 'Horizon', hint: 'Limite visible de la courbure planétaire', category: 'Géométrie' },
+  { word: 'ALTITUDE', translation: 'Altitude', hint: 'Hauteur mesurée au-dessus du niveau de référence', category: 'Navigation' },
+  { word: 'VELOCITY', translation: 'Vélocité', hint: 'Vitesse de déplacement d\'une sonde dans l\'espace', category: 'Cinématique' },
+  { word: 'PRESSURE', translation: 'Pression', hint: 'Force exercée par l\'air sur les parois du module', category: 'Physique' },
+  { word: 'HELMET', translation: 'Casque', hint: 'Bulle protectrice transparente de la combinaison', category: 'Équipement' },
+  { word: 'CIRCUIT', translation: 'Circuit', hint: 'Chemin électronique alimentant les processeurs de bord', category: 'Électronique' },
+  { word: 'MODULE', translation: 'Module', hint: 'Compartiment autonome détachable du vaisseau', category: 'Structure' },
+  { word: 'ANTENNA', translation: 'Antenne', hint: 'Dispositif parabolique orienté vers le centre de contrôle', category: 'Télécoms' },
+  { word: 'EXPLORER', translation: 'Explorateur', hint: 'Vaisseau envoyé cartographier des mondes vierges', category: 'Exploration' },
+  { word: 'SENSOR', translation: 'Capteur', hint: 'Organe de mesure détectant la chaleur et les radiations', category: 'Instrumentation' },
+  { word: 'BOOSTER', translation: 'Propulseur', hint: 'Étage d\'appoint délivrant la poussée initiale', category: 'Propulsion' },
+  { word: 'AIRLOCK', translation: 'Sas spatial', hint: 'Chambre pressurisée permettant la sortie extravéhiculaire', category: 'Sécurité' },
+  { word: 'LANDER', translation: 'Atterrisseur', hint: 'Véhicule se posant en douceur sur la surface lunaire', category: 'Robots' },
+  { word: 'ORBITER', translation: 'Orbiteur', hint: 'Sonde restant en orbite pour scanner la planète', category: 'Vaisseaux' },
+  { word: 'MATRIX', translation: 'Matrice', hint: 'Réseau informatique régulant les paramètres de survie', category: 'Informatique' },
+  { word: 'PARTICLE', translation: 'Particule', hint: 'Élément infime composant le vent solaire', category: 'Physique' },
+  { word: 'DOCKING', translation: 'Amarrage', hint: 'Jonction millimétrée entre deux vaisseaux en apesanteur', category: 'Manœuvre' },
+  { word: 'ASTEROID', translation: 'Astéroïde', hint: 'Rocher spatial gravitant dans la ceinture principale', category: 'Astronomie' },
+  { word: 'MAGNET', translation: 'Aimant', hint: 'Corps créant un champ d\'attraction magnétique', category: 'Magnétisme' },
+  { word: 'ATMOSPHERE', translation: 'Atmosphère', hint: 'Manteau gazeux retenant l\'air respirable', category: 'Planétologie' }
+];
+
+export const ASTRO_HANGMAN_EXPERT_BANK: AstroHangmanWord[] = [
+  { word: 'SUPERNOVA', translation: 'Supernova', hint: 'Explosion cataclysmique marquant la mort d\'une étoile massive', category: 'Astrophysique' },
+  { word: 'BLACKHOLE', translation: 'Trou noir', hint: 'Zone d\'effondrement gravitationnel d\'où rien ne peut s\'échapper', category: 'Relativité' },
+  { word: 'INTERSTELLAR', translation: 'Interstellaire', hint: 'Situé dans le gouffre béant séparant deux systèmes stellaires', category: 'Cosmos' },
+  { word: 'EXOPLANET', translation: 'Exoplanète', hint: 'Monde orbitant autour d\'une autre étoile que le Soleil', category: 'Planétologie' },
+  { word: 'CONSTELLATION', translation: 'Constellation', hint: 'Figure géométrique imaginaire formée par des étoiles lointaines', category: 'Cartographie' },
+  { word: 'PROPULSION', translation: 'Propulsion', hint: 'Système d\'éjection de masse produisant une poussée réactive', category: 'Aérospatiale' },
+  { word: 'OBSERVATORY', translation: 'Observatoire', hint: 'Dôme scientifique perché au sommet d\'une montagne dégagée', category: 'Recherche' },
+  { word: 'WAVELENGTH', translation: 'Longueur d\'onde', hint: 'Distance entre deux crêtes successives d\'un rayonnement', category: 'Spectroscopie' },
+  { word: 'RADIATION', translation: 'Radiation', hint: 'Émission d\'énergie sous forme d\'ondes électromagnétiques', category: 'Physique' },
+  { word: 'SINGULARITY', translation: 'Singularité', hint: 'Point de densité infinie au cœur d\'un trou noir', category: 'Cosmologie' },
+  { word: 'RELATIVITY', translation: 'Relativité', hint: 'Théorie d\'Einstein unissant l\'espace et le temps', category: 'Théorie' },
+  { word: 'THERMODYNAMICS', translation: 'Thermodynamique', hint: 'Science régissant les échanges de chaleur et d\'énergie', category: 'Physique' },
+  { word: 'CRYOGENIC', translation: 'Cryogénique', hint: 'Carburant maintenu à des températures proches du zéro absolu', category: 'Chimie' },
+  { word: 'LUMINOSITY', translation: 'Luminosité', hint: 'Quantité totale d\'énergie rayonnée par un astre chaque seconde', category: 'Astrophysique' },
+  { word: 'SPECTROGRAPH', translation: 'Spectrographe', hint: 'Outil décomposant la lumière stellaire en raies colorées', category: 'Analyse' },
+  { word: 'CORONA', translation: 'Couronne solaire', hint: 'Halo de plasma incandescent entourant le Soleil', category: 'Astrophysique' },
+  { word: 'QUASAR', translation: 'Quasar', hint: 'Noyau galactique actif ultra-lumineux alimenté par un trou noir', category: 'Astrophysique' },
+  { word: 'PULSAR', translation: 'Pulsar', hint: 'Étoile à neutrons émettant des impulsions radio régulières', category: 'Astrophysique' },
+  { word: 'COSMOLOGY', translation: 'Cosmologie', hint: 'Étude scientifique de l\'origine et de l\'évolution de l\'univers', category: 'Sciences' },
+  { word: 'TELEMETRY', translation: 'Télémétrie', hint: 'Collecte et transmission à distance de données de bord', category: 'Télécoms' },
+  { word: 'CENTRIFUGE', translation: 'Centrifugeuse', hint: 'Appareil reproduisant les fortes accélérations terrestres', category: 'Entraînement' },
+  { word: 'APOGEE', translation: 'Apogée', hint: 'Point le plus éloigné de la Terre sur une orbite elliptique', category: 'Orbites' },
+  { word: 'PERIGEE', translation: 'Périgée', hint: 'Point le plus rapproché de la Terre sur une trajectoire orbitale', category: 'Orbites' },
+  { word: 'EQUINOX', translation: 'Équinoxe', hint: 'Jour où la durée du jour est strictement égale à la nuit', category: 'Calendrier' },
+  { word: 'SOLSTICE', translation: 'Solstice', hint: 'Moment où le Soleil atteint sa plus forte déclinaison', category: 'Saisons' },
+  { word: 'PROTOSTAR', translation: 'Protoétoile', hint: 'Masse dense de gaz en contraction avant l\'allumage nucléaire', category: 'Évolution' },
+  { word: 'MAGNETAR', translation: 'Magnétar', hint: 'Étoile à neutrons dotée d\'un champ magnétique colossale', category: 'Astrophysique' },
+  { word: 'CELESTIAL', translation: 'Céleste', hint: 'Qui appartient à la beauté sublime du ciel et des astres', category: 'Poétique' },
+  { word: 'ASTROMETRY', translation: 'Astrométrie', hint: 'Mesure minutieuse de la position et des mouvements stellaires', category: 'Sciences' },
+  { word: 'COSMONAUT', translation: 'Cosmonaute', hint: 'Pilote spatial selon l\'appellation de l\'agence russe', category: 'Pionniers' }
+];
+
+export const ASTRO_HANGMAN_EXPERT_AVANCE_BANK: AstroHangmanWord[] = [
+  { word: 'ASTROPHYSICS', translation: 'Astrophysique', hint: 'Branche de la physique étudiant les propriétés des astres', category: 'Sciences' },
+  { word: 'ELECTROMAGNETISM', translation: 'Électromagnétisme', hint: 'Interaction unifiant électricité et magnétisme', category: 'Fondamental' },
+  { word: 'THERMONUCLEAR', translation: 'Thermonucléaire', hint: 'Réaction de fusion libérant l\'énergie au cœur des étoiles', category: 'Nucléaire' },
+  { word: 'NUCLEOSYNTHESIS', translation: 'Nucléosynthèse', hint: 'Création des éléments chimiques lourds lors des supernovas', category: 'Chimie' },
+  { word: 'INTERGALACTIC', translation: 'Intergalactique', hint: 'Qui se déploie à travers les immensités entre galaxies', category: 'Échelle' },
+  { word: 'MICROGRAVITY', translation: 'Microgravité', hint: 'État d\'apesanteur presque parfaite ressentie en orbite', category: 'Physique' },
+  { word: 'MULTIVERSE', translation: 'Multivers', hint: 'Hypothèse d\'une infinité d\'univers parallèles coexistants', category: 'Théorie' },
+  { word: 'BIOASTRONAUTICS', translation: 'Bioastronautique', hint: 'Étude des réactions biologiques humaines aux vols spatiaux', category: 'Médecine' },
+  { word: 'EXOBIOLOGY', translation: 'Exobiologie', hint: 'Recherche de traces de vie organique sur d\'autres mondes', category: 'Biologie' },
+  { word: 'COSMOCHEMISTRY', translation: 'Cosmochimie', hint: 'Analyse chimique de la matière cométaire et météoritique', category: 'Chimie' },
+  { word: 'PERTURBATION', translation: 'Perturbation', hint: 'Légère déviation gravitationnelle d\'une orbite planétaire', category: 'Mécanique' },
+  { word: 'TELEPORTATION', translation: 'Téléportation', hint: 'Transfert instantané d\'états quantiques à distance', category: 'Quantique' },
+  { word: 'NANOTECHNOLOGY', translation: 'Nanotechnologie', hint: 'Manipulation de la matière à l\'échelle atomique pour les sondes', category: 'High-Tech' },
+  { word: 'SUPERCONDUCTIVITY', translation: 'Supraconductivité', hint: 'Disparition de toute résistance électrique à froid extrême', category: 'Physique' },
+  { word: 'EXOSPHERIC', translation: 'Exosphérique', hint: 'Relatif à la couche la plus externe et ténue de l\'atmosphère', category: 'Couches' },
+  { word: 'SPATIOTEMPORAL', translation: 'Spatiotemporel', hint: 'Qui combine intimement les dimensions d\'espace et de temps', category: 'Relativité' },
+  { word: 'DECOHERENCE', translation: 'Décohérence', hint: 'Perte des propriétés quantiques d\'un système au contact du milieu', category: 'Quantique' },
+  { word: 'SPECTROMETER', translation: 'Spectromètre', hint: 'Appareil analysant la composition chimique par réfraction', category: 'Appareillage' },
+  { word: 'RECOMBINATION', translation: 'Recombinaison', hint: 'Époque où les premiers atomes neutres se formèrent après le Big Bang', category: 'Origines' },
+  { word: 'BARYOGENESIS', translation: 'Baryogenèse', hint: 'Asymétrie primordiale ayant permis à la matière de l\'emporter', category: 'Origines' }
+];
+
+export const ASTRO_HANGMAN_MASTER_BANK: AstroHangmanWord[] = [
+  { word: 'CONSCIOUSNESS', translation: 'Conscience', hint: 'Perception lucide de sa place dans l\'harmonie cosmique', category: 'Philosophie' },
+  { word: 'TRANSCENDENTAL', translation: 'Transcendantal', hint: 'Qui dépasse l\'expérience commune et touche à l\'universel', category: 'Métaphysique' },
+  { word: 'ANISOTROPY', translation: 'Anisotropie', hint: 'Variations infimes de température dans le fond diffus cosmologique', category: 'Mesures' },
+  { word: 'QUINTESSENCE', translation: 'Quintessence', hint: 'Hypothèse d\'une forme dynamique d\'énergie noire répulsive', category: 'Cosmologie' },
+  { word: 'ENTANGLEMENT', translation: 'Intrication quantique', hint: 'Liaison instantanée de deux particules séparées par des années-lumière', category: 'Quantique' },
+  { word: 'INTERFEROMETRY', translation: 'Interférométrie', hint: 'Combinaison de signaux de multiples télescopes pour un rendu géant', category: 'Instruments' },
+  { word: 'SUPERSYMMETRY', translation: 'Supersymétrie', hint: 'Théorie unifiant fermions et bosons par des particules miroirs', category: 'Particules' },
+  { word: 'GRAVITOMAGNETISM', translation: 'Gravitomagnétisme', hint: 'Effet relativiste d\'entraînement de l\'espace par un corps en rotation', category: 'Relativité' },
+  { word: 'SPATIOTEMPORALITY', translation: 'Spatiotemporalité', hint: 'Nature inséparable de la trame quadridimensionnelle cosmique', category: 'Physique' },
+  { word: 'CHROMODYNAMICS', translation: 'Chromodynamique', hint: 'Théorie de l\'interaction forte liant les quarks au sein des protons', category: 'Théorie' },
+  { word: 'ELECTRODYNAMICS', translation: 'Électrodynamique', hint: 'Description quantique des interactions entre lumière et matière', category: 'Fondamental' },
+  { word: 'EXTRAORDINARY', translation: 'Extraordinaire', hint: 'Qui surpasse l\'imagination et transcende le réel', category: 'Vocabulaire' },
+  { word: 'SOPHISTICATED', translation: 'Sophistiqué', hint: 'D\'une ingénierie extrêmement raffinée et complexe', category: 'Élégance' },
+  { word: 'CONTEMPLATION', translation: 'Contemplation', hint: 'Observation sereine et émerveillée de la voûte étoilée', category: 'Spiritualité' },
+  { word: 'EXTRAVEHICULAR', translation: 'Extravéhiculaire', hint: 'Sortie d\'un cosmonaute dans le vide en dehors du vaisseau', category: 'Activités' },
+  { word: 'AUTHENTICITY', translation: 'Authenticité', hint: 'Vérité pure et rigueur scientifique irréprochable', category: 'Valeurs' },
+  { word: 'MAGNIFICENT', translation: 'Magnifique', hint: 'D\'une splendeur grandiose coupant le souffle', category: 'Esthétique' },
+  { word: 'ILLUMINATION', translation: 'Illumination', hint: 'Clarté soudaine de l\'esprit devant une découverte majeure', category: 'Savoir' },
+  { word: 'RESILIENCE', translation: 'Résilience', hint: 'Capacité d\'un système autonome à surmonter les avaries', category: 'Robustesse' }
+];
+
+/**
+ * Générateur dynamique de questions Astro Hangman non-répétitives :
+ * Chaque question contient rigoureusement 12 MOTS (60, 300, 600, 840, ou 1080 mots selon le niveau).
+ */
+export function generateAstroHangmanQuestions(levelKey: AstroHangmanLevelKey): AstroHangmanQuestion[] {
+  const config = ASTRO_HANGMAN_LEVELS[levelKey] || ASTRO_HANGMAN_LEVELS.debutant;
+
+  let pool: AstroHangmanWord[];
+  if (levelKey === 'debutant') {
+    pool = [...ASTRO_HANGMAN_DEBUTANT_BANK];
+  } else if (levelKey === 'intermediaire') {
+    pool = [...ASTRO_HANGMAN_INTERMEDIAIRE_BANK, ...ASTRO_HANGMAN_DEBUTANT_BANK];
+  } else if (levelKey === 'expert') {
+    pool = [...ASTRO_HANGMAN_EXPERT_BANK, ...ASTRO_HANGMAN_INTERMEDIAIRE_BANK];
+  } else if (levelKey === 'expert_avance') {
+    pool = [...ASTRO_HANGMAN_EXPERT_AVANCE_BANK, ...ASTRO_HANGMAN_EXPERT_BANK];
+  } else {
+    pool = [...ASTRO_HANGMAN_MASTER_BANK, ...ASTRO_HANGMAN_EXPERT_AVANCE_BANK];
+  }
+
+  const questions: AstroHangmanQuestion[] = [];
+  const shuffledPool = [...pool].sort(() => Math.random() - 0.5);
+  let poolIdx = 0;
+
+  for (let q = 1; q <= config.questionsCount; q++) {
+    const roundWords: AstroHangmanWord[] = [];
+    const usedWords = new Set<string>();
+
+    while (roundWords.length < config.wordsPerQuestion) {
+      if (poolIdx >= shuffledPool.length) {
+        shuffledPool.sort(() => Math.random() - 0.5);
+        poolIdx = 0;
+      }
+      const candidate = shuffledPool[poolIdx];
+      poolIdx++;
+
+      if (!usedWords.has(candidate.word)) {
+        usedWords.add(candidate.word);
+        roundWords.push(candidate);
+      }
+    }
+
+    questions.push({
+      questionNumber: q,
+      totalQuestions: config.questionsCount,
+      words: roundWords
+    });
+  }
+
+  return questions;
+}
+
+// Rétrocompatibilité avec l'ancienne référence
 export const HANGMAN_WORDS = [
   { word: 'PLANET', hint: 'Corps céleste en orbite autour d\'une étoile' },
   { word: 'GALAXY', hint: 'Immense ensemble d\'étoiles et de systèmes' },

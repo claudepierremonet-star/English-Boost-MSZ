@@ -631,7 +631,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 {chartMetric === 'xp' ? 'show_chart' : 'trending_up'}
               </span>
               <h3 className="font-serif text-base sm:text-lg text-[#dce2f8] font-bold">
-                {chartMetric === 'xp' ? 'Évolution Hebdomadaire des XP & Régularité' : 'Évolution du Score sur 7 Jours'}
+                {chartMetric === 'xp' ? 'Mon historique de progression • 7 Jours' : 'Mon historique de progression (Score %)'}
               </h3>
               <span
                 className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${

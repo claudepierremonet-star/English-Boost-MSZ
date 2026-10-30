@@ -4,13 +4,13 @@
 English Boost MZ offre une progression linguistique complète, rigoureuse et immersive de la classe de **6ème jusqu'à la Terminale**, alignée sur les exigences du Cadre Européen Commun de Référence pour les Langues (CECRL) et les programmes officiels de l'Éducation Nationale.
 
 ### Chiffres Clés du Programme
-- **70 Leçons exhaustives** (7 classes × 10 thèmes fondamentaux)
-- **560 Termes de vocabulaire contextualisés** avec phonétique internationale (API), exemples bilingues et notes de nuance
-- **350 Phrases modèles** illustrant la grammaire en situation
-- **70 Points de grammaire détaillés** avec règles claires, formules et astuces mnémotechniques
-- **420 Répliques de dialogues bilingues** conçues pour l'oral, la lecture expressive et le shadowing
-- **280 Questions de quiz interactifs** avec retours pédagogiques immédiats et corrigés argumentés
-- **70 Dictées d'entraînement** avec détection de frappe et tolérance orthographique intelligente
+- **200 Leçons exhaustives** (réparties sur les 7 classes scolaires et les 10 thèmes fondamentaux)
+- **Plus de 1 600 Termes de vocabulaire contextualisés** avec phonétique internationale (API), exemples bilingues et notes de nuance
+- **Plus de 1 000 Phrases modèles** illustrant la grammaire en situation réelle
+- **200 Points de grammaire détaillés** avec règles claires, formules et astuces mnémotechniques
+- **Plus de 1 200 Répliques de dialogues bilingues** conçues pour l'oral, la lecture expressive et le shadowing
+- **800 Questions de quiz interactifs** avec retours pédagogiques immédiats et corrigés argumentés
+- **200 Dictées d'entraînement** avec détection de frappe et tolérance orthographique intelligente
 
 ---
 
