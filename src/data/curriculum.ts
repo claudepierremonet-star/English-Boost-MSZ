@@ -211,9 +211,20 @@ export interface DictationItem {
     register: string;
     explanation: string;
   }>;
+  targetWord?: string;
+  phonetic?: string;
+  frenchDef?: string;
+  englishDef?: string;
+  etymology?: string;
+  collocations?: string[];
+  nuanceComparisons?: Array<{ word: string; distinction: string }>;
+  gradeLevel?: '6e' | '5e' | '4e' | '3e' | '2nde' | '1re' | 'terminale';
+  gradeLabel?: string;
+  theme?: string;
+  themeLabel?: string;
 }
 
-export const DICTATION_ITEMS: DictationItem[] = [
+export const CLASSIC_DICTATION_ITEMS: DictationItem[] = [
   {
     id: 'dict-1',
     title: 'The Bretton Woods Paradigm',
@@ -221,6 +232,20 @@ export const DICTATION_ITEMS: DictationItem[] = [
     level: 'C1',
     durationLabel: '14 sec',
     canonicalText: "The central bank's reluctance to curb quantitative easing inadvertently exacerbated inflationary pressures across sovereign debt markets.",
+    targetWord: 'To curb',
+    phonetic: '/tə kɜːb/',
+    frenchDef: 'Réfréner, contenir ou freiner une dynamique haussière.',
+    englishDef: 'To restrain, check, or keep in control.',
+    etymology: "Du vieux français 'courber' (plier, restreindre), issu du latin classique 'curvare'.",
+    collocations: ['curb inflation', 'curb spending', 'curb quantitative easing'],
+    nuanceComparisons: [
+      { word: 'To curb', distinction: 'Freiner fermement une force en marche' },
+      { word: 'To stop', distinction: 'Arrêter net et immédiatement' }
+    ],
+    gradeLevel: 'terminale',
+    gradeLabel: 'Terminale (Lycée C1)',
+    theme: 'monde_travail_metiers',
+    themeLabel: 'Monde du travail & Métiers',
     notes: [
       {
         term: 'To curb [something]',
@@ -246,6 +271,20 @@ export const DICTATION_ITEMS: DictationItem[] = [
     level: 'C2',
     durationLabel: '18 sec',
     canonicalText: 'Seldom does an institution wield such unbridled prerogative without precipitating profound structural fissures across multilateral alliances.',
+    targetWord: 'Unbridled',
+    phonetic: '/ʌnˈbraɪ.dəld/',
+    frenchDef: 'Effréné, sans entraves, déployé sans modération.',
+    englishDef: 'Uncontrolled, unconstrained, unrestrained.',
+    etymology: "Préfixe négatif 'un-' et 'bridle' (la bride équestre), issu du vieil anglais 'brīdel'.",
+    collocations: ['unbridled prerogative', 'unbridled enthusiasm', 'unbridled power'],
+    nuanceComparisons: [
+      { word: 'Unbridled', distinction: 'Sens métaphorique : sans bride, fougueux' },
+      { word: 'Wild', distinction: 'Sauvage par nature originelle' }
+    ],
+    gradeLevel: 'terminale',
+    gradeLabel: 'Terminale (Lycée C2)',
+    theme: 'geographie_politique_art',
+    themeLabel: 'Géographie, Société & Arts',
     notes: [
       {
         term: 'Seldom does [subject] [verb]',
@@ -271,6 +310,20 @@ export const DICTATION_ITEMS: DictationItem[] = [
     level: 'B2',
     durationLabel: '12 sec',
     canonicalText: 'Although the committee reached a tentative consensus, several delegates voiced serious reservations regarding the proposed timetable.',
+    targetWord: 'Tentative',
+    phonetic: '/ˈten.tə.tɪv/',
+    frenchDef: 'Accord de principe provisoire, susceptible d’ajustements ultérieurs.',
+    englishDef: 'Not certain or fixed; provisional.',
+    etymology: "Du latin médiéval 'tentativus' (destiné à tester), dérivé de 'tentare' (essayer, toucher).",
+    collocations: ['tentative consensus', 'tentative timetable', 'tentative agreement'],
+    nuanceComparisons: [
+      { word: 'Tentative', distinction: 'Provisoire et prudent avant validation' },
+      { word: 'Definitive', distinction: 'Final, irréversible' }
+    ],
+    gradeLevel: '1re',
+    gradeLabel: 'Première (Lycée B2)',
+    theme: 'monde_travail_metiers',
+    themeLabel: 'Monde du travail & Métiers',
     notes: [
       {
         term: 'Tentative consensus',
@@ -291,6 +344,20 @@ export const DICTATION_ITEMS: DictationItem[] = [
     level: 'B1',
     durationLabel: '10 sec',
     canonicalText: 'The university library contains thousands of rare manuscripts and historical documents from the eighteenth century.',
+    targetWord: 'Manuscripts',
+    phonetic: '/ˈmæn.jə.skrɪpts/',
+    frenchDef: 'Manuscrits anciens et documents rédigés à la main conservés en bibliothèque.',
+    englishDef: 'Books, documents, or pieces of music written by hand rather than typed or printed.',
+    etymology: "Du latin médiéval 'manuscriptum', de 'manu' (par la main) et 'scriptus' (écrit).",
+    collocations: ['rare manuscripts', 'ancient manuscripts', 'historical documents'],
+    nuanceComparisons: [
+      { word: 'Manuscript', distinction: 'Document écrit à la main' },
+      { word: 'Print', distinction: 'Ouvrage imprimé mécaniquement' }
+    ],
+    gradeLevel: '3e',
+    gradeLabel: '3e (Collège palier B1)',
+    theme: 'histoire_patrimoine',
+    themeLabel: 'Histoire & Patrimoine',
     notes: [
       {
         term: 'Rare manuscripts',
@@ -299,6 +366,50 @@ export const DICTATION_ITEMS: DictationItem[] = [
       }
     ]
   }
+];
+
+import { SPACED_REPETITION_500 } from './spacedRepetition500';
+
+export const DICTATION_ITEMS_500: DictationItem[] = SPACED_REPETITION_500.map((card) => ({
+  id: `dict-${card.id}`,
+  title: `${card.term} — ${card.category}`,
+  source: `${card.pressSource} • ${card.themeLabel}`,
+  level: card.level,
+  durationLabel: `${Math.max(4, Math.min(18, Math.round(card.pressExcerpt.split(' ').length * 0.65)))} sec`,
+  canonicalText: card.pressExcerpt,
+  notes: [
+    {
+      term: card.term,
+      register: `Mot cible • ${card.gradeLabel}`,
+      explanation: `${card.frenchDef} (Phonétique : ${card.phonetic})`
+    },
+    {
+      term: 'Origine & Philologie',
+      register: 'Étymologie',
+      explanation: card.etymology
+    },
+    ...card.collocations.map((c) => ({
+      term: c,
+      register: 'Collocation usuelle',
+      explanation: 'Association idiomatique fréquente en anglais contemporain.'
+    }))
+  ],
+  targetWord: card.term,
+  phonetic: card.phonetic,
+  frenchDef: card.frenchDef,
+  englishDef: card.englishDef,
+  etymology: card.etymology,
+  collocations: card.collocations,
+  nuanceComparisons: card.nuanceComparisons,
+  gradeLevel: card.gradeLevel,
+  gradeLabel: card.gradeLabel,
+  theme: card.theme,
+  themeLabel: card.themeLabel
+}));
+
+export const DICTATION_ITEMS: DictationItem[] = [
+  ...CLASSIC_DICTATION_ITEMS,
+  ...DICTATION_ITEMS_500
 ];
 
 export interface FlashcardItem {
@@ -314,82 +425,13 @@ export interface FlashcardItem {
   pressSource: string;
   collocations: string[];
   nuanceComparisons: Array<{ word: string; distinction: string }>;
+  gradeLevel?: '6e' | '5e' | '4e' | '3e' | '2nde' | '1re' | 'terminale';
+  gradeLabel?: string;
+  theme?: string;
+  themeLabel?: string;
 }
 
-export const FLASHCARD_ITEMS: FlashcardItem[] = [
-  {
-    id: 'card-equivocal',
-    term: 'Equivocal',
-    phonetic: '/ɪˈkwɪv.ə.kəl/',
-    level: 'C1',
-    category: 'Collocations Rhétoriques',
-    frenchDef: 'Qui prête délibérément à double interprétation ; subtilement ambigu, équivoque ou fuyant.',
-    englishDef: 'Open to more than one interpretation; deliberately ambiguous, often to mislead or conceal true intent.',
-    etymology: 'Du latin tardif aequivocus, formé sur aequus (« égal ») et vox (« voix, parole ») — « à double voix ».',
-    pressExcerpt: '“The foreign ministry released an equivocal statement, preserving vital strategic room for maneuver without alarming key allies.”',
-    pressSource: 'The Financial Times',
-    collocations: ['highly equivocal stance', 'deliberately equivocal phrasing', 'an equivocal diplomatic signal'],
-    nuanceComparisons: [
-      { word: 'Equivocal', distinction: 'Ambiguïté volontaire, calculée et stratégique.' },
-      { word: 'Ambiguous', distinction: 'Double sens possible, souvent involontaire ou contextuel.' },
-      { word: 'Evasive', distinction: 'Fuite ou refus délibéré de répondre frontalement.' }
-    ]
-  },
-  {
-    id: 'card-perspicacity',
-    term: 'Perspicacity',
-    phonetic: '/ˌpɜː.spɪˈkæs.ə.ti/',
-    level: 'C2',
-    category: 'Épistémologie & Finesse',
-    frenchDef: 'Clairvoyance aiguë et perspicacité d’esprit capable de percer les apparences trompeuses.',
-    englishDef: 'The quality of having a ready insight into things; penetrating discernment.',
-    etymology: 'Du latin perspicax (« au regard perçant »), dérivé de perspicere (« regarder à travers, scruter »).',
-    pressExcerpt: '“His perspicacity in anticipating currency devaluations shielded the sovereign investment fund from catastrophic losses.”',
-    pressSource: 'The Wall Street Journal',
-    collocations: ['diplomatic perspicacity', 'keen intellectual perspicacity', 'demonstrate rare perspicacity'],
-    nuanceComparisons: [
-      { word: 'Perspicacity', distinction: 'Pénétration d’esprit immédiate et profonde.' },
-      { word: 'Acuteness', distinction: 'Vivacité sensorielle ou logique ponctuelle.' },
-      { word: 'Wisdom', distinction: 'Jugement mûri par l’expérience et le temps.' }
-    ]
-  },
-  {
-    id: 'card-meretricious',
-    term: 'Meretricious',
-    phonetic: '/ˌmɛr.ɪˈtrɪʃ.əs/',
-    level: 'C2',
-    category: 'Critique Littéraire & Rhétorique',
-    frenchDef: 'Séduisant en apparence mais vide de substance ou de réelle probité morale.',
-    englishDef: 'Apparently attractive but having in reality no substance, integrity, or value.',
-    etymology: 'Du latin meretricius, dérivé de meretrix (« courtisane », de merere, gagner un salaire).',
-    pressExcerpt: '“The orator’s speeches were undeniably theatrical, yet critics condemned them as meretricious spectacles devoid of policy.”',
-    pressSource: 'The Guardian Books & Culture',
-    collocations: ['meretricious arguments', 'meretricious ornaments of style', 'meretricious popularity'],
-    nuanceComparisons: [
-      { word: 'Meretricious', distinction: 'Attrait tape-à-l’œil cachant le vide ou la fausseté.' },
-      { word: 'Specious', distinction: 'Argument d’apparence logique mais fallacieux.' },
-      { word: 'Superficial', distinction: 'Restant en surface, sans intention de tromperie ostentatoire.' }
-    ]
-  },
-  {
-    id: 'card-fastidious',
-    term: 'Fastidious',
-    phonetic: '/fæˈstɪd.i.əs/',
-    level: 'B2',
-    category: 'Précision Stylistique',
-    frenchDef: 'Très exigeant sur les détails, minutieux jusqu’à la méticulosité extrême.',
-    englishDef: 'Very attentive to and concerned about accuracy and detail.',
-    etymology: 'Du latin fastidiosus (« dégoûté, dédaigneux »), de fastidium (« dégoût, aversion »).',
-    pressExcerpt: '“The treaty draft demanded fastidious attention to every comma and subjunctive clause.”',
-    pressSource: 'Cambridge Academic Press',
-    collocations: ['fastidious attention to detail', 'fastidious craftsmanship', 'remained fastidious in research'],
-    nuanceComparisons: [
-      { word: 'Fastidious', distinction: 'Exigence de rigueur et d’exactitude presque maniaque.' },
-      { word: 'Meticulous', distinction: 'Minutieux et méthodique dans le travail.' },
-      { word: 'Finicky', distinction: 'Pinaillage trivial ou caprice déplaisant.' }
-    ]
-  }
-];
+export const FLASHCARD_ITEMS: FlashcardItem[] = SPACED_REPETITION_500;
 
 export interface QuizQuestion {
   id: string;
@@ -520,6 +562,36 @@ export interface SpeakingItem {
 
 export const SPEAKING_ITEMS: SpeakingItem[] = [
   {
+    id: 'spk-a1',
+    level: 'A1',
+    title: 'Daily Greeting & Morning Courtesies',
+    source: 'Everyday Politeness & Welcome',
+    textToRead: '“Good morning! It is wonderful to meet you today in London, and I hope you have a pleasant journey.”',
+    phoneticHints: '/ɡʊd ˈmɔːnɪŋ! ɪt ɪz ˈwʌndəfʊl tuː miːt juː təˈdeɪ/',
+    rhythmTips: 'Accent tonique sur « morning » et « wonderful ». Veillez à ne pas prononcer le /r/ britannique dans « morning ».',
+    targetAccent: 'Received Pronunciation (RP)'
+  },
+  {
+    id: 'spk-a2',
+    level: 'A2',
+    title: 'Travel & Urban Navigation',
+    source: 'London Underground Station Guide',
+    textToRead: '“Excuse me, could you tell me which platform the train to Oxford departs from, and how long the journey takes?”',
+    phoneticHints: '/ɪkˈskjuːz miː, kʊd juː tɛl miː wɪtʃ ˈplætfɔːm/',
+    rhythmTips: 'Intonation montante de politesse sur « Excuse me », puis intonation descendante naturelle sur « takes ».',
+    targetAccent: 'Received Pronunciation (RP)'
+  },
+  {
+    id: 'spk-b1',
+    level: 'B1',
+    title: 'Academic Archival Research',
+    source: 'Bodleian Library Orientation',
+    textToRead: '“The university archives contain thousands of rare manuscripts and historical documents from the eighteenth century.”',
+    phoneticHints: '/ðə ˌjuːnɪˈvɜːsɪti ˈɑːkaɪvz kənˈteɪn ˈθaʊzəndz əv reə ˈmænjʊskrɪpts/',
+    rhythmTips: 'Attaque douce sur « archives », prononciation fricative soignée de /θ/ dans « thousands » et « eighteenth ».',
+    targetAccent: 'Oxford Academic Standard'
+  },
+  {
     id: 'spk-1',
     level: 'C1',
     title: 'The Ambassador’s Demurral',
@@ -550,3 +622,212 @@ export const SPEAKING_ITEMS: SpeakingItem[] = [
     targetAccent: 'Contemporary British'
   }
 ];
+
+// ============================================================================
+// CURSUS SCOLAIRE 200 LEÇONS (6e À TERMINALE) PAR NIVEAU & PAR THÈME
+// ============================================================================
+import schoolCurriculumJson from './schoolCurriculumData.json';
+import type {
+  SchoolGrade,
+  SchoolLesson,
+  SchoolLevelInfo,
+  SchoolThemeInfo,
+  SchoolVocabularyItem,
+  ModelPhrase,
+  GrammarLessonPoint,
+  DialogueLine,
+  DictationLessonItem,
+  SchoolQuizQuestion
+} from './schoolCurriculum';
+
+export type {
+  SchoolGrade,
+  SchoolLesson,
+  SchoolLevelInfo,
+  SchoolThemeInfo,
+  SchoolVocabularyItem,
+  ModelPhrase,
+  GrammarLessonPoint,
+  DialogueLine,
+  DictationLessonItem,
+  SchoolQuizQuestion
+};
+
+export interface ThemeCurriculumGroup {
+  themeId: string;
+  themeLabel: string;
+  themeEn: string;
+  themeIcon: string;
+  lessonsCount: number;
+  lessons: SchoolLesson[];
+}
+
+export interface GradeCurriculum {
+  grade: SchoolGrade;
+  label: string;
+  cycle: string;
+  cefr: string;
+  goal: string;
+  totalLessons: number;
+  totalVocabulary: number;
+  themes: ThemeCurriculumGroup[];
+  themesMap: Record<string, ThemeCurriculumGroup>;
+}
+
+export interface Curriculum200Structure {
+  metadata: {
+    title: string;
+    totalLessons: number;
+    gradesCount: number;
+    themesCount: number;
+    version: string;
+  };
+  levels: SchoolLevelInfo[];
+  themes: SchoolThemeInfo[];
+  allLessons: SchoolLesson[];
+  grades: GradeCurriculum[];
+  byGrade: Record<SchoolGrade, GradeCurriculum>;
+}
+
+function build200LessonsCurriculum(): Curriculum200Structure {
+  const levels = schoolCurriculumJson.levels as SchoolLevelInfo[];
+  const themes = schoolCurriculumJson.themes as SchoolThemeInfo[];
+  const allLessons = schoolCurriculumJson.lessons as SchoolLesson[];
+
+  const byGrade = {} as Record<SchoolGrade, GradeCurriculum>;
+  const gradesList: GradeCurriculum[] = [];
+
+  for (const lev of levels) {
+    const gradeLessons = allLessons.filter((l) => l.class_level === lev.id);
+    const themesGroups: ThemeCurriculumGroup[] = [];
+    const themesMap: Record<string, ThemeCurriculumGroup> = {};
+
+    let gradeVocabCount = 0;
+
+    for (const th of themes) {
+      const themeLessons = gradeLessons.filter((l) => l.theme_id === th.id);
+      for (const les of themeLessons) {
+        gradeVocabCount += les.vocabulary?.length || 0;
+      }
+
+      const group: ThemeCurriculumGroup = {
+        themeId: th.id,
+        themeLabel: th.label,
+        themeEn: th.en,
+        themeIcon: th.icon,
+        lessonsCount: themeLessons.length,
+        lessons: themeLessons
+      };
+
+      themesGroups.push(group);
+      themesMap[th.id] = group;
+    }
+
+    const gradeData: GradeCurriculum = {
+      grade: lev.id as SchoolGrade,
+      label: lev.label,
+      cycle: lev.cycle,
+      cefr: lev.cefr,
+      goal: lev.goal,
+      totalLessons: gradeLessons.length,
+      totalVocabulary: gradeVocabCount,
+      themes: themesGroups,
+      themesMap
+    };
+
+    byGrade[lev.id as SchoolGrade] = gradeData;
+    gradesList.push(gradeData);
+  }
+
+  return {
+    metadata: {
+      title: 'English Boost MZ — Cursus 200 Leçons Scolaires (6e à Terminale)',
+      totalLessons: allLessons.length,
+      gradesCount: levels.length,
+      themesCount: themes.length,
+      version: (schoolCurriculumJson as { version?: string }).version || '3.0.0'
+    },
+    levels,
+    themes,
+    allLessons,
+    grades: gradesList,
+    byGrade
+  };
+}
+
+/**
+ * Structure officielle des 200 leçons organisées par niveau (6e à Terminale)
+ * et par thème (10 thèmes pédagogiques transversaux).
+ */
+export const CURRICULUM_200_STRUCTURE: Curriculum200Structure = build200LessonsCurriculum();
+export const SCHOOL_LEVELS_DATA: SchoolLevelInfo[] = CURRICULUM_200_STRUCTURE.levels;
+export const SCHOOL_THEMES_DATA: SchoolThemeInfo[] = CURRICULUM_200_STRUCTURE.themes;
+export const ALL_200_LESSONS: SchoolLesson[] = CURRICULUM_200_STRUCTURE.allLessons;
+
+/**
+ * Récupère le cursus complet d'un niveau scolaire donné (ex: '6e', '3e', 'terminale')
+ * avec ses 10 thèmes et leurs leçons respectives.
+ */
+export function getCurriculumByGrade(grade: SchoolGrade): GradeCurriculum {
+  return CURRICULUM_200_STRUCTURE.byGrade[grade] || CURRICULUM_200_STRUCTURE.grades[0];
+}
+
+/**
+ * Récupère la liste des 10 thèmes pour un niveau donné avec le nombre de leçons.
+ */
+export function getThemesForGrade(grade: SchoolGrade): ThemeCurriculumGroup[] {
+  return getCurriculumByGrade(grade).themes;
+}
+
+/**
+ * Récupère les leçons filtrées par classe et optionnellement par thème.
+ */
+export function getLessonsForGradeAndTheme(grade: SchoolGrade, themeId?: string): SchoolLesson[] {
+  const gradeCurriculum = getCurriculumByGrade(grade);
+  if (!themeId || themeId === 'all') {
+    return gradeCurriculum.themes.flatMap((tg) => tg.lessons);
+  }
+  return gradeCurriculum.themesMap[themeId]?.lessons || [];
+}
+
+/**
+ * Recherche une leçon par son identifiant unique parmi les 200 leçons.
+ */
+export function getCurriculumLessonById(id: string): SchoolLesson | undefined {
+  return CURRICULUM_200_STRUCTURE.allLessons.find((l) => l.id === id);
+}
+
+/**
+ * Fournit les statistiques globales de couverture du cursus des 200 leçons.
+ */
+export function getCurriculum200Stats() {
+  const { allLessons, grades } = CURRICULUM_200_STRUCTURE;
+  let totalVocab = 0;
+  let totalQuiz = 0;
+  let totalDictation = 0;
+  let totalMinutes = 0;
+
+  for (const l of allLessons) {
+    totalVocab += l.vocabulary?.length || 0;
+    totalQuiz += l.quiz?.length || 0;
+    if (l.dictation) totalDictation++;
+    totalMinutes += l.estimated_minutes || 20;
+  }
+
+  return {
+    totalLessons: allLessons.length,
+    totalVocabulary: totalVocab,
+    totalQuizQuestions: totalQuiz,
+    totalDictations: totalDictation,
+    totalEstimatedHours: Math.round(totalMinutes / 60),
+    gradesSummary: grades.map((g) => ({
+      grade: g.grade,
+      label: g.label,
+      cycle: g.cycle,
+      cefr: g.cefr,
+      lessonsCount: g.totalLessons,
+      vocabularyCount: g.totalVocabulary
+    }))
+  };
+}
+

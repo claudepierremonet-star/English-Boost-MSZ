@@ -1,6 +1,6 @@
 {
   "name": "English Boost MSZ",
-  "description": "Application éditoriale et immersive de perfectionnement en anglais avancé (B1 à C2) avec analyse rhétorique, répétition espacée, dictée cadencée et studio d'élocution.",
+  "description": "Plateforme d'excellence et d'immersion linguistique pour l'anglais du collège au lycée (6e, 5e, 4e, 3e, Seconde, 1re, Terminale). 200 leçons structurées en 10 thématiques, 500 cartes de répétition espacée (SM-2, étymologie philologique, collocations, presse authentique), studio de double prononciation britannique & américaine, dictée cadencée et analyse rhétorique.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

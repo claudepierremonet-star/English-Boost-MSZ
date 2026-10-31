@@ -242,26 +242,26 @@ export const STACKED_COLLECTIONS_DATA: Record<StackCategoryType, {
   },
 
   vocabulary: {
-    label: 'Decks de Vocabulaire SM-2',
+    label: 'Decks Vocabulaire SM-2 (500 Mots)',
     labelCn: '词汇集',
-    description: 'Jeux de flashcards mémorisées selon l’algorithme de répétition espacée SM-2',
+    description: '500 cartes de répétition espacée réparties de la 6e à la Terminale sur 10 thématiques fondamentales',
     icon: 'style',
     items: [
       {
         id: 'voc-1',
         category: 'vocabulary',
-        title: 'Deck C2 : Orfèvrerie & Nuances Morales',
-        subtitle: 'Perspicacity, Sobriquet, Meretricious, Pusillanimous, Verisimilitude, Equivocal.',
-        badge: 'DECK MAÎTRE SM-2',
+        title: 'Grand Deck Spaced Repetition (500 Mots)',
+        subtitle: 'Parcours complet 6e à Terminale : étymologie philologique, citations de presse, collocations et double audio UK/US.',
+        badge: '500 MOTS • SM-2 COMPLET',
         romanId: 'I',
-        level: 'C2',
-        accent: 'Haute Rétention',
+        level: '6e à Tle',
+        accent: '🇬🇧 UK & 🇺🇸 US',
         iconName: 'style',
-        itemsCount: '50 Cartes Dues',
-        duration: '8 min / session',
+        itemsCount: '500 Cartes Actives',
+        duration: '10 min / session',
         quote: '“A single exact word renders ten pages of vague description completely obsolete.”',
         author: 'Gustave Flaubert • Correspondance',
-        actionLabel: 'Lancer SM-2',
+        actionLabel: 'Lancer SM-2 (500)',
         actionType: 'flashcards'
       },
       {

@@ -135,6 +135,21 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
     window.speechSynthesis.speak(utterance);
   };
 
+  const handleGenerateLessonSummaryAudio = () => {
+    if (!lesson || !('speechSynthesis' in window)) return;
+    if (isPlayingAudio === 'summary-audio') {
+      window.speechSynthesis.cancel();
+      setIsPlayingAudio(null);
+      return;
+    }
+    const topVocab = lesson.vocabulary
+      .slice(0, 4)
+      .map((v) => `${v.term}: ${v.translation_fr}`)
+      .join(', ');
+    const summaryText = `Lesson summary: ${lesson.title_en}. Objective: ${lesson.learning_objective}. Grammar point: ${lesson.grammar.title}. Rule: ${lesson.grammar.rule}. Key vocabulary: ${topVocab}.`;
+    speakText(summaryText, 'summary-audio');
+  };
+
   const handleSelectQuizOption = (qId: string, optIdx: number) => {
     if (quizSubmitted) return;
     setQuizAnswers((prev) => ({ ...prev, [qId]: optIdx }));
@@ -371,6 +386,25 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                 <p className="text-sm text-[#dce2f8] leading-relaxed">
                   Cette leçon permet aux élèves de <strong className="text-[#f2ca50]">{lesson.class_label}</strong> de maîtriser le thème « {lesson.theme_label} » tout en consolidant le point de grammaire : <em className="text-[#d4c78f]">{lesson.grammar.title}</em>.
                 </p>
+                <div className="pt-2 border-t border-[#232a3a] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <span className="text-xs text-[#99907c]">
+                    Écouter la synthèse vocale complète de la leçon
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleGenerateLessonSummaryAudio}
+                    className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-[#d4af37] via-[#f2ca50] to-[#cca639] text-[#3c2f00] font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-[#f2ca50]/15 hover:brightness-110 active:scale-95 transition-all cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-sm">
+                      {isPlayingAudio === 'summary-audio' ? 'graphic_eq' : 'volume_up'}
+                    </span>
+                    <span>
+                      {isPlayingAudio === 'summary-audio'
+                        ? 'Lecture en cours...'
+                        : 'Générer résumé audio'}
+                    </span>
+                  </button>
+                </div>
               </div>
 
               <div>

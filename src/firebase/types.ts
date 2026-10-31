@@ -14,7 +14,7 @@ export interface UserStats {
 }
 
 export type BadgeTier = 'bronze' | 'silver' | 'gold' | 'platinum' | 'oxford';
-export type BadgeCategory = 'xp' | 'streak' | 'lessons' | 'dictation' | 'quiz' | 'mastery';
+export type BadgeCategory = 'xp' | 'streak' | 'lessons' | 'dictation' | 'quiz' | 'mastery' | 'distinction';
 
 export interface AcademicBadge {
   id: string;

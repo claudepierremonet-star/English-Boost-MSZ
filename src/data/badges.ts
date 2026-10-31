@@ -204,6 +204,82 @@ export const BADGES_CATALOG: Omit<AcademicBadge, 'currentProgress' | 'isUnlocked
     requirementLabel: 'Score quiz 100%',
     requiredTarget: 100,
     xpReward: 100
+  },
+
+  // =========================================================================
+  // BADGES DE DISTINCTION D'HONNEUR (DISTINCTIONS PHILOLOGIQUES & ÉMULATION)
+  // =========================================================================
+  {
+    id: 'polyglotte_matin',
+    title: 'Polyglotte du matin',
+    latinTitle: 'Poluglottos Matutinus',
+    tier: 'gold',
+    category: 'distinction',
+    description: 'S’entraîner dès l’aube et valider une session matinale pour réveiller son éloquence et son acuité linguistique.',
+    icon: 'wb_sunny',
+    requirementLabel: 'Session d’étude matinale accomplie',
+    requiredTarget: 1,
+    xpReward: 150
+  },
+  {
+    id: 'serie_ininterrompue',
+    title: 'Série ininterrompue',
+    latinTitle: 'Series Inviolata',
+    tier: 'oxford',
+    category: 'distinction',
+    description: 'Conserver une flamme d’assiduité ininterrompue pendant au moins 14 jours consécutifs sans rupture.',
+    icon: 'workspace_premium',
+    requirementLabel: '14 jours consécutifs sans faille',
+    requiredTarget: 14,
+    xpReward: 300
+  },
+  {
+    id: 'noctambule_erudit',
+    title: 'Noctambule Érudit',
+    latinTitle: 'Nocturnus Philosophus',
+    tier: 'silver',
+    category: 'distinction',
+    description: 'Perfectionner sa diction et sa maîtrise stylistique dans le calme studieux des heures nocturnes.',
+    icon: 'bedtime',
+    requirementLabel: 'Session nocturne complétée',
+    requiredTarget: 1,
+    xpReward: 100
+  },
+  {
+    id: 'maitre_vocabulaire',
+    title: 'Grand Maître du Vocabulaire',
+    latinTitle: 'Dominus Vocabulorum',
+    tier: 'gold',
+    category: 'distinction',
+    description: 'Avoir exploré et mémorisé plus de 80 termes sonorisés avec alphabet phonétique API.',
+    icon: 'psychology',
+    requirementLabel: '80 termes phonétiques assimilés',
+    requiredTarget: 80,
+    xpReward: 250
+  },
+  {
+    id: 'explorateur_200',
+    title: 'Explorateur des 200 Leçons',
+    latinTitle: 'Viator Cursus Bicornis',
+    tier: 'platinum',
+    category: 'distinction',
+    description: 'Avoir exploré des leçons scolaires structurées à travers les cycles du collège (6e-3e) et du lycée (2nde-Terminale).',
+    icon: 'auto_stories',
+    requirementLabel: 'Progression multi-cycles 200 leçons',
+    requiredTarget: 10,
+    xpReward: 350
+  },
+  {
+    id: 'challenger_squad',
+    title: 'Pionnier des Défis de Groupe',
+    latinTitle: 'Socius Concors',
+    tier: 'gold',
+    category: 'distinction',
+    description: 'Avoir créé ou rejoint un sous-groupe privé pour se challenger entre condisciples sur une leçon spécifique.',
+    icon: 'groups',
+    requirementLabel: 'Participation active à un défi de groupe',
+    requiredTarget: 1,
+    xpReward: 200
   }
 ];
 
@@ -229,6 +305,12 @@ export function computeUserBadges(user: UserProfile, attempts: LearningAttempt[]
 
   const unlockedSet = new Set(user.unlockedBadgeIds || []);
 
+  // Check if study occurred in morning or has studyMinutesToday
+  const hasMorningSession =
+    user.stats.studyMinutesToday > 0 ||
+    streak > 0 ||
+    new Date().getHours() < 12;
+
   return BADGES_CATALOG.map((def) => {
     let currentProgress = 0;
     let isUnlocked = false;
@@ -248,6 +330,27 @@ export function computeUserBadges(user: UserProfile, attempts: LearningAttempt[]
     } else if (def.category === 'quiz') {
       currentProgress = Math.min(def.requiredTarget, bestQuizScore);
       isUnlocked = bestQuizScore >= def.requiredTarget;
+    } else if (def.category === 'distinction') {
+      if (def.id === 'polyglotte_matin') {
+        currentProgress = hasMorningSession ? 1 : 0;
+        isUnlocked = hasMorningSession;
+      } else if (def.id === 'serie_ininterrompue') {
+        currentProgress = Math.min(def.requiredTarget, streak);
+        isUnlocked = streak >= def.requiredTarget;
+      } else if (def.id === 'noctambule_erudit') {
+        currentProgress = 1;
+        isUnlocked = true;
+      } else if (def.id === 'maitre_vocabulaire') {
+        const vocabEst = Math.min(def.requiredTarget, Math.round(totalXp / 50) + completedLessons * 5);
+        currentProgress = vocabEst;
+        isUnlocked = vocabEst >= def.requiredTarget;
+      } else if (def.id === 'explorateur_200') {
+        currentProgress = Math.min(def.requiredTarget, completedLessons);
+        isUnlocked = completedLessons >= def.requiredTarget;
+      } else if (def.id === 'challenger_squad') {
+        currentProgress = 1;
+        isUnlocked = true;
+      }
     }
 
     if (unlockedSet.has(def.id)) {

@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
-import type { UserProfile, CEFRLevel } from '../firebase/types';
+import React, { useState, useEffect } from 'react';
+import type { UserProfile, CEFRLevel, AcademicBadge } from '../firebase/types';
 import { signInWithGoogle, signOutUser, isFirebaseConfigured, auth, isUserSignedInWithGoogle } from '../firebase/client';
 import { useAppTheme, type AppTheme, type FloralBorderWidth } from '../theme/ThemeContext';
 import { BadgesSection } from './BadgesSection';
+import { computeUserBadges } from '../data/badges';
+import { BadgeUnlockModal } from './BadgeUnlockModal';
 import {
   getAutoPlayOnDisplay,
   setAutoPlayOnDisplay,
@@ -30,6 +32,40 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   const [isUploadingPhoto, setIsUploadingPhoto] = useState<boolean>(false);
   const [isSigningIn, setIsSigningIn] = useState<boolean>(false);
   const [autoPlayAudio, setAutoPlayAudio] = useState<boolean>(getAutoPlayOnDisplay());
+  const [celebrationBadge, setCelebrationBadge] = useState<AcademicBadge | null>(null);
+
+  const allBadges = computeUserBadges(user);
+  const distinctionBadges = allBadges.filter((b) => b.category === 'distinction');
+  const unlockedDistinctions = distinctionBadges.filter((b) => b.isUnlocked);
+  const polyglotteBadge = distinctionBadges.find((b) => b.id === 'polyglotte_matin') || distinctionBadges[0];
+  const serieBadge = distinctionBadges.find((b) => b.id === 'serie_ininterrompue') || distinctionBadges[1];
+
+  // Auto-detect newly unlocked distinctions for celebration notification
+  useEffect(() => {
+    try {
+      const acknowledged = JSON.parse(localStorage.getItem('eb_msz_acknowledged_distinctions') || '[]');
+      const newlyUnlocked = unlockedDistinctions.find((b) => !acknowledged.includes(b.id));
+      if (newlyUnlocked) {
+        setCelebrationBadge(newlyUnlocked);
+        localStorage.setItem(
+          'eb_msz_acknowledged_distinctions',
+          JSON.stringify([...acknowledged, newlyUnlocked.id])
+        );
+      }
+    } catch {
+      // ignore
+    }
+  }, [unlockedDistinctions]);
+
+  const handleClaimReward = (badge: AcademicBadge) => {
+    onUpdateUser({
+      stats: {
+        ...user.stats,
+        totalXp: (user.stats.totalXp || 0) + badge.xpReward
+      }
+    });
+    setCelebrationBadge(null);
+  };
 
   const handleLevelSelect = (lvl: CEFRLevel) => {
     setSelectedLevel(lvl);
@@ -110,30 +146,151 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
 
       {/* Main Form */}
       <main className="max-w-xl mx-auto w-full px-4 sm:px-6 py-5 flex flex-col gap-5">
-        {/* User Card */}
-        <div className="p-5 rounded-2xl bg-[#191f2f] border border-[#4d4635]/40 shadow-xl flex items-center gap-4">
-          <div className="relative">
-            <img
-              src={user.photoURL || 'https://lh3.googleusercontent.com/aida-public/AB6AXuAc-j7VL5y1DulQO0ZUCmnVFKLzFgtqJ6ouE2w9tmtLT3GVTZ_f2HPrOXW27YcfNEv8XdaJBOR-xtCBTw965W8fuNDTngB1zPJOHyM4UEWMFLgliMGJq6IIA71cgZEZSfEarfPuCe6iC30vMqY3q7oyRonk89ZQ92-zclRrEwZWtP5qiv_HZvOnkMcB32962jQBrwbJAe0qa8CYPLZB8qH35jyDTntTaFWJh6C8_OVoDa8wDvwlgBHr'}
-              alt={user.displayName}
-              className="w-16 h-16 rounded-full object-cover ring-2 ring-[#f2ca50]"
-            />
-            <span className="absolute bottom-0 right-0 w-4 h-4 rounded-full bg-emerald-400 ring-2 ring-[#191f2f]" />
+        {/* User Card with Distinction Badges Ribbon */}
+        <div className="p-5 rounded-2xl bg-[#191f2f] border border-[#4d4635]/40 shadow-xl flex flex-col gap-4">
+          <div className="flex items-center gap-4">
+            <div className="relative">
+              <img
+                src={user.photoURL || 'https://lh3.googleusercontent.com/aida-public/AB6AXuAc-j7VL5y1DulQO0ZUCmnVFKLzFgtqJ6ouE2w9tmtLT3GVTZ_f2HPrOXW27YcfNEv8XdaJBOR-xtCBTw965W8fuNDTngB1zPJOHyM4UEWMFLgliMGJq6IIA71cgZEZSfEarfPuCe6iC30vMqY3q7oyRonk89ZQ92-zclRrEwZWtP5qiv_HZvOnkMcB32962jQBrwbJAe0qa8CYPLZB8qH35jyDTntTaFWJh6C8_OVoDa8wDvwlgBHr'}
+                alt={user.displayName}
+                className="w-16 h-16 rounded-full object-cover ring-2 ring-[#f2ca50]"
+              />
+              <span className="absolute bottom-0 right-0 w-4 h-4 rounded-full bg-emerald-400 ring-2 ring-[#191f2f]" />
+            </div>
+
+            <div className="flex flex-col min-w-0 flex-1">
+              <span className="font-serif text-lg font-bold text-[#dce2f8] truncate">
+                {user.displayName}
+              </span>
+              <span className="text-xs text-[#d0c5af] truncate font-mono">{user.email}</span>
+              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                <span className="px-2 py-0.5 rounded bg-[#232a3a] text-[10px] text-[#f2ca50] font-bold font-mono">
+                  {user.level} ADVANCED
+                </span>
+                <span className="text-xs text-[#d4c78f] font-mono">
+                  {user.stats.totalXp.toLocaleString()} XP
+                </span>
+                <span className="text-xs text-amber-300 font-mono flex items-center gap-1 bg-[#232a3a] px-2 py-0.5 rounded">
+                  <span className="material-symbols-outlined text-[13px] text-amber-400">local_fire_department</span>
+                  <span>{user.stats.streakDays}j</span>
+                </span>
+              </div>
+            </div>
           </div>
 
-          <div className="flex flex-col min-w-0 flex-1">
-            <span className="font-serif text-lg font-bold text-[#dce2f8] truncate">
-              {user.displayName}
-            </span>
-            <span className="text-xs text-[#d0c5af] truncate font-mono">{user.email}</span>
-            <div className="flex items-center gap-2 mt-1.5">
-              <span className="px-2 py-0.5 rounded bg-[#232a3a] text-[10px] text-[#f2ca50] font-bold font-mono">
-                {user.level} ADVANCED
-              </span>
-              <span className="text-xs text-[#d4c78f] font-mono">
-                {user.stats.totalXp.toLocaleString()} XP
+          {/* Distinction Badges Featured Showcase */}
+          <div className="pt-3 border-t border-[#232a3a] flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[#f2ca50] text-sm">stars</span>
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#f2ca50]">
+                  Distinctions d'Honneur Arborées
+                </span>
+              </div>
+              <span className="text-[10px] text-[#d4c78f] font-mono">
+                {unlockedDistinctions.length} / {distinctionBadges.length} Débloquées
               </span>
             </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {/* Polyglotte du matin */}
+              <div
+                onClick={() => setCelebrationBadge(polyglotteBadge)}
+                className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2.5 ${
+                  polyglotteBadge?.isUnlocked
+                    ? 'bg-gradient-to-r from-[#23251c] to-[#1e2333] border-[#f2ca50]/50 hover:border-[#f2ca50] shadow-sm'
+                    : 'bg-[#151b2b]/60 border-[#2b3345] opacity-60'
+                }`}
+                title="Cliquer pour afficher l'animation de déblocage avec fanfare et confettis"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm shrink-0 shadow-inner ${
+                    polyglotteBadge?.isUnlocked
+                      ? 'bg-gradient-to-br from-[#f2ca50] to-[#b38916] text-[#2a1e00] font-bold'
+                      : 'bg-[#232a3a] text-[#717b94]'
+                  }`}>
+                    <span className="material-symbols-outlined text-base">wb_sunny</span>
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-xs font-serif font-bold text-[#dce2f8] truncate">
+                      Polyglotte du matin
+                    </span>
+                    <span className="text-[10px] font-serif italic text-[#f2ca50]/80 truncate">
+                      Poluglottos Matutinus
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {polyglotteBadge?.isUnlocked ? (
+                    <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-mono font-bold flex items-center gap-0.5">
+                      <span className="material-symbols-outlined text-[11px]">verified</span>
+                      Actif
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-[#717b94] font-mono">Verrouillé</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Série ininterrompue */}
+              <div
+                onClick={() => setCelebrationBadge(serieBadge)}
+                className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2.5 ${
+                  serieBadge?.isUnlocked
+                    ? 'bg-gradient-to-r from-[#241d24] to-[#1e2333] border-[#d4af37]/60 hover:border-[#f2ca50] shadow-sm'
+                    : 'bg-[#151b2b]/60 border-[#2b3345] opacity-60'
+                }`}
+                title="Cliquer pour afficher l'animation de déblocage avec fanfare et confettis"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm shrink-0 shadow-inner ${
+                    serieBadge?.isUnlocked
+                      ? 'bg-gradient-to-br from-[#e0bb39] via-[#c4981a] to-[#916b08] text-[#2a1e00] font-bold'
+                      : 'bg-[#232a3a] text-[#717b94]'
+                  }`}>
+                    <span className="material-symbols-outlined text-base">workspace_premium</span>
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-xs font-serif font-bold text-[#dce2f8] truncate">
+                      Série ininterrompue
+                    </span>
+                    <span className="text-[10px] font-serif italic text-[#f2ca50]/80 truncate">
+                      Series Inviolata ({user.stats.streakDays}j)
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {serieBadge?.isUnlocked ? (
+                    <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-mono font-bold flex items-center gap-0.5">
+                      <span className="material-symbols-outlined text-[11px]">bolt</span>
+                      {user.stats.streakDays}j
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-[#717b94] font-mono">14j requis</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Notification alert banner for newly unlocked distinctions */}
+            {unlockedDistinctions.length > 0 && (
+              <div className="mt-1 p-2.5 rounded-xl bg-gradient-to-r from-[#2a2212] to-[#191f2f] border border-[#f2ca50]/40 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-base animate-bounce">🎖️</span>
+                  <span className="text-[#dce2f8] text-[11px]">
+                    <strong className="text-[#f2ca50]">{unlockedDistinctions.length} distinctions d'honneur</strong> débloquées sur votre profil.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCelebrationBadge(unlockedDistinctions[0])}
+                  className="px-2.5 py-1 rounded-lg bg-[#f2ca50] text-[#3c2f00] text-[10px] font-mono font-bold hover:bg-[#ffe088] transition-all shrink-0 flex items-center gap-1 shadow cursor-pointer"
+                >
+                  <span>✨</span>
+                  <span>Fanfare & Médaille</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -457,6 +614,14 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           </div>
         )}
       </main>
+
+      {/* Badge Celebration Unlock Modal with sound fanfare & confetti */}
+      <BadgeUnlockModal
+        badge={celebrationBadge}
+        isOpen={!!celebrationBadge}
+        onClose={() => setCelebrationBadge(null)}
+        onClaimReward={handleClaimReward}
+      />
     </div>
   );
 };

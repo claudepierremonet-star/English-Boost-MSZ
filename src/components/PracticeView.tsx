@@ -226,29 +226,29 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
             </div>
 
             <div className="flex flex-col items-end">
-              <span className="px-2 py-0.5 rounded-full bg-[#070e1d] text-[10px] font-bold text-[#f2ca50] font-mono">
-                82% ACCOMPLI
+              <span className="px-2 py-0.5 rounded-full bg-[#070e1d] text-[10px] font-bold text-[#f2ca50] font-mono border border-[#f2ca50]/30">
+                500 SESSIONS
               </span>
-              <span className="text-[11px] text-[#d0c5af]/80 mt-1">14/18 Sessions</span>
+              <span className="text-[11px] text-[#d0c5af]/80 mt-1">6e à Terminale • 10 Thèmes</span>
             </div>
           </div>
 
           <p className="text-xs text-[#d0c5af] mt-3 leading-relaxed">
-            Écoute attentive de sources certifiées (BBC, Cambridge, The Economist), saisie en direct, correction contextuelle avec tolérance intelligente et cartographie des fautes.
+            500 sessions sur deck recto-verso interactif : écoute britannique & américaine (UK/US), saisie orthotypographique, étymologie, collocations et décryptage philologique.
           </p>
 
           <div className="grid grid-cols-3 gap-2 mt-3 pt-1">
             <div className="flex items-center gap-1.5 p-2 rounded-lg bg-[#070e1d]/70 text-xs text-[#d0c5af]">
-              <span className="material-symbols-outlined text-[#f2ca50] text-sm">graphic_eq</span>
-              <span className="truncate">Voix Authentiques</span>
+              <span className="material-symbols-outlined text-[#f2ca50] text-sm">flip</span>
+              <span className="truncate">Deck Recto-Verso</span>
             </div>
             <div className="flex items-center gap-1.5 p-2 rounded-lg bg-[#070e1d]/70 text-xs text-[#d0c5af]">
-              <span className="material-symbols-outlined text-[#f2ca50] text-sm">spellcheck</span>
-              <span className="truncate">Tolérance Finesse</span>
+              <span className="material-symbols-outlined text-[#f2ca50] text-sm">record_voice_over</span>
+              <span className="truncate">Dual UK & US</span>
             </div>
             <div className="flex items-center gap-1.5 p-2 rounded-lg bg-[#070e1d]/70 text-xs text-[#d0c5af]">
-              <span className="material-symbols-outlined text-[#f2ca50] text-sm">analytics</span>
-              <span className="truncate">Diagnostic Immédiat</span>
+              <span className="material-symbols-outlined text-[#f2ca50] text-sm">history_edu</span>
+              <span className="truncate">Étymologie & Sens</span>
             </div>
           </div>
 

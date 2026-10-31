@@ -18,6 +18,7 @@ import {
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { useSyncStatus } from '../offline/useSyncStatus';
 import { VocabularyMasterySummary } from './VocabularyMasterySummary';
+import { StudyCalendarWidget } from './StudyCalendarWidget';
 import { STUDY_FOLIOS } from '../data/curriculum';
 
 interface CustomTooltipProps {
@@ -943,6 +944,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <VocabularyMasterySummary
           user={user}
           onOpenFlashcards={onOpenFlashcards}
+        />
+      </motion.div>
+
+      {/* Visual Study Calendar, Weekly Goals & Study Reminders */}
+      <motion.div variants={dashboardCardVariants}>
+        <StudyCalendarWidget
+          user={user}
+          onResumePractice={onResumePractice}
         />
       </motion.div>
 
