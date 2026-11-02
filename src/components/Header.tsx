@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { UserProfile, CEFRLevel } from '../firebase/types';
 import { useSyncStatus } from '../offline/useSyncStatus';
+import { calculateLevel } from '../utils/levelUtils';
 import appIconImg from '../assets/images/app_icon_msz_1792789129742.jpg';
 
 interface HeaderProps {
@@ -15,6 +16,7 @@ interface HeaderProps {
   onOpenInstallModal?: () => void;
   onOpenAuthModal?: () => void;
   onOpenAccentStudio?: () => void;
+  onOpenLevelCelebration?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -28,13 +30,19 @@ export const Header: React.FC<HeaderProps> = ({
   onNavigateLeaderboard,
   onOpenInstallModal,
   onOpenAuthModal,
-  onOpenAccentStudio
+  onOpenAccentStudio,
+  onOpenLevelCelebration
 }) => {
   const { isOnline, isSyncing, pendingCount, triggerSync } = useSyncStatus();
   const [imageError, setImageError] = useState(false);
+  const academicLevel = calculateLevel(user.stats?.totalXp || 0);
+  const xpInLevel = (user.stats?.totalXp || 0) % 100;
 
   return (
-    <header className="fixed top-0 w-full z-40 pt-safe bg-[#0c1322]/85 backdrop-blur-xl border-b border-[#232a3a]/80 shadow-[0_4px_20px_rgba(0,0,0,0.5)]">
+    <header
+      className="fixed top-0 w-full z-40 bg-[#0c1322]/90 backdrop-blur-xl border-b border-[#232a3a]/80 shadow-[0_4px_20px_rgba(0,0,0,0.5)]"
+      style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 10px)' }}
+    >
       <div className="max-w-5xl mx-auto h-16 px-4 sm:px-6 flex items-center justify-between gap-4">
         {/* Brand Lockup with Luxury App Icon */}
         <div
@@ -112,6 +120,20 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <span className="material-symbols-outlined text-[15px]">school</span>
               <span className="font-mono text-[11px] uppercase tracking-wider">Cursus 6e-Tle</span>
+            </button>
+          )}
+
+          {/* Oxford Academic Level & Prestige Badge with Level-up celebration preview */}
+          {onOpenLevelCelebration && (
+            <button
+              type="button"
+              onClick={onOpenLevelCelebration}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-500/20 via-[#f2ca50]/20 to-amber-600/20 hover:from-amber-500/35 hover:to-[#f2ca50]/40 border border-[#f2ca50]/60 text-xs font-bold text-[#f2ca50] hover:text-[#ffe088] transition-all active:scale-95 shadow-sm cursor-pointer"
+              title={`Niveau Académique ${academicLevel} (${xpInLevel}/100 XP vers le Niveau ${academicLevel + 1}). Cliquez pour contempler vos distinctions et l'ascension.`}
+            >
+              <span className="material-symbols-outlined text-[15px] text-[#f2ca50]">military_tech</span>
+              <span className="font-mono text-[11px] font-extrabold tracking-wide">Niv. {academicLevel}</span>
+              <span className="hidden lg:inline text-[9px] font-mono text-[#d0c5af]/80">({xpInLevel}%)</span>
             </button>
           )}
 

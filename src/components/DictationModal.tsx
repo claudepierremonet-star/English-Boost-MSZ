@@ -315,8 +315,11 @@ export const DictationModal: React.FC<DictationModalProps> = ({
         </div>
       )}
 
-      {/* Top Studio Header */}
-      <header className="sticky top-0 z-30 px-4 sm:px-6 py-3 bg-[#0c1322]/95 backdrop-blur-xl border-b border-[#232a3a] flex items-center justify-between">
+      {/* Top Studio Header with iPhone safe area clearance */}
+      <header
+        className="sticky top-0 z-30 px-4 sm:px-6 py-3 bg-[#0c1322]/95 backdrop-blur-xl border-b border-[#232a3a] flex items-center justify-between"
+        style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 20px)' }}
+      >
         <div className="flex items-center gap-2.5">
           <button
             type="button"

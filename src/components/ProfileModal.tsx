@@ -57,6 +57,17 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
     }
   }, [unlockedDistinctions]);
 
+  // Support touche Échap (clavier physique iPad / Mac / PC)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   const handleClaimReward = (badge: AcademicBadge) => {
     onUpdateUser({
       stats: {
@@ -119,30 +130,79 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   const { theme, floralWidth, setTheme, setFloralWidth, isDark } = useAppTheme();
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#0c1322] flex flex-col pt-safe pb-safe animate-fadeIn select-none">
-      {/* Header */}
-      <header className="sticky top-0 z-20 h-16 px-4 sm:px-6 bg-[#0c1322]/90 backdrop-blur-xl border-b border-[#232a3a] flex items-center justify-between">
-        <div className="flex items-center gap-2">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#0c1322] flex flex-col animate-fadeIn select-none">
+      {/* Header avec espacement sécurisé pour Dynamic Island / Notch iPhone */}
+      <header
+        className="sticky top-0 z-30 w-full bg-[#0c1322]/95 backdrop-blur-2xl border-b border-[#232a3a] shadow-lg flex flex-col justify-end"
+        style={{
+          paddingTop: 'max(env(safe-area-inset-top, 0px), 28px)'
+        }}
+      >
+        <div className="h-16 px-4 sm:px-6 flex items-center justify-between gap-3 max-w-xl mx-auto w-full">
+          {/* Bouton Retour tactile & stylisé d'Oxford */}
           <button
             type="button"
             onClick={onClose}
-            className="w-10 h-10 rounded-full flex items-center justify-center text-[#dce2f8] hover:text-[#f2ca50] transition-colors"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#151c2c] hover:bg-[#1f293e] border border-[#f2ca50]/70 text-[#f2ca50] hover:text-[#ffe088] shadow-md transition-all active:scale-95 cursor-pointer font-sans"
+            aria-label="Revenir en arrière"
+            title="Revenir aux cours et leçons"
           >
-            <span className="material-symbols-outlined text-xl">arrow_back_ios_new</span>
+            <span className="material-symbols-outlined text-lg font-bold">arrow_back</span>
+            <span className="text-xs font-serif font-bold uppercase tracking-wider">Retour</span>
           </button>
-          <h1 className="font-serif text-lg font-bold text-[#dce2f8]">
-            Profil & Paramètres
-          </h1>
-        </div>
 
-        <button
-          type="button"
-          onClick={onClose}
-          className="w-9 h-9 rounded-full bg-[#191f2f] flex items-center justify-center text-[#d0c5af] hover:text-[#f2ca50]"
-        >
-          <span className="material-symbols-outlined text-base">close</span>
-        </button>
+          {/* Titre centralisé */}
+          <div className="flex flex-col items-center text-center">
+            <h1 className="font-serif text-base sm:text-lg font-bold text-[#f3f4f6] leading-tight">
+              Profil & Paramètres
+            </h1>
+            <span className="text-[10px] font-mono text-[#d4c78f] uppercase tracking-widest hidden sm:block">
+              Académie d'Oxford MSZ
+            </span>
+          </div>
+
+          {/* Bouton Fermer */}
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-3.5 py-1.5 rounded-full bg-gradient-to-r from-[#d4af37] via-[#f2ca50] to-[#cca639] text-[#3c2f00] text-xs font-bold uppercase tracking-wider hover:brightness-110 active:scale-95 transition-all shadow-md flex items-center gap-1 cursor-pointer font-sans"
+            aria-label="Fermer le profil"
+            title="Fermer le profil"
+          >
+            <span>Fermer</span>
+            <span className="material-symbols-outlined text-sm font-bold">close</span>
+          </button>
+        </div>
       </header>
+
+      {/* Ruban Artistique d'Oxford & Bouton de Sortie Immédiate (Visible sous la bordure iPhone) */}
+      <div className="max-w-xl mx-auto w-full px-4 sm:px-6 pt-3 pb-1">
+        <div className="p-3 sm:p-3.5 rounded-2xl bg-gradient-to-r from-[#172338] via-[#101828] to-[#1c2840] border border-[#f2ca50]/50 shadow-xl flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#f2ca50] to-[#b4830c] text-[#2c1d00] flex items-center justify-center font-bold shadow-md shrink-0">
+              <span className="material-symbols-outlined text-lg">school</span>
+            </div>
+            <div className="flex flex-col min-w-0">
+              <span className="text-[10px] font-mono uppercase tracking-widest text-[#f2ca50] font-bold truncate">
+                ESPACE ÉTUDIANT & PARAMÈTRES
+              </span>
+              <span className="text-xs text-[#d0c5af] truncate">
+                Préférences enregistrées automatiquement
+              </span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#d4af37] via-[#f2ca50] to-[#cca639] hover:from-[#ffe088] hover:to-[#f2ca50] text-[#3c2f00] text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-lg active:scale-95 transition-all shrink-0 cursor-pointer font-sans"
+            title="Sortir du profil et retourner à l'application"
+          >
+            <span className="material-symbols-outlined text-sm font-bold">arrow_back</span>
+            <span>Sortir</span>
+          </button>
+        </div>
+      </div>
 
       {/* Main Form */}
       <main className="max-w-xl mx-auto w-full px-4 sm:px-6 py-5 flex flex-col gap-5">
@@ -613,7 +673,49 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             </button>
           </div>
         )}
+
+        {/* Carte de Sauvegarde et Sortie d'Oxford */}
+        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#172338] via-[#101828] to-[#1c2840] border border-[#f2ca50]/50 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-[#f2ca50]/20 text-[#f2ca50] flex items-center justify-center shrink-0 border border-[#f2ca50]/40">
+              <span className="material-symbols-outlined text-xl">verified</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="font-serif font-bold text-sm text-[#f3f4f6]">
+                Préférences et progression sauvegardées
+              </span>
+              <span className="text-xs text-[#99907c]">
+                Votre compte est synchronisé avec Cloud Firestore & IndexedDB
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#d4af37] via-[#f2ca50] to-[#cca639] hover:from-[#ffe088] hover:to-[#f2ca50] text-[#3c2f00] font-bold text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer font-sans shrink-0"
+          >
+            <span className="material-symbols-outlined text-base">arrow_back</span>
+            <span>Sortir & Reprendre</span>
+          </button>
+        </div>
       </main>
+
+      {/* Barre de retour inférieure flottante (Sticky Bottom, garantie anti-blocage iOS / iPhone) */}
+      <div
+        className="sticky bottom-0 z-30 w-full bg-[#0c1322]/95 backdrop-blur-2xl border-t border-[#232a3a] px-4 py-3 shadow-[0_-8px_30px_rgba(0,0,0,0.7)] flex items-center justify-center"
+        style={{
+          paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 16px)'
+        }}
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          className="w-full max-w-md py-3.5 px-6 rounded-2xl bg-gradient-to-r from-[#d4af37] via-[#f2ca50] to-[#cca639] hover:from-[#ffe088] hover:to-[#f2ca50] text-[#3c2f00] font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-xl shadow-[#f2ca50]/20 active:scale-98 transition-all cursor-pointer font-sans"
+        >
+          <span className="material-symbols-outlined text-lg font-bold">arrow_back</span>
+          <span>Quitter le Profil & Continuer mes Leçons</span>
+        </button>
+      </div>
 
       {/* Badge Celebration Unlock Modal with sound fanfare & confetti */}
       <BadgeUnlockModal

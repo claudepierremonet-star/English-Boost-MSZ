@@ -33,6 +33,8 @@ import {
 import type { UserProfile, CEFRLevel } from './firebase/types';
 import type { StudyFolio, CurioWord } from './data/curriculum';
 import { calculateLevel } from './utils/levelUtils';
+import { LevelUpCelebrationModal, type LevelUpData } from './components/LevelUpCelebrationModal';
+import { XpGainToast, type XpToastInfo } from './components/XpGainToast';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabKey>('accueil');
@@ -57,6 +59,21 @@ export default function App() {
   const [isSpeakingOpen, setIsSpeakingOpen] = useState<boolean>(false);
   const [isAccentStudioOpen, setIsAccentStudioOpen] = useState<boolean>(false);
   const [activeFolioForStudy, setActiveFolioForStudy] = useState<StudyFolio | null>(null);
+
+  // Level-Up celebration modal & fluid XP Toast states (Framer Motion)
+  const [levelUpData, setLevelUpData] = useState<LevelUpData | null>(null);
+  const [isLevelUpModalOpen, setIsLevelUpModalOpen] = useState<boolean>(false);
+  const [xpToast, setXpToast] = useState<XpToastInfo | null>(null);
+
+  // Auto-dismiss XP Toast after 3.2s
+  useEffect(() => {
+    if (xpToast) {
+      const timer = setTimeout(() => {
+        setXpToast(null);
+      }, 3200);
+      return () => clearTimeout(timer);
+    }
+  }, [xpToast]);
 
   // Subscribe to auth / local session
   useEffect(() => {
@@ -142,12 +159,38 @@ export default function App() {
     });
     setUser(updated);
 
+    const isLevelUp = newLevel > oldLevel;
+
+    // Déclenchement de la célébration de montée de niveau animée par Framer Motion
+    if (isLevelUp) {
+      setLevelUpData({
+        oldLevel,
+        newLevel,
+        totalXp: newTotalXp,
+        deltaXp: delta
+      });
+      setIsLevelUpModalOpen(true);
+    }
+
+    // Toast de gain / déduction d'XP animé avec Framer Motion
+    setXpToast({
+      id: `${Date.now()}-${Math.random()}`,
+      delta,
+      currentLevel: newLevel,
+      progressPercent: newTotalXp % 100,
+      message: isLevelUp
+        ? `🎉 Ascension académique vers le Niveau ${newLevel} !`
+        : delta > 0
+        ? 'Défi accompli avec succès !'
+        : 'Pénalité de 5 points'
+    });
+
     return {
       delta,
       newTotalXp,
       oldLevel,
       newLevel,
-      isLevelUp: newLevel > oldLevel
+      isLevelUp
     };
   };
 
@@ -182,11 +225,24 @@ export default function App() {
         onOpenInstallModal={() => setIsInstallModalOpen(true)}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
         onOpenAccentStudio={() => setIsAccentStudioOpen(true)}
+        onOpenLevelCelebration={() => {
+          const currentLvl = calculateLevel(user.stats?.totalXp || 0);
+          setLevelUpData({
+            oldLevel: Math.max(1, currentLvl - 1),
+            newLevel: currentLvl,
+            totalXp: user.stats?.totalXp || 0,
+            deltaXp: 10
+          });
+          setIsLevelUpModalOpen(true);
+        }}
       />
 
       {/* Offline Alert Banner */}
       {!isOnline && (
-        <div className="fixed top-16 left-0 right-0 z-30 bg-amber-950/95 border-b border-amber-500/50 px-4 py-2 text-center text-xs text-amber-200 font-medium flex items-center justify-center gap-2 backdrop-blur-md shadow-lg animate-fadeIn">
+        <div
+          className="fixed left-0 right-0 z-30 bg-amber-950/95 border-b border-amber-500/50 px-4 py-2 text-center text-xs text-amber-200 font-medium flex items-center justify-center gap-2 backdrop-blur-md shadow-lg animate-fadeIn"
+          style={{ top: 'calc(max(env(safe-area-inset-top, 0px), 10px) + 64px)' }}
+        >
           <span className="material-symbols-outlined text-sm text-amber-400">wifi_off</span>
           <span>
             Mode Hors-Ligne activé : vos leçons, quiz et scores sont enregistrés sur <strong>IndexedDB local</strong> et seront synchronisés automatiquement à la reconnexion.
@@ -196,7 +252,10 @@ export default function App() {
 
       {/* Pending Sync Notification Banner (when online with pending queue items) */}
       {isOnline && pendingCount > 0 && (
-        <div className="fixed top-16 left-0 right-0 z-30 bg-[#191f2f]/95 border-b border-[#f2ca50]/50 px-4 py-2 text-center text-xs text-[#dce2f8] font-medium flex items-center justify-center gap-3 backdrop-blur-md shadow-lg animate-fadeIn">
+        <div
+          className="fixed left-0 right-0 z-30 bg-[#191f2f]/95 border-b border-[#f2ca50]/50 px-4 py-2 text-center text-xs text-[#dce2f8] font-medium flex items-center justify-center gap-3 backdrop-blur-md shadow-lg animate-fadeIn"
+          style={{ top: 'calc(max(env(safe-area-inset-top, 0px), 10px) + 64px)' }}
+        >
           <span className="material-symbols-outlined text-sm text-[#f2ca50] animate-pulse">cloud_upload</span>
           <span>
             <strong>{pendingCount}</strong> modification(s) enregistrée(s) hors-ligne en attente de synchronisation Cloud Firestore.
@@ -212,7 +271,12 @@ export default function App() {
       )}
 
       {/* Discreet 1 cm Real-Time Weather Bar (Discreet hairline bar, reveals on click, auto-dismisses in 5s) */}
-      <div className={`w-full z-30 transition-all ${!isOnline || (isOnline && pendingCount > 0) ? 'pt-24' : 'pt-16'}`}>
+      <div
+        className="w-full z-30 transition-all"
+        style={{
+          paddingTop: `calc(max(env(safe-area-inset-top, 0px), 10px) + ${!isOnline || (isOnline && pendingCount > 0) ? '104px' : '68px'})`
+        }}
+      >
         <DiscreteWeatherBar />
       </div>
 
@@ -563,6 +627,23 @@ export default function App() {
       <AmericanAccentStudioModal
         isOpen={isAccentStudioOpen}
         onClose={() => setIsAccentStudioOpen(false)}
+      />
+
+      {/* Level-Up Celebration Modal (Framer Motion) */}
+      <LevelUpCelebrationModal
+        isOpen={isLevelUpModalOpen}
+        data={levelUpData}
+        onClose={() => setIsLevelUpModalOpen(false)}
+        onClaimReward={() => {
+          // Bonus honorifique de complétion
+          setIsLevelUpModalOpen(false);
+        }}
+      />
+
+      {/* Floating XP Gain / Penalty Toast (Framer Motion) */}
+      <XpGainToast
+        toast={xpToast}
+        onDismiss={() => setXpToast(null)}
       />
     </div>
   );

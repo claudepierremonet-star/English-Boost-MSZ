@@ -168,7 +168,7 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({ onChalle
         {/* Feedback message */}
         {hasSubmitted && (
           <div
-            className={`p-3.5 rounded-xl mb-4 flex items-center justify-between animate-fadeIn border ${
+            className={`p-3.5 rounded-xl mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fadeIn border ${
               isCorrect
                 ? 'bg-[#191f2f] border-[#f2ca50]/50 text-[#f2ca50]'
                 : 'bg-[#151b2b] border-[#ffb4ab]/40 text-[#ffb4ab]'
@@ -185,13 +185,26 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({ onChalle
               </span>
             </div>
 
-            <button
-              type="button"
-              onClick={handleReset}
-              className="text-xs underline text-[#d4c78f] hover:text-[#f2ca50] ml-2 shrink-0 font-mono"
-            >
-              Recommencer
-            </button>
+            <div className="flex items-center gap-2 self-end sm:self-auto">
+              {isCorrect && (
+                <button
+                  type="button"
+                  onClick={() => onChallengeComplete?.(100)}
+                  className="px-2.5 py-1 rounded-lg bg-[#f2ca50]/20 hover:bg-[#f2ca50]/30 border border-[#f2ca50]/60 text-[11px] text-[#f2ca50] font-bold font-mono transition-all cursor-pointer flex items-center gap-1 active:scale-95 shadow-sm"
+                  title="Déclencher la montée de niveau avec l'animation Framer Motion (+100 XP)"
+                >
+                  <span className="material-symbols-outlined text-xs">military_tech</span>
+                  <span>Niveau Supérieur (+100 XP)</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleReset}
+                className="text-xs underline text-[#d4c78f] hover:text-[#f2ca50] ml-2 shrink-0 font-mono"
+              >
+                Recommencer
+              </button>
+            </div>
           </div>
         )}
 

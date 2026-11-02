@@ -28,12 +28,21 @@
 }
 
 @layer base {
+  :root {
+    --sat: env(safe-area-inset-top, 0px);
+    --sab: env(safe-area-inset-bottom, 0px);
+    --sal: env(safe-area-inset-left, 0px);
+    --sar: env(safe-area-inset-right, 0px);
+  }
+
   body {
     background-color: #0c1322;
     color: #dce2f8;
     font-family: var(--font-sans);
     overscroll-behavior-y: none;
     transition: background-color 0.3s ease, color 0.3s ease;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
   html.light body,
@@ -42,6 +51,23 @@
     background-color: #f7f4ee !important;
     color: #1c1917 !important;
   }
+}
+
+/* iOS Safe Area Padding Utilities */
+.pt-safe {
+  padding-top: max(env(safe-area-inset-top, 0px), 16px);
+}
+
+.pt-safe-notch {
+  padding-top: max(env(safe-area-inset-top, 0px), 48px);
+}
+
+.pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 16px);
+}
+
+.top-safe {
+  top: max(env(safe-area-inset-top, 0px), 0px);
 }
 
 .font-serif {

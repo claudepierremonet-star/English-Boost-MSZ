@@ -77,9 +77,12 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#0c1322] flex flex-col pt-safe pb-safe animate-fadeIn select-none">
-      {/* Header */}
-      <header className="sticky top-0 z-20 h-16 px-4 sm:px-6 bg-[#0c1322]/90 backdrop-blur-xl border-b border-[#232a3a] flex items-center justify-between">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#0c1322] flex flex-col animate-fadeIn select-none">
+      {/* Header with iPhone safe area clearance */}
+      <header
+        className="sticky top-0 z-20 px-4 sm:px-6 bg-[#0c1322]/95 backdrop-blur-xl border-b border-[#232a3a] flex items-center justify-between"
+        style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 20px)', minHeight: 'calc(max(env(safe-area-inset-top, 0px), 20px) + 60px)' }}
+      >
         <div className="flex items-center gap-2">
           <button
             type="button"

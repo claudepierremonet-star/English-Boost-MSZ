@@ -356,7 +356,10 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
 
       {/* 1. TOP HEADER: Standard vs Focus Mode */}
       {!isFocusMode ? (
-        <header className="sticky top-0 z-30 px-3 sm:px-6 py-2.5 bg-[#0c1322]/95 backdrop-blur-xl border-b border-[#232a3a] flex flex-col gap-2">
+        <header
+          className="sticky top-0 z-30 px-3 sm:px-6 py-2.5 bg-[#0c1322]/95 backdrop-blur-xl border-b border-[#232a3a] flex flex-col gap-2"
+          style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 18px)' }}
+        >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <button
@@ -625,8 +628,11 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
           )}
         </header>
       ) : (
-        /* Focus Mode Minimal Top Bar */
-        <header className="sticky top-0 z-30 px-4 py-2 bg-[#050913]/90 backdrop-blur-xl border-b border-white/10 flex items-center justify-between">
+        /* Focus Mode Minimal Top Bar with safe area padding */
+        <header
+          className="sticky top-0 z-30 px-4 py-2 bg-[#050913]/90 backdrop-blur-xl border-b border-white/10 flex items-center justify-between"
+          style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 18px)' }}
+        >
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-[#f2ca50] animate-pulse" />
             <span className="text-xs font-mono font-bold text-[#f2ca50]">
