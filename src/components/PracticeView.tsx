@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 import type { CEFRLevel } from '../firebase/types';
 
 interface PracticeViewProps {
@@ -182,14 +183,28 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
                 key={lvl}
                 type="button"
                 onClick={() => onSelectLevel(lvl)}
-                className={`flex flex-col items-center justify-center py-2.5 px-1 rounded-xl transition-all duration-200 border ${
+                className={`relative flex flex-col items-center justify-center py-2.5 px-1 rounded-xl transition-colors duration-200 border cursor-pointer ${
                   isActive
-                    ? 'bg-[#f2ca50] text-[#3c2f00] border-[#f2ca50] shadow-lg shadow-[#f2ca50]/20 font-bold scale-[1.02]'
+                    ? 'text-[#3c2f00] font-bold border-[#f2ca50]'
                     : 'bg-[#191f2f] text-[#d0c5af] border-[#4d4635]/30 hover:bg-[#232a3a]'
                 }`}
               >
-                <span className="text-base font-bold font-mono">{lvl}</span>
-                <span className="text-[10px] opacity-90 mt-0.5">{subLabels[lvl]}</span>
+                {/* Bloc de mise en évidence aux coins arrondis glissant avec rebond ressort */}
+                {isActive && (
+                  <motion.div
+                    layoutId="activeCefrLevelHighlight"
+                    transition={{
+                      type: 'spring',
+                      stiffness: 380,
+                      damping: 24,
+                      mass: 0.8
+                    }}
+                    className="absolute inset-0 rounded-xl bg-gradient-to-r from-[#d4af37] via-[#f2ca50] to-[#cca639] shadow-lg shadow-[#f2ca50]/25 pointer-events-none"
+                    style={{ zIndex: 0 }}
+                  />
+                )}
+                <span className="relative z-10 text-base font-bold font-mono">{lvl}</span>
+                <span className="relative z-10 text-[10px] opacity-90 mt-0.5">{subLabels[lvl]}</span>
               </button>
             );
           })}

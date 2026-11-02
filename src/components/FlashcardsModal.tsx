@@ -5,14 +5,20 @@ import { saveFlashcardProgress } from '../firebase/client';
 import type { CEFRLevel } from '../firebase/types';
 import confetti from 'canvas-confetti';
 import { DualSpeakerButton } from './DualSpeakerButton';
+import { VoiceStudioModal } from './VoiceStudioModal';
 import {
   triggerAutoPlayIfEnabled,
+  triggerFlipAutoPlay,
+  getAutoPlayOnFlip,
+  setAutoPlayOnFlip,
   getAutoPlayOnDisplay,
   setAutoPlayOnDisplay,
   peekNextAlternatingAccent,
-  speakText
+  speakText,
+  speakFrenchText
 } from '../services/speechService';
 import { getWordLinguisticDetails } from '../utils/flashcardDetailsHelper';
+import { recordFlashcardError } from '../utils/errorJournal';
 
 interface FlashcardsModalProps {
   currentLevel: CEFRLevel;
@@ -42,7 +48,9 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
     }
   });
   const [isFocusMode, setIsFocusMode] = useState<boolean>(initialFocusMode);
+  const [isAutoPlayOnFlip, setIsAutoPlayOnFlip] = useState<boolean>(getAutoPlayOnFlip());
   const [isAutoPlay, setIsAutoPlay] = useState<boolean>(getAutoPlayOnDisplay());
+  const [isVoiceStudioOpen, setIsVoiceStudioOpen] = useState<boolean>(false);
   const [showFilterBar, setShowFilterBar] = useState<boolean>(true);
   const [showJumper, setShowJumper] = useState<boolean>(false);
   const [shuffledOrder, setShuffledOrder] = useState<number[] | null>(null);
@@ -119,8 +127,18 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
   };
 
   const handleFlip = useCallback(() => {
-    setIsFlipped((prev) => !prev);
-  }, []);
+    setIsFlipped((prev) => {
+      const next = !prev;
+      // Immersion auditive: joue la prononciation dès que la carte se retourne
+      if (next && isAutoPlayOnFlip && card?.term) {
+        triggerFlipAutoPlay(card.term, `fc-modal-${card.id}`, {
+          frenchTranslation: card.frenchDef,
+          delayMs: 60
+        });
+      }
+      return next;
+    });
+  }, [isAutoPlayOnFlip, card?.term, card?.id, card?.frenchDef]);
 
   const handleNextCard = useCallback(() => {
     setIsFlipped(false);
@@ -275,10 +293,34 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
       days = 0;
       score = 1;
       feedback = 'Programmé pour révision immédiate (< 10m)';
+      recordFlashcardError({
+        id: card.id,
+        term: card.term,
+        definition: card.englishDef || card.frenchDef,
+        translationFr: card.frenchDef,
+        gradeLevel: card.gradeLevel,
+        level: card.level,
+        theme: card.theme,
+        phoneticsUk: card.phonetic,
+        phoneticsUs: card.phonetic,
+        etymology: card.etymology
+      });
     } else if (quality === 'hard') {
       days = 1;
       score = 2;
       feedback = 'Intervalle ajusté : 1 jour (SM-2)';
+      recordFlashcardError({
+        id: card.id,
+        term: card.term,
+        definition: card.englishDef || card.frenchDef,
+        translationFr: card.frenchDef,
+        gradeLevel: card.gradeLevel,
+        level: card.level,
+        theme: card.theme,
+        phoneticsUk: card.phonetic,
+        phoneticsUs: card.phonetic,
+        etymology: card.etymology
+      });
     } else if (quality === 'good') {
       days = 3;
       score = 3;
@@ -427,33 +469,43 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
                 <span className="hidden md:inline">Mélanger</span>
               </button>
 
-              {/* Auto Play Alternating Toggle */}
+              {/* Auto Play on Flip Toggle ('Auto-play Audio') */}
               <button
                 type="button"
                 onClick={() => {
-                  const next = !isAutoPlay;
-                  setIsAutoPlay(next);
-                  setAutoPlayOnDisplay(next);
+                  const next = !isAutoPlayOnFlip;
+                  setIsAutoPlayOnFlip(next);
+                  setAutoPlayOnFlip(next);
                   showToast(
                     next
-                      ? 'Lecture auto alternée activée (🇬🇧⇄🇺🇸)'
-                      : 'Lecture auto désactivée'
+                      ? 'Auto-play Audio activé : prononciation jouée dès que la carte se retourne 🔊'
+                      : 'Auto-play Audio au retournement désactivé'
                   );
-                  if (next && card?.term) {
-                    triggerAutoPlayIfEnabled(card.term, `fc-modal-${card.id}`, 100);
-                  }
                 }}
-                className={`px-2.5 py-1.5 rounded-xl border text-xs font-mono font-medium flex items-center gap-1 transition-all active:scale-95 shadow-sm ${
-                  isAutoPlay
-                    ? 'border-[#f2ca50]/60 bg-[#1e2538] text-[#f2ca50] shadow-[0_0_10px_rgba(242,202,80,0.2)]'
+                className={`px-2.5 py-1.5 rounded-xl border text-xs font-mono font-medium flex items-center gap-1 transition-all active:scale-95 shadow-sm cursor-pointer ${
+                  isAutoPlayOnFlip
+                    ? 'border-[#f2ca50]/70 bg-[#1e2538] text-[#f2ca50] shadow-[0_0_12px_rgba(242,202,80,0.25)] font-bold'
                     : 'border-[#2e3b55] bg-[#121824] text-[#8391ac] hover:text-[#dce2f8]'
                 }`}
-                title="Lecture auto alternée 50/50 🇬🇧 UK & 🇺🇸 US"
+                title="Lecture automatique du mot dès retournement de carte ('Auto-play Audio')"
               >
                 <span className="material-symbols-outlined text-sm">
-                  {isAutoPlay ? 'autoplay' : 'motion_photos_off'}
+                  {isAutoPlayOnFlip ? 'autorenew' : 'motion_photos_off'}
                 </span>
-                <span className="hidden sm:inline">Auto 🇬🇧⇄🇺🇸</span>
+                <span className="hidden sm:inline">
+                  {isAutoPlayOnFlip ? 'Auto-play : Flip 🔊' : 'Auto-play : Off'}
+                </span>
+              </button>
+
+              {/* Voice Studio 30 Voix Réelles Button */}
+              <button
+                type="button"
+                onClick={() => setIsVoiceStudioOpen(true)}
+                className="px-2.5 py-1.5 rounded-xl border border-[#2e3b55] bg-[#121824] hover:border-[#f2ca50]/50 text-[#8391ac] hover:text-[#f2ca50] text-xs font-mono font-medium flex items-center gap-1 transition-all cursor-pointer"
+                title="Studio des Voix : Choisir parmi 30 voix réelles non-robotisées (5F/5M, Normal & Grave, UK/US/FR)"
+              >
+                <span className="material-symbols-outlined text-sm">tune</span>
+                <span className="hidden md:inline">30 Voix Réelles</span>
               </button>
 
               {/* Focus mode button */}
@@ -934,9 +986,25 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
                         }`}
                       >
                         <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1">
-                          <span className="text-[10px] text-[#f2ca50] uppercase font-bold tracking-wider">
-                            Traduction Française & Finesse Sémantique
-                          </span>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[10px] text-[#f2ca50] uppercase font-bold tracking-wider">
+                              Traduction Française & Finesse Sémantique
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                speakFrenchText(card.frenchDef, `fc-fr-def-${card.id}`);
+                                showToast('Lecture 🇫🇷 en voix française authentique');
+                              }}
+                              className="px-2 py-0.5 rounded-md bg-[#192233] hover:bg-[#232f48] border border-emerald-400/40 hover:border-emerald-400 text-emerald-300 text-[10px] font-mono font-bold flex items-center gap-1 transition-all cursor-pointer"
+                              title="Écouter la traduction française avec la voix française sélectionnée"
+                            >
+                              <span>🇫🇷</span>
+                              <span>Écouter</span>
+                              <span className="material-symbols-outlined text-xs">volume_up</span>
+                            </button>
+                          </div>
                           <span className="text-[10px] text-[#ffe082] font-mono font-bold">
                             Niveau {card.level} &bull; {card.gradeLabel}
                           </span>
@@ -1295,6 +1363,16 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
           </div>
         </div>
       )}
+
+      {/* Voice Studio Modal (30 Voix Réelles & Auto-Play Audio Settings) */}
+      <VoiceStudioModal
+        isOpen={isVoiceStudioOpen}
+        onClose={() => {
+          setIsVoiceStudioOpen(false);
+          // Sync flip autoplay setting from storage
+          setIsAutoPlayOnFlip(getAutoPlayOnFlip());
+        }}
+      />
     </div>
   );
 };

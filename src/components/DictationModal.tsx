@@ -7,6 +7,7 @@ import confetti from 'canvas-confetti';
 import { DualSpeakerButton } from './DualSpeakerButton';
 import { speakText, stopSpeech } from '../services/speechService';
 import { getWordLinguisticDetails } from '../utils/flashcardDetailsHelper';
+import { recordDictationError } from '../utils/errorJournal';
 
 interface DictationModalProps {
   currentLevel: CEFRLevel;
@@ -286,6 +287,29 @@ export const DictationModal: React.FC<DictationModalProps> = ({
       }
     }
 
+    // Record error in Error Journal if score < 100
+    if (score < 100) {
+      const errTokens = diffs.filter((d) => !d.isCorrect);
+      const diffSummary =
+        errTokens.length > 0
+          ? `Hésitation sur : ${errTokens.map((t) => `${t.original || '(omission)'} → ${t.text}`).slice(0, 4).join(', ')}`
+          : 'Transcription incomplète';
+
+      recordDictationError({
+        dictationId: item.id,
+        term: item.targetWord || canonicalTokens[0] || item.title,
+        canonicalSentence: item.canonicalText,
+        userText: userText.trim(),
+        score,
+        gradeLevel: item.gradeLevel,
+        level: item.level,
+        theme: item.theme,
+        definition: item.notes?.[0]?.explanation || item.englishDef || item.frenchDef || item.title,
+        translationFr: item.frenchDef || item.title,
+        diffExplanation: diffSummary
+      });
+    }
+
     // Save attempt to Firebase
     await recordAttempt({
       moduleId: item.id,
@@ -300,7 +324,20 @@ export const DictationModal: React.FC<DictationModalProps> = ({
 
   const handleSaveToRevision = async () => {
     setIsSavedToCloud(true);
-    showToast('Session ajoutée à votre carnet de révision 📚');
+    recordDictationError({
+      dictationId: item.id,
+      term: item.targetWord || item.canonicalText.split(/\s+/)[0] || item.title,
+      canonicalSentence: item.canonicalText,
+      userText: userText.trim() || '(non transcrit)',
+      score: hasEvaluated ? accuracyScore : 50,
+      gradeLevel: item.gradeLevel,
+      level: item.level,
+      theme: item.theme,
+      definition: item.notes?.[0]?.explanation || item.englishDef || item.frenchDef || item.title,
+      translationFr: item.frenchDef || item.title,
+      diffExplanation: 'Session épinglée dans le Journal d\'Erreurs pour entraînement ciblé'
+    });
+    showToast('Session enregistrée dans le Journal d\'Erreurs 📚');
   };
 
   const wordCount = userText.trim().length === 0 ? 0 : userText.trim().split(/\s+/).length;

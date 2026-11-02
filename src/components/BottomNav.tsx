@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 
 export type TabKey = 'accueil' | 'cursus' | 'jeux' | 'classement' | 'pratique' | 'dashboard' | 'profil';
 
@@ -28,24 +29,43 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
               key={tab.key}
               type="button"
               onClick={() => onTabChange(tab.key)}
-              className={`flex flex-col items-center justify-center gap-1 min-w-[42px] sm:min-w-[56px] min-h-[48px] rounded-xl transition-all active:scale-95 ${
-                isActive
-                  ? 'text-[#f2ca50] font-semibold'
-                  : 'text-[#d0c5af]/70 hover:text-[#dce2f8]'
+              className={`relative flex flex-col items-center justify-center gap-0.5 min-w-[42px] sm:min-w-[56px] min-h-[48px] py-1 px-1.5 sm:px-2 rounded-2xl transition-colors duration-200 cursor-pointer active:scale-95 ${
+                isActive ? 'text-[#f2ca50]' : 'text-[#d0c5af]/70 hover:text-[#dce2f8]'
               }`}
             >
-              <div className="relative flex items-center justify-center">
-                <span
+              {/* Bloc de mise en évidence aux coins arrondis glissant avec rebond ressort */}
+              {isActive && (
+                <motion.div
+                  layoutId="activeBottomNavHighlight"
+                  transition={{
+                    type: 'spring',
+                    stiffness: 380,
+                    damping: 24,
+                    mass: 0.8
+                  }}
+                  className="absolute inset-0 rounded-2xl bg-gradient-to-b from-[#f2ca50]/25 via-[#f2ca50]/15 to-[#d4af37]/20 border border-[#f2ca50]/60 shadow-[0_0_18px_rgba(242,202,80,0.3)] pointer-events-none"
+                  style={{ zIndex: 0 }}
+                />
+              )}
+
+              <div className="relative z-10 flex items-center justify-center">
+                <motion.span
+                  animate={{ scale: isActive ? 1.12 : 1 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 20 }}
                   className="material-symbols-outlined text-[23px] transition-transform duration-200"
                   style={isActive ? { fontVariationSettings: "'FILL' 1" } : undefined}
                 >
                   {tab.icon}
-                </span>
-                {isActive && (
-                  <span className="absolute -bottom-1 w-1 h-1 rounded-full bg-[#f2ca50] shadow-[0_0_6px_#f2ca50]" />
-                )}
+                </motion.span>
               </div>
-              <span className="text-[11px] tracking-wide font-sans">{tab.label}</span>
+
+              <span
+                className={`relative z-10 text-[11px] tracking-wide font-sans transition-all duration-200 ${
+                  isActive ? 'text-[#f2ca50] font-bold scale-105' : 'text-[#d0c5af]/80 font-medium'
+                }`}
+              >
+                {tab.label}
+              </span>
             </button>
           );
         })}

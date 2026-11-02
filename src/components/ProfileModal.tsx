@@ -5,6 +5,8 @@ import { useAppTheme, type AppTheme, type FloralBorderWidth } from '../theme/The
 import { BadgesSection } from './BadgesSection';
 import { computeUserBadges } from '../data/badges';
 import { BadgeUnlockModal } from './BadgeUnlockModal';
+import { ErrorJournalModal } from './ErrorJournalModal';
+import { getErrorJournal } from '../utils/errorJournal';
 import {
   getAutoPlayOnDisplay,
   setAutoPlayOnDisplay,
@@ -33,6 +35,18 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   const [isSigningIn, setIsSigningIn] = useState<boolean>(false);
   const [autoPlayAudio, setAutoPlayAudio] = useState<boolean>(getAutoPlayOnDisplay());
   const [celebrationBadge, setCelebrationBadge] = useState<AcademicBadge | null>(null);
+  const [isErrorJournalOpen, setIsErrorJournalOpen] = useState<boolean>(false);
+  const [errorCount, setErrorCount] = useState<number>(() => {
+    return getErrorJournal().filter((i) => !i.resolved).length;
+  });
+
+  useEffect(() => {
+    const updateCounts = () => {
+      setErrorCount(getErrorJournal().filter((i) => !i.resolved).length);
+    };
+    window.addEventListener('eb_error_journal_updated', updateCounts);
+    return () => window.removeEventListener('eb_error_journal_updated', updateCounts);
+  }, []);
 
   const allBadges = computeUserBadges(user);
   const distinctionBadges = allBadges.filter((b) => b.category === 'distinction');
@@ -351,6 +365,47 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 </button>
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Section 'Journal d'Erreurs & Révision Ciblée' */}
+        <div className="p-5 rounded-2xl bg-gradient-to-br from-[#1a2336] via-[#131b2c] to-[#0d1424] border border-[#f2ca50]/50 shadow-xl flex flex-col gap-3.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-[#f2ca50]/20 border border-[#f2ca50]/50 flex items-center justify-center text-[#f2ca50] shadow-inner shrink-0">
+                <span className="material-symbols-outlined text-xl">history_edu</span>
+              </div>
+              <div className="flex flex-col">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-[#f2ca50] font-bold uppercase tracking-wider font-mono">
+                    ANALYSE DES DIFFICULTÉS
+                  </span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#f2ca50] animate-ping" />
+                </div>
+                <h3 className="font-serif font-bold text-base text-[#f3f4f6]">
+                  Journal d'Erreurs & Révision Ciblée
+                </h3>
+              </div>
+            </div>
+
+            <span className="px-2.5 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 text-[11px] font-mono font-bold shrink-0">
+              {errorCount} point{errorCount > 1 ? 's' : ''} à consolider
+            </span>
+          </div>
+
+          <p className="text-xs text-[#cbd5e1] leading-relaxed">
+            Consultez le récapitulatif détaillé des mots manqués en <strong>cartes de répétition espacée</strong> et des erreurs d'orthographe en <strong>dictée</strong>. Lancez une session d'entraînement ciblée pour surmonter vos hésitations et gagner de l'XP.
+          </p>
+
+          <div className="pt-1 flex flex-col sm:flex-row gap-2.5">
+            <button
+              type="button"
+              onClick={() => setIsErrorJournalOpen(true)}
+              className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-[#d4af37] via-[#f2ca50] to-[#cca639] hover:from-[#ffe088] hover:to-[#f2ca50] text-[#3c2f00] text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-[#f2ca50]/20 active:scale-95 transition-all cursor-pointer font-sans"
+            >
+              <span className="material-symbols-outlined text-base">target</span>
+              <span>Ouvrir le Journal & Réviser ({errorCount})</span>
+            </button>
           </div>
         </div>
 
@@ -723,6 +778,24 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
         isOpen={!!celebrationBadge}
         onClose={() => setCelebrationBadge(null)}
         onClaimReward={handleClaimReward}
+      />
+
+      {/* Error Journal & Targeted Revision Session Modal */}
+      <ErrorJournalModal
+        isOpen={isErrorJournalOpen}
+        onClose={() => {
+          setIsErrorJournalOpen(false);
+          setErrorCount(getErrorJournal().filter((i) => !i.resolved).length);
+        }}
+        onXpEarned={(xp) => {
+          onUpdateUser({
+            stats: {
+              ...user.stats,
+              totalXp: (user.stats.totalXp || 0) + xp,
+              weeklyXp: (user.stats.weeklyXp || 0) + xp
+            }
+          });
+        }}
       />
     </div>
   );
