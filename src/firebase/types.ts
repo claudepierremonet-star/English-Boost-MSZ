@@ -58,6 +58,16 @@ export interface UserProfile {
   isAnonymous?: boolean;
   unlockedBadgeIds?: string[];
   arcadeProgression?: ArcadeProgressionState;
+  mszCoinsBalance?: number;
+  ownedCardInstances?: Array<{
+    characterId: string;
+    editionNumber: number;
+    maxSupply: number;
+    serialCode: string;
+    obtainedAt: string;
+    obtainedPrice: number;
+  }>;
+  equippedCharacterId?: string;
 }
 
 export interface LearningAttempt {

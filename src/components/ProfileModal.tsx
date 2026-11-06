@@ -6,6 +6,17 @@ import { BadgesSection } from './BadgesSection';
 import { computeUserBadges } from '../data/badges';
 import { BadgeUnlockModal } from './BadgeUnlockModal';
 import { ErrorJournalModal } from './ErrorJournalModal';
+import { VoiceStudioModal } from './VoiceStudioModal';
+import { MszShopModal } from './MszShopModal';
+import { UserInventorySection } from './UserInventorySection';
+import {
+  getMszCoinsBalance,
+  getEquippedCharacterId,
+  getOwnedCardInstances,
+  formatEditionNumber,
+  type OwnedCardInstance
+} from '../utils/mszCoinsManager';
+import { MSZ_CHARACTERS } from '../data/mszShopData';
 import { getErrorJournal } from '../utils/errorJournal';
 import {
   getAutoPlayOnDisplay,
@@ -36,6 +47,14 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   const [autoPlayAudio, setAutoPlayAudio] = useState<boolean>(getAutoPlayOnDisplay());
   const [celebrationBadge, setCelebrationBadge] = useState<AcademicBadge | null>(null);
   const [isErrorJournalOpen, setIsErrorJournalOpen] = useState<boolean>(false);
+  const [isVoiceStudioOpen, setIsVoiceStudioOpen] = useState<boolean>(false);
+  const [isShopOpen, setIsShopOpen] = useState<boolean>(false);
+  const [activeProfileTab, setActiveProfileTab] = useState<'profile' | 'inventory'>('profile');
+  const [ownedInstances, setOwnedInstances] = useState<OwnedCardInstance[]>(() => getOwnedCardInstances());
+  const [mszBalance, setMszBalance] = useState<number>(() => getMszCoinsBalance());
+  const [equippedCharId, setEquippedCharId] = useState<string>(() => getEquippedCharacterId());
+  const equippedChar = MSZ_CHARACTERS.find((c) => c.id === equippedCharId) || MSZ_CHARACTERS[0];
+  const equippedInstance = ownedInstances.find((inst) => inst.characterId === equippedCharId);
   const [errorCount, setErrorCount] = useState<number>(() => {
     return getErrorJournal().filter((i) => !i.resolved).length;
   });
@@ -43,9 +62,20 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   useEffect(() => {
     const updateCounts = () => {
       setErrorCount(getErrorJournal().filter((i) => !i.resolved).length);
+      setOwnedInstances(getOwnedCardInstances());
+      setMszBalance(getMszCoinsBalance());
+      setEquippedCharId(getEquippedCharacterId());
     };
     window.addEventListener('eb_error_journal_updated', updateCounts);
-    return () => window.removeEventListener('eb_error_journal_updated', updateCounts);
+    window.addEventListener('msz-inventory-updated', updateCounts);
+    window.addEventListener('msz-coins-updated', updateCounts);
+    window.addEventListener('msz-equipped-updated', updateCounts);
+    return () => {
+      window.removeEventListener('eb_error_journal_updated', updateCounts);
+      window.removeEventListener('msz-inventory-updated', updateCounts);
+      window.removeEventListener('msz-coins-updated', updateCounts);
+      window.removeEventListener('msz-equipped-updated', updateCounts);
+    };
   }, []);
 
   const allBadges = computeUserBadges(user);
@@ -218,10 +248,56 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
         </div>
       </div>
 
-      {/* Main Form */}
-      <main className="max-w-xl mx-auto w-full px-4 sm:px-6 py-5 flex flex-col gap-5">
-        {/* User Card with Distinction Badges Ribbon */}
-        <div className="p-5 rounded-2xl bg-[#191f2f] border border-[#4d4635]/40 shadow-xl flex flex-col gap-4">
+      {/* Profile & Inventory Tab Switcher */}
+      <div className="max-w-xl mx-auto w-full px-4 sm:px-6 pt-2 pb-0">
+        <div className="p-1 rounded-2xl bg-[#121929] border border-[#232a3a] flex items-center gap-1.5 shadow-md">
+          <button
+            type="button"
+            onClick={() => setActiveProfileTab('profile')}
+            className={`flex-1 py-2 px-3 rounded-xl text-xs font-mono font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              activeProfileTab === 'profile'
+                ? 'bg-[#f2ca50] text-[#0c1322] shadow-md shadow-[#f2ca50]/20'
+                : 'text-[#8391ac] hover:text-white hover:bg-[#151f33]'
+            }`}
+          >
+            <span className="material-symbols-outlined text-sm">person</span>
+            <span>Profil & Distinctions</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveProfileTab('inventory')}
+            className={`flex-1 py-2 px-3 rounded-xl text-xs font-mono font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              activeProfileTab === 'inventory'
+                ? 'bg-[#f2ca50] text-[#0c1322] shadow-md shadow-[#f2ca50]/20'
+                : 'text-[#8391ac] hover:text-white hover:bg-[#151f33]'
+            }`}
+          >
+            <span className="material-symbols-outlined text-sm">style</span>
+            <span>Mon Inventaire ({ownedInstances.length})</span>
+            <span className="px-1.5 py-0.2 rounded-md bg-[#070e1d] text-[#ffd700] text-[10px] font-mono font-black border border-[#ffd700]/30 hidden sm:inline">
+              1/100
+            </span>
+          </button>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <main className="max-w-xl mx-auto w-full px-4 sm:px-6 py-4 flex flex-col gap-5">
+        {activeProfileTab === 'inventory' ? (
+          <UserInventorySection
+            onOpenShop={() => setIsShopOpen(true)}
+            onProfileUpdated={() => {
+              setMszBalance(getMszCoinsBalance());
+              setEquippedCharId(getEquippedCharacterId());
+              setOwnedInstances(getOwnedCardInstances());
+              onUpdateUser({});
+            }}
+          />
+        ) : (
+          <>
+            {/* User Card with Distinction Badges Ribbon */}
+            <div className="p-5 rounded-2xl bg-[#191f2f] border border-[#4d4635]/40 shadow-xl flex flex-col gap-4">
           <div className="flex items-center gap-4">
             <div className="relative">
               <img
@@ -249,6 +325,67 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                   <span>{user.stats.streakDays}j</span>
                 </span>
               </div>
+            </div>
+          </div>
+
+          {/* MSZ Collectible Character & Wallet Showcase */}
+          <div className="p-3.5 rounded-xl bg-[#121929] border border-[#f2ca50]/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div
+                onClick={() => setActiveProfileTab('inventory')}
+                className="w-13 h-13 rounded-xl overflow-hidden border border-[#f2ca50]/60 shrink-0 bg-[#070e1d] cursor-pointer hover:scale-105 transition-transform"
+                title="Cliquer pour afficher dans Mon Inventaire"
+              >
+                <img
+                  src={equippedChar.image}
+                  alt={equippedChar.name}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+
+              <div className="flex flex-col min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[10px] font-mono text-[#f2ca50] font-bold uppercase">
+                    Icône Équipée
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300 font-mono font-bold">
+                    Niv. {equippedChar.level}
+                  </span>
+                  {equippedInstance && (
+                    <span className="text-[9px] font-mono font-black text-[#ffd700] px-1.5 py-0.2 rounded bg-amber-500/25 border border-amber-400/50">
+                      N° ${equippedInstance.editionNumber}/${equippedInstance.maxSupply || 100}
+                    </span>
+                  )}
+                </div>
+                <span className="font-serif text-sm font-bold text-white truncate">
+                  « {equippedChar.name} » &bull; {equippedChar.element}
+                </span>
+                <span className="text-[10px] text-[#ffe082] font-mono flex items-center gap-1 mt-0.5">
+                  <span className="material-symbols-outlined text-xs text-[#f2ca50]">monetization_on</span>
+                  <strong>{mszBalance} MSZ Coins</strong>
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 self-end sm:self-auto">
+              <button
+                type="button"
+                onClick={() => setActiveProfileTab('inventory')}
+                className="px-3 py-1.5 rounded-lg bg-[#1e293b] hover:bg-[#25355a] text-[#ffe082] text-xs font-mono font-bold flex items-center gap-1 border border-[#f2ca50]/30 shadow-sm active:scale-95 transition-all shrink-0 cursor-pointer"
+                title="Accéder à Mon Inventaire de cartes"
+              >
+                <span className="material-symbols-outlined text-xs">style</span>
+                <span>Mon Inventaire</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsShopOpen(true)}
+                className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-[#f2ca50] to-[#ffd700] text-[#2c2000] text-xs font-mono font-bold flex items-center gap-1 shadow-sm active:scale-95 transition-all shrink-0 cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-xs">storefront</span>
+                <span>Boutique</span>
+              </button>
             </div>
           </div>
 
@@ -663,6 +800,17 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               <span>Tester</span>
             </button>
           </div>
+
+          <div className="pt-2 border-t border-[#232a3a]">
+            <button
+              type="button"
+              onClick={() => setIsVoiceStudioOpen(true)}
+              className="w-full py-2.5 px-3.5 rounded-xl bg-gradient-to-r from-[#20293d] via-[#1a2336] to-[#121927] hover:border-[#f2ca50]/60 border border-[#3b455b] text-[#dce2f8] hover:text-[#f2ca50] text-xs font-mono font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow"
+            >
+              <span className="material-symbols-outlined text-sm text-[#f2ca50]">tune</span>
+              <span>Studio des Voix : 30 Voix Réelles (5F / 5M • Normal & Grave)</span>
+            </button>
+          </div>
         </div>
 
         {/* Custom Hero Photo Upload */}
@@ -753,6 +901,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             <span>Sortir & Reprendre</span>
           </button>
         </div>
+        </>
+        )}
       </main>
 
       {/* Barre de retour inférieure flottante (Sticky Bottom, garantie anti-blocage iOS / iPhone) */}
@@ -795,6 +945,27 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               weeklyXp: (user.stats.weeklyXp || 0) + xp
             }
           });
+        }}
+      />
+
+      {/* Studio des Voix Modal (30 Voix Réelles) */}
+      <VoiceStudioModal
+        isOpen={isVoiceStudioOpen}
+        onClose={() => setIsVoiceStudioOpen(false)}
+      />
+
+      {/* Boutique des Personnages & Collection MSZ */}
+      <MszShopModal
+        isOpen={isShopOpen}
+        onClose={() => {
+          setIsShopOpen(false);
+          setMszBalance(getMszCoinsBalance());
+          setEquippedCharId(getEquippedCharacterId());
+        }}
+        userLevel={user.arcadeProgression?.level || 14}
+        onProfileUpdated={() => {
+          setMszBalance(getMszCoinsBalance());
+          setEquippedCharId(getEquippedCharacterId());
         }}
       />
     </div>

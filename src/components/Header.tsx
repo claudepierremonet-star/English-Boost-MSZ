@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { UserProfile, CEFRLevel } from '../firebase/types';
 import { useSyncStatus } from '../offline/useSyncStatus';
 import { calculateLevel } from '../utils/levelUtils';
+import { getMszCoinsBalance } from '../utils/mszCoinsManager';
 import appIconImg from '../assets/images/app_icon_msz_1792789129742.jpg';
 
 interface HeaderProps {
@@ -17,6 +18,7 @@ interface HeaderProps {
   onOpenAuthModal?: () => void;
   onOpenAccentStudio?: () => void;
   onOpenLevelCelebration?: () => void;
+  onOpenShop?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -31,12 +33,20 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenInstallModal,
   onOpenAuthModal,
   onOpenAccentStudio,
-  onOpenLevelCelebration
+  onOpenLevelCelebration,
+  onOpenShop
 }) => {
   const { isOnline, isSyncing, pendingCount, triggerSync } = useSyncStatus();
   const [imageError, setImageError] = useState(false);
+  const [mszCoins, setMszCoins] = useState<number>(() => getMszCoinsBalance());
   const academicLevel = calculateLevel(user.stats?.totalXp || 0);
   const xpInLevel = (user.stats?.totalXp || 0) % 100;
+
+  useEffect(() => {
+    const handleCoinsUpdate = () => setMszCoins(getMszCoinsBalance());
+    window.addEventListener('msz-coins-updated', handleCoinsUpdate);
+    return () => window.removeEventListener('msz-coins-updated', handleCoinsUpdate);
+  }, []);
 
   return (
     <header
@@ -147,6 +157,25 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <span className="material-symbols-outlined text-[15px] text-[#f2ca50]">emoji_events</span>
               <span className="hidden sm:inline font-mono text-[11px]">Top Hebdo</span>
+            </button>
+          )}
+
+          {/* MSZ Coins Balance & Shop Quick Button */}
+          {onOpenShop && (
+            <button
+              type="button"
+              onClick={onOpenShop}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#182338] hover:bg-[#202f4a] border border-[#f2ca50]/50 text-xs font-bold text-[#ffd700] hover:text-white transition-all active:scale-95 shadow-sm cursor-pointer"
+              title="Portefeuille MSZ Coins & Boutique des Personnages"
+            >
+              <span
+                className="material-symbols-outlined text-[15px] text-[#f2ca50]"
+                style={{ fontVariationSettings: "'FILL' 1" }}
+              >
+                monetization_on
+              </span>
+              <span className="font-mono text-[11px] font-black">{mszCoins.toLocaleString()}</span>
+              <span className="hidden xl:inline text-[9px] text-[#f2ca50] font-mono">MSZ</span>
             </button>
           )}
 

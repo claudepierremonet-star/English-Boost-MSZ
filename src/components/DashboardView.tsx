@@ -19,6 +19,8 @@ import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { useSyncStatus } from '../offline/useSyncStatus';
 import { VocabularyMasterySummary } from './VocabularyMasterySummary';
 import { StudyCalendarWidget } from './StudyCalendarWidget';
+import { MszShop } from './MszShop';
+import { MszShopModal } from './MszShopModal';
 import { STUDY_FOLIOS } from '../data/curriculum';
 
 interface CustomTooltipProps {
@@ -227,6 +229,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [showAdjustModal, setShowAdjustModal] = useState<boolean>(false);
   const [selectedTarget, setSelectedTarget] = useState<number>(user.stats.studyMinutesTarget || 30);
   const [chartMetric, setChartMetric] = useState<'xp' | 'score'>('xp');
+  const [isShopModalOpen, setIsShopModalOpen] = useState<boolean>(false);
 
   const {
     isOnline,
@@ -947,6 +950,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         />
       </motion.div>
 
+      {/* Composant MSZ-Shop du Dashboard (10 Catégories, Rendu 3D Recto-Verso au Clic, Prix en MSZ Coins & Rareté) */}
+      <motion.div variants={dashboardCardVariants}>
+        <MszShop
+          userLevel={user.arcadeProgression?.level || 14}
+          onOpenFullShop={() => setIsShopModalOpen(true)}
+          onProfileUpdated={onOpenProfile}
+        />
+      </motion.div>
+
       {/* Visual Study Calendar, Weekly Goals & Study Reminders */}
       <motion.div variants={dashboardCardVariants}>
         <StudyCalendarWidget
@@ -1401,6 +1413,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Fullscreen MSZ Shop & P2P Marketplace Modal */}
+      <MszShopModal
+        isOpen={isShopModalOpen}
+        onClose={() => setIsShopModalOpen(false)}
+        userLevel={user.arcadeProgression?.level || 14}
+        onProfileUpdated={onOpenProfile}
+      />
     </motion.div>
   );
 };

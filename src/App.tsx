@@ -35,6 +35,7 @@ import type { StudyFolio, CurioWord } from './data/curriculum';
 import { calculateLevel } from './utils/levelUtils';
 import { LevelUpCelebrationModal, type LevelUpData } from './components/LevelUpCelebrationModal';
 import { XpGainToast, type XpToastInfo } from './components/XpGainToast';
+import { MszShopModal } from './components/MszShopModal';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabKey>('accueil');
@@ -58,6 +59,7 @@ export default function App() {
   const [isQuizOpen, setIsQuizOpen] = useState<boolean>(false);
   const [isSpeakingOpen, setIsSpeakingOpen] = useState<boolean>(false);
   const [isAccentStudioOpen, setIsAccentStudioOpen] = useState<boolean>(false);
+  const [isShopModalOpen, setIsShopModalOpen] = useState<boolean>(false);
   const [activeFolioForStudy, setActiveFolioForStudy] = useState<StudyFolio | null>(null);
 
   // Level-Up celebration modal & fluid XP Toast states (Framer Motion)
@@ -225,6 +227,7 @@ export default function App() {
         onOpenInstallModal={() => setIsInstallModalOpen(true)}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
         onOpenAccentStudio={() => setIsAccentStudioOpen(true)}
+        onOpenShop={() => setIsShopModalOpen(true)}
         onOpenLevelCelebration={() => {
           const currentLvl = calculateLevel(user.stats?.totalXp || 0);
           setLevelUpData({
@@ -627,6 +630,14 @@ export default function App() {
       <AmericanAccentStudioModal
         isOpen={isAccentStudioOpen}
         onClose={() => setIsAccentStudioOpen(false)}
+      />
+
+      {/* Collectible Cards & MSZ Coins Shop Modal */}
+      <MszShopModal
+        isOpen={isShopModalOpen}
+        onClose={() => setIsShopModalOpen(false)}
+        userLevel={calculateLevel(user.stats?.totalXp || 0)}
+        onProfileUpdated={() => setUser(getLocalUserProfile())}
       />
 
       {/* Level-Up Celebration Modal (Framer Motion) */}

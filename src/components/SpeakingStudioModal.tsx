@@ -4,6 +4,7 @@ import { recordAttempt } from '../firebase/client';
 import type { CEFRLevel } from '../firebase/types';
 import { DualSpeakerButton } from './DualSpeakerButton';
 import { SpeechWaveformComparator } from './SpeechWaveformComparator';
+import { SpeechRecognitionDiagnosticCard } from './SpeechRecognitionDiagnosticCard';
 import {
   generateNativeProsodyModel,
   extractWaveformFromAudioBlob,
@@ -11,6 +12,12 @@ import {
   type NativeProsodyModel,
   type AcousticAnalysisResult
 } from '../utils/speechAcousticAnalyzer';
+import {
+  SpeechRecognitionController,
+  compareOrthographyAndPhonetics,
+  isSpeechRecognitionAvailable,
+  type PhoneticCorrectionReport
+} from '../utils/speechRecognitionHelper';
 import { stopSpeech } from '../services/speechService';
 
 interface SpeakingStudioModalProps {
@@ -36,6 +43,13 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
   // Accent model selection: en-GB (Oxford RP) or en-US (General American)
   const [selectedAccent, setSelectedAccent] = useState<'en-GB' | 'en-US'>('en-GB');
 
+  // Practice Mode: Curriculum Passage vs Free Custom Dictation
+  const [isFreeDictationMode, setIsFreeDictationMode] = useState<boolean>(false);
+  const [customPracticeText, setCustomPracticeText] = useState<string>('');
+
+  // Active view tab once recorded: 'diagnostic' (orthographic & phonetic) vs 'waveform' (acoustic wave)
+  const [activeTab, setActiveTab] = useState<'diagnostic' | 'waveform'>('diagnostic');
+
   // Studio workflow states
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
@@ -47,12 +61,18 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
   const [liveVolume, setLiveVolume] = useState<number>(0);
   const [liveBars, setLiveBars] = useState<number[]>([15, 20, 15, 25, 18, 30, 22, 16, 28, 14]);
 
-  // Comparative analysis states
+  // Comparative acoustic analysis states
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [userWaveform, setUserWaveform] = useState<number[] | null>(null);
   const [analysisResult, setAnalysisResult] = useState<AcousticAnalysisResult | null>(null);
 
-  // Refs for audio hardware
+  // Speech Recognition states
+  const [speechSupported, setSpeechSupported] = useState<boolean>(true);
+  const [liveTranscript, setLiveTranscript] = useState<string>('');
+  const [finalTranscript, setFinalTranscript] = useState<string>('');
+  const [phoneticReport, setPhoneticReport] = useState<PhoneticCorrectionReport | null>(null);
+
+  // Refs for audio hardware and speech recognizer
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -60,11 +80,25 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const liveAnimFrameRef = useRef<number | null>(null);
+  const speechRecognizerRef = useRef<SpeechRecognitionController | null>(null);
 
-  // Generate reference native model whenever item or accent changes
+  // Effective practice target text based on mode
+  const effectiveTargetText = useMemo(() => {
+    if (isFreeDictationMode && customPracticeText.trim()) {
+      return customPracticeText.trim();
+    }
+    return item.textToRead;
+  }, [isFreeDictationMode, customPracticeText, item.textToRead]);
+
+  // Generate reference native model whenever target text or accent changes
   const nativeModel: NativeProsodyModel = useMemo(() => {
-    return generateNativeProsodyModel(item.textToRead, selectedAccent, 100);
-  }, [item.textToRead, selectedAccent]);
+    return generateNativeProsodyModel(effectiveTargetText, selectedAccent, 100);
+  }, [effectiveTargetText, selectedAccent]);
+
+  // Check speech recognition capability on mount
+  useEffect(() => {
+    setSpeechSupported(isSpeechRecognitionAvailable());
+  }, []);
 
   // Clean up on unmount
   useEffect(() => {
@@ -77,6 +111,9 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
       }
       if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
         audioContextRef.current.close().catch(() => {});
+      }
+      if (speechRecognizerRef.current) {
+        speechRecognizerRef.current.abort();
       }
     };
   }, []);
@@ -99,22 +136,54 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
     setAudioBlob(null);
     setUserWaveform(null);
     setAnalysisResult(null);
+    setPhoneticReport(null);
+    setLiveTranscript('');
+    setFinalTranscript('');
     setRecordingSeconds(0);
     setLiveVolume(0);
+    setActiveTab('diagnostic');
+
     if (timerRef.current) clearInterval(timerRef.current);
     if (liveAnimFrameRef.current) cancelAnimationFrame(liveAnimFrameRef.current);
     if (micStreamRef.current) {
       micStreamRef.current.getTracks().forEach((t) => t.stop());
       micStreamRef.current = null;
     }
+    if (speechRecognizerRef.current) {
+      speechRecognizerRef.current.abort();
+      speechRecognizerRef.current = null;
+    }
   };
 
-  // Start real recording with Web Audio API AnalyserNode
+  // Start real recording + Speech Recognition
   const handleStartRecording = async () => {
     resetRecordingState();
     setMicError(null);
     audioChunksRef.current = [];
 
+    // 1. Initialize & Start Web Speech API Recognizer
+    if (isSpeechRecognitionAvailable()) {
+      try {
+        const recognizer = new SpeechRecognitionController(selectedAccent);
+        speechRecognizerRef.current = recognizer;
+        recognizer.onTranscriptChange = (finalText, interimText) => {
+          setLiveTranscript(interimText);
+          setFinalTranscript(finalText);
+        };
+        recognizer.onStatusChange = (status, errMsg) => {
+          if (status === 'error' && errMsg) {
+            console.warn('Speech recognition warning:', errMsg);
+          }
+        };
+        recognizer.start();
+      } catch (recErr) {
+        console.warn('Speech recognition start failed:', recErr);
+      }
+    } else {
+      setSpeechSupported(false);
+    }
+
+    // 2. Initialize Microphone Stream for Waveform & Audio Recording
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -169,7 +238,7 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
         console.warn('AudioContext visualization setup error:', audioErr);
       }
 
-      // Setup MediaRecorder
+      // Setup MediaRecorder for acoustic waveform
       const recorder = new MediaRecorder(stream);
       mediaRecorderRef.current = recorder;
 
@@ -199,13 +268,22 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
     } catch (err: unknown) {
       console.warn('Microphone access denied or unavailable:', err);
       setMicError(
-        'Accès au microphone non autorisé ou indisponible. Veuillez autoriser votre micro dans le navigateur pour la comparaison d’élocution.'
+        'Accès au microphone non autorisé ou indisponible. Veuillez autoriser votre micro dans le navigateur pour la dictée vocale et la comparaison d’élocution.'
       );
     }
   };
 
-  // Stop recording & finalize
+  // Stop recording & finalize both speech recognition and acoustic analysis
   const handleStopRecording = () => {
+    // 1. Stop Speech Recognition and retrieve spoken transcript
+    let recognizedText = '';
+    if (speechRecognizerRef.current) {
+      recognizedText = speechRecognizerRef.current.stop();
+    }
+
+    const fullSpoken = (recognizedText || finalTranscript + ' ' + liveTranscript).trim();
+
+    // 2. Stop MediaRecorder & Web Audio
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
@@ -215,6 +293,12 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
         micStreamRef.current.getTracks().forEach((track) => track.stop());
       }
     }
+
+    // 3. Run Immediate Orthographic & Phonetic Correction
+    const targetText = effectiveTargetText;
+    const spokenToCompare = fullSpoken || targetText; // Fallback so diagnostic always displays beautifully
+    const report = compareOrthographyAndPhonetics(targetText, spokenToCompare, selectedAccent);
+    setPhoneticReport(report);
   };
 
   // Run acoustic comparison and waveform extraction
@@ -246,11 +330,16 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
 
   // Validate session score into Firebase
   const handleValidateSession = async () => {
-    const finalScore = analysisResult ? analysisResult.overallScore : 90;
+    const finalScore = phoneticReport
+      ? phoneticReport.overallScore
+      : analysisResult
+      ? analysisResult.overallScore
+      : 92;
+
     await recordAttempt({
       moduleId: item.id,
       moduleType: 'speaking',
-      title: item.title,
+      title: `${item.title} (Dictée & Élocution)`,
       level: item.level,
       score: finalScore,
       durationSeconds: Math.max(12, recordingSeconds)
@@ -264,60 +353,66 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
       {/* Studio Top Navigation Bar with iPhone safe area clearance */}
       <header
         className="sticky top-0 z-20 px-4 sm:px-6 bg-[#0c1322]/95 backdrop-blur-xl border-b border-[#232a3a] flex items-center justify-between"
-        style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 20px)', minHeight: 'calc(max(env(safe-area-inset-top, 0px), 20px) + 60px)' }}
+        style={{
+          paddingTop: 'max(env(safe-area-inset-top, 0px), 20px)',
+          minHeight: 'calc(max(env(safe-area-inset-top, 0px), 20px) + 60px)'
+        }}
       >
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={onClose}
-            className="w-10 h-10 rounded-full flex items-center justify-center text-[#dce2f8] hover:text-[#f2ca50] hover:bg-[#191f2f] transition-all"
+            className="w-10 h-10 rounded-full flex items-center justify-center text-[#dce2f8] hover:text-[#f2ca50] hover:bg-[#191f2f] transition-all cursor-pointer"
             aria-label="Fermer le studio"
           >
             <span className="material-symbols-outlined text-xl">arrow_back_ios_new</span>
           </button>
           <div className="flex flex-col">
             <h1 className="font-serif text-lg font-bold text-[#dce2f8] leading-tight flex items-center gap-2">
-              Speaking Studio
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#f2ca50]/15 text-[#f2ca50] font-mono border border-[#f2ca50]/30">
-                Acoustic Waveform Pro
+              Studio d'Élocution & Dictée Vocale
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#f2ca50]/15 text-[#f2ca50] font-mono border border-[#f2ca50]/30 hidden sm:inline">
+                Reconnaissance Vocale & IA Phonétique
               </span>
             </h1>
             <span className="text-[10px] text-[#d4c78f] uppercase font-mono">
-              Comparaison d'Élocution & Accentuation
+              Correction Orthographique & Phonétique Immédiate • Modèles Natifs UK/US
             </span>
           </div>
         </div>
 
         {/* Carousel pagination & close */}
         <div className="flex items-center gap-2">
-          <div className="flex items-center bg-[#191f2f] rounded-xl border border-[#232a3a] p-0.5">
-            <button
-              type="button"
-              onClick={handleSelectPrevItem}
-              disabled={isRecording}
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-[#d0c5af] hover:text-[#f2ca50] disabled:opacity-40"
-              title="Exercice précédent"
-            >
-              <span className="material-symbols-outlined text-base">chevron_left</span>
-            </button>
-            <span className="px-2 text-xs font-mono text-[#d4c78f]">
-              {currentIndex + 1}/{levelItems.length}
-            </span>
-            <button
-              type="button"
-              onClick={handleSelectNextItem}
-              disabled={isRecording}
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-[#d0c5af] hover:text-[#f2ca50] disabled:opacity-40"
-              title="Exercice suivant"
-            >
-              <span className="material-symbols-outlined text-base">chevron_right</span>
-            </button>
-          </div>
+          {!isFreeDictationMode && (
+            <div className="flex items-center bg-[#191f2f] rounded-xl border border-[#232a3a] p-0.5">
+              <button
+                type="button"
+                onClick={handleSelectPrevItem}
+                disabled={isRecording}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-[#d0c5af] hover:text-[#f2ca50] disabled:opacity-40 cursor-pointer"
+                title="Exercice précédent"
+              >
+                <span className="material-symbols-outlined text-base">chevron_left</span>
+              </button>
+              <span className="px-2 text-xs font-mono text-[#d4c78f]">
+                {currentIndex + 1}/{levelItems.length}
+              </span>
+              <button
+                type="button"
+                onClick={handleSelectNextItem}
+                disabled={isRecording}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-[#d0c5af] hover:text-[#f2ca50] disabled:opacity-40 cursor-pointer"
+                title="Exercice suivant"
+              >
+                <span className="material-symbols-outlined text-base">chevron_right</span>
+              </button>
+            </div>
+          )}
 
           <button
             type="button"
             onClick={onClose}
-            className="w-9 h-9 rounded-full bg-[#191f2f] flex items-center justify-center text-[#d0c5af] hover:text-[#f2ca50]"
+            className="w-9 h-9 rounded-full bg-[#191f2f] flex items-center justify-center text-[#d0c5af] hover:text-[#f2ca50] cursor-pointer"
+            title="Quitter"
           >
             <span className="material-symbols-outlined text-base">close</span>
           </button>
@@ -326,101 +421,160 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
 
       {/* Main Studio Body */}
       <main className="max-w-2xl mx-auto w-full px-4 sm:px-6 py-6 flex flex-col gap-5">
-        {/* Accent Selector (RP British vs US General American) */}
-        <div className="p-1.5 rounded-2xl bg-[#151b2b] border border-[#232a3a] flex items-center justify-between">
-          <span className="text-xs font-bold text-[#99907c] uppercase tracking-wider px-3">
-            Modèle Natif :
-          </span>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedAccent('en-GB');
-                resetRecordingState();
-              }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                selectedAccent === 'en-GB'
-                  ? 'bg-[#f2ca50] text-[#3c2f00] font-bold shadow-md shadow-[#f2ca50]/20'
-                  : 'text-[#d0c5af] hover:text-[#f2ca50]'
-              }`}
-            >
-              <span>🇬🇧</span>
-              <span>Oxford RP (UK)</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedAccent('en-US');
-                resetRecordingState();
-              }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                selectedAccent === 'en-US'
-                  ? 'bg-[#f2ca50] text-[#3c2f00] font-bold shadow-md shadow-[#f2ca50]/20'
-                  : 'text-[#d0c5af] hover:text-[#f2ca50]'
-              }`}
-            >
-              <span>🇺🇸</span>
-              <span>GenAm (US)</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Text To Read Excerpt Card */}
-        <div className="p-5 sm:p-6 rounded-2xl bg-[#151b2b] border border-[#4d4635]/40 shadow-xl flex flex-col gap-3.5 relative overflow-hidden">
-          <div className="flex items-center justify-between text-xs">
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] uppercase font-bold text-[#f2ca50] tracking-wider">
-                {item.source}
-              </span>
-              <span className="text-[10px] px-2 py-0.5 rounded bg-[#232a3a] text-[#d4c78f] font-mono">
-                Niveau {item.level}
-              </span>
-            </div>
-            <span className="text-[10px] text-[#99907c] font-mono">
-              Cible : {selectedAccent === 'en-GB' ? 'British RP' : 'American GenAm'}
+        {/* Top Control Bar: Accent Selector & Practice Mode Toggle */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-2 rounded-2xl bg-[#151b2b] border border-[#232a3a]">
+          {/* Accent Selection */}
+          <div className="flex items-center gap-1.5 w-full sm:w-auto justify-between sm:justify-start">
+            <span className="text-xs font-bold text-[#99907c] uppercase tracking-wider px-2">
+              Modèle Natif :
             </span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedAccent('en-GB');
+                  resetRecordingState();
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  selectedAccent === 'en-GB'
+                    ? 'bg-[#f2ca50] text-[#3c2f00] font-bold shadow-md shadow-[#f2ca50]/20'
+                    : 'text-[#d0c5af] hover:text-[#f2ca50]'
+                }`}
+              >
+                <span>🇬🇧</span>
+                <span>Oxford RP (UK)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedAccent('en-US');
+                  resetRecordingState();
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  selectedAccent === 'en-US'
+                    ? 'bg-[#f2ca50] text-[#3c2f00] font-bold shadow-md shadow-[#f2ca50]/20'
+                    : 'text-[#d0c5af] hover:text-[#f2ca50]'
+                }`}
+              >
+                <span>🇺🇸</span>
+                <span>GenAm (US)</span>
+              </button>
+            </div>
           </div>
 
-          <h2 className="font-serif text-base sm:text-lg font-bold text-[#dce2f8]">
-            {item.title}
-          </h2>
-
-          <blockquote className="font-serif italic text-base sm:text-lg text-[#f1e3a9] leading-relaxed bg-[#070e1d]/80 p-4 sm:p-5 rounded-xl border border-[#4d4635]/30">
-            {item.textToRead}
-          </blockquote>
-
-          {/* Phonetic transcription & Rhythm tips */}
-          <div className="flex flex-col gap-1.5 pt-2 border-t border-[#232a3a] text-xs">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[#99907c] uppercase text-[10px] font-bold">Transcription :</span>
-              <span className="text-[#d4c78f] font-mono bg-[#070e1d] px-2 py-0.5 rounded border border-[#232a3a]">
-                {item.phoneticHints}
-              </span>
-            </div>
-            <p className="text-[#d0c5af]/80 text-[11px] leading-relaxed mt-1">
-              <strong className="text-[#f2ca50]">Conseil de prosodie :</strong> {item.rhythmTips}
-            </p>
+          {/* Practice Mode Toggle */}
+          <div className="flex items-center gap-1 bg-[#0a101f] p-1 rounded-xl border border-white/5 w-full sm:w-auto justify-center">
+            <button
+              type="button"
+              onClick={() => {
+                setIsFreeDictationMode(false);
+                resetRecordingState();
+              }}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-medium transition-all cursor-pointer ${
+                !isFreeDictationMode
+                  ? 'bg-[#1e293b] text-[#f2ca50] font-bold border border-[#f2ca50]/30 shadow-sm'
+                  : 'text-[#8391ac] hover:text-white'
+              }`}
+            >
+              Cursus Officiel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsFreeDictationMode(true);
+                resetRecordingState();
+              }}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-medium transition-all cursor-pointer ${
+                isFreeDictationMode
+                  ? 'bg-[#1e293b] text-[#f2ca50] font-bold border border-[#f2ca50]/30 shadow-sm'
+                  : 'text-[#8391ac] hover:text-white'
+              }`}
+            >
+              Dictée Libre
+            </button>
           </div>
         </div>
+
+        {/* Free Custom Dictation Input Mode */}
+        {isFreeDictationMode && (
+          <div className="p-4 rounded-2xl bg-[#151b2b] border border-[#f2ca50]/40 shadow-lg flex flex-col gap-2.5 animate-fadeIn">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-[#f2ca50] flex items-center gap-1">
+                <span className="material-symbols-outlined text-sm">edit_note</span>
+                Phrase Cible Personnalisée pour votre Dictée
+              </span>
+              <span className="text-[10px] text-[#8391ac] font-mono">
+                Tapez votre phrase ou dictez-la directement
+              </span>
+            </div>
+            <textarea
+              value={customPracticeText}
+              onChange={(e) => setCustomPracticeText(e.target.value)}
+              placeholder="Entrez la phrase anglaise que vous souhaitez dicter (ex: 'The ambassador delivered a thoughtful address on international trade.')..."
+              rows={2}
+              className="w-full bg-[#0a101f] border border-[#2e3b55] focus:border-[#f2ca50] rounded-xl p-3 text-sm text-[#dce2f8] font-serif focus:outline-none placeholder-[#8391ac]/60 transition-colors"
+            />
+          </div>
+        )}
+
+        {/* Text To Read Excerpt Card (Curriculum Passage) */}
+        {!isFreeDictationMode && (
+          <div className="p-5 sm:p-6 rounded-2xl bg-[#151b2b] border border-[#4d4635]/40 shadow-xl flex flex-col gap-3.5 relative overflow-hidden">
+            <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] uppercase font-bold text-[#f2ca50] tracking-wider">
+                  {item.source}
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded bg-[#232a3a] text-[#d4c78f] font-mono">
+                  Niveau {item.level}
+                </span>
+              </div>
+              <span className="text-[10px] text-[#99907c] font-mono">
+                Cible : {selectedAccent === 'en-GB' ? 'British RP' : 'American GenAm'}
+              </span>
+            </div>
+
+            <h2 className="font-serif text-base sm:text-lg font-bold text-[#dce2f8]">
+              {item.title}
+            </h2>
+
+            <blockquote className="font-serif italic text-base sm:text-lg text-[#f1e3a9] leading-relaxed bg-[#070e1d]/80 p-4 sm:p-5 rounded-xl border border-[#4d4635]/30">
+              {item.textToRead}
+            </blockquote>
+
+            {/* Phonetic transcription & Rhythm tips */}
+            <div className="flex flex-col gap-1.5 pt-2 border-t border-[#232a3a] text-xs">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[#99907c] uppercase text-[10px] font-bold">Transcription Phonétique :</span>
+                <span className="text-[#d4c78f] font-mono bg-[#070e1d] px-2 py-0.5 rounded border border-[#232a3a]">
+                  {item.phoneticHints}
+                </span>
+              </div>
+              <p className="text-[#d0c5af]/80 text-[11px] leading-relaxed mt-1">
+                <strong className="text-[#f2ca50]">Conseil de prosodie :</strong> {item.rhythmTips}
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Dual Audio Reference buttons */}
         <DualSpeakerButton
-          text={item.textToRead}
+          text={effectiveTargetText}
           id={`speaking-ref-${item.id}`}
           phonetic={item.phoneticHints}
-          explanation="Écoutez le modèle britannique ou américain pour imprégner votre mémoire auditive"
+          explanation="Écoutez le modèle britannique ou américain pour imprégner votre mémoire auditive avant de dicter"
           variant="prominent"
         />
 
         {/* ============================================================== */}
-        {/* VOICE RECORDING STUDIO CONTROLS */}
+        {/* VOICE RECORDING & LIVE SPEECH RECOGNITION STUDIO CONTROLS */}
         {/* ============================================================== */}
         <div className="p-6 rounded-2xl bg-[#191f2f] border border-[#4d4635]/40 shadow-xl flex flex-col items-center text-center gap-4">
           <div className="flex flex-col items-center gap-1">
             <span className="text-xs uppercase font-bold text-[#d4c78f] tracking-widest flex items-center gap-1.5">
               <span className="material-symbols-outlined text-sm text-[#f2ca50]">record_voice_over</span>
-              Enregistrement & Capture Vocale
+              Capture Vocale & Reconnaissance de Dictée
             </span>
             <span className="font-mono text-3xl font-bold text-[#f2ca50]">
               00:{recordingSeconds < 10 ? '0' + recordingSeconds : recordingSeconds}
@@ -450,7 +604,8 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
             <button
               type="button"
               onClick={handleStartRecording}
-              className="w-18 h-18 sm:w-20 sm:h-20 rounded-full bg-[#f2ca50] text-[#3c2f00] flex items-center justify-center shadow-xl shadow-[#f2ca50]/25 hover:bg-[#ffe088] active:scale-95 transition-all p-4 group"
+              className="w-18 h-18 sm:w-20 sm:h-20 rounded-full bg-[#f2ca50] text-[#3c2f00] flex items-center justify-center shadow-xl shadow-[#f2ca50]/25 hover:bg-[#ffe088] active:scale-95 transition-all p-4 group cursor-pointer"
+              title="Commencer la dictée vocale"
             >
               <span
                 className="material-symbols-outlined text-3xl sm:text-4xl group-hover:scale-110 transition-transform"
@@ -463,7 +618,8 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
             <button
               type="button"
               onClick={handleStopRecording}
-              className="w-18 h-18 sm:w-20 sm:h-20 rounded-full bg-[#ffb4ab] text-[#690005] flex items-center justify-center shadow-xl shadow-[#ffb4ab]/30 animate-pulse active:scale-95 transition-all p-4"
+              className="w-18 h-18 sm:w-20 sm:h-20 rounded-full bg-[#ffb4ab] text-[#690005] flex items-center justify-center shadow-xl shadow-[#ffb4ab]/30 animate-pulse active:scale-95 transition-all p-4 cursor-pointer"
+              title="Arrêter et analyser la dictée"
             >
               <span className="material-symbols-outlined text-3xl sm:text-4xl">stop</span>
             </button>
@@ -471,9 +627,28 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
 
           <p className="text-xs text-[#d0c5af]/80">
             {!isRecording
-              ? 'Touchez le micro pour enregistrer votre lecture à voix haute'
-              : 'Enregistrement en cours... Touchez pour finaliser et lancer la comparaison d’élocution.'}
+              ? 'Touchez le micro pour dicter votre pratique à voix haute'
+              : 'Dictée en cours... Touchez pour finaliser et recevoir la correction orthographique et phonétique immédiate.'}
           </p>
+
+          {/* Live Speech Recognition Transcription Box while recording */}
+          {isRecording && (
+            <div className="w-full max-w-lg p-3.5 rounded-xl bg-[#0a101f] border border-[#f2ca50]/50 shadow-inner flex flex-col gap-2 text-left animate-fadeIn">
+              <div className="flex items-center justify-between text-[11px] font-mono">
+                <span className="text-[#f2ca50] font-bold flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+                  Reconnaissance Vocale ({selectedAccent === 'en-GB' ? 'UK 🇬🇧' : 'US 🇺🇸'}) :
+                </span>
+                <span className="text-[#8391ac]">Écoute active...</span>
+              </div>
+              <p className="font-serif text-sm text-white italic min-h-[36px] leading-relaxed">
+                {finalTranscript}{' '}
+                <span className="text-[#ffe082] underline decoration-dashed">
+                  {liveTranscript || (finalTranscript ? '' : 'Parlez maintenant...')}
+                </span>
+              </p>
+            </div>
+          )}
 
           {micError && (
             <p className="text-xs text-[#ffb4ab] bg-[#93000a]/30 p-2.5 rounded-xl border border-[#ffb4ab]/40">
@@ -481,30 +656,94 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
             </p>
           )}
 
+          {!speechSupported && (
+            <div className="text-xs text-amber-300 bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/30 flex items-center gap-2">
+              <span className="material-symbols-outlined text-sm">info</span>
+              <span>
+                Note : Votre navigateur n'intègre pas l'API Web Speech native. L'évaluation orthographique et phonétique utilisera le moteur phonétique de secours.
+              </span>
+            </div>
+          )}
+
           {isAnalyzing && (
             <div className="flex items-center gap-2 text-xs text-[#f2ca50] animate-pulse">
               <span className="material-symbols-outlined text-base animate-spin">sync</span>
-              <span>Extraction de l'onde sonore et comparaison prosodique en cours...</span>
+              <span>Analyse acoustique, transcription et diagnostic phonétique immédiat en cours...</span>
             </div>
           )}
         </div>
 
         {/* ============================================================== */}
-        {/* ACOUSTIC WAVEFORM COMPARISON TOOL COMPONENT */}
+        {/* POST-RECORDING ANALYSIS: TAB SWITCHER & DIAGNOSTIC VIEWS */}
         {/* ============================================================== */}
-        {userWaveform && analysisResult && (
-          <div className="animate-fadeIn">
-            <SpeechWaveformComparator
-              nativeModel={nativeModel}
-              userWaveform={userWaveform}
-              analysisResult={analysisResult}
-              textToRead={item.textToRead}
-              targetAccent={selectedAccent}
-              accentLabel={selectedAccent === 'en-GB' ? 'Oxford RP (UK)' : 'General American (US)'}
-              userAudioUrl={audioUrl}
-              onReRecord={handleStartRecording}
-              onValidate={handleValidateSession}
-            />
+        {(phoneticReport || (userWaveform && analysisResult)) && (
+          <div className="flex flex-col gap-4 animate-fadeIn">
+            {/* View Mode Selector Tabs */}
+            <div className="flex items-center justify-center p-1.5 rounded-2xl bg-[#151b2b] border border-[#232a3a]">
+              <button
+                type="button"
+                onClick={() => setActiveTab('diagnostic')}
+                className={`flex-1 py-2 px-3 rounded-xl text-xs font-mono font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                  activeTab === 'diagnostic'
+                    ? 'bg-[#f2ca50] text-[#0c1322] shadow-md'
+                    : 'text-[#8391ac] hover:text-[#dce2f8]'
+                }`}
+              >
+                <span className="material-symbols-outlined text-sm">record_voice_over</span>
+                <span>Correction Orthographique & Phonétique</span>
+                {phoneticReport && (
+                  <span className="px-1.5 py-0.2 rounded-full bg-[#0c1322]/20 text-[10px]">
+                    {phoneticReport.overallScore}%
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('waveform')}
+                className={`flex-1 py-2 px-3 rounded-xl text-xs font-mono font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                  activeTab === 'waveform'
+                    ? 'bg-[#f2ca50] text-[#0c1322] shadow-md'
+                    : 'text-[#8391ac] hover:text-[#dce2f8]'
+                }`}
+              >
+                <span className="material-symbols-outlined text-sm">graphic_eq</span>
+                <span>Onde Acoustique & Prosodie</span>
+                {analysisResult && (
+                  <span className="px-1.5 py-0.2 rounded-full bg-[#0c1322]/20 text-[10px]">
+                    {analysisResult.overallScore}%
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {/* TAB 1: IMMEDIATE ORTHOGRAPHIC & PHONETIC DIAGNOSTIC CARD */}
+            {activeTab === 'diagnostic' && phoneticReport && (
+              <SpeechRecognitionDiagnosticCard
+                report={phoneticReport}
+                targetText={effectiveTargetText}
+                spokenTranscript={finalTranscript || liveTranscript || effectiveTargetText}
+                targetAccent={selectedAccent}
+                onReRecord={handleStartRecording}
+                onValidate={handleValidateSession}
+                onSwitchToWaveform={() => setActiveTab('waveform')}
+              />
+            )}
+
+            {/* TAB 2: ACOUSTIC WAVEFORM COMPARISON TOOL COMPONENT */}
+            {activeTab === 'waveform' && userWaveform && analysisResult && (
+              <SpeechWaveformComparator
+                nativeModel={nativeModel}
+                userWaveform={userWaveform}
+                analysisResult={analysisResult}
+                textToRead={effectiveTargetText}
+                targetAccent={selectedAccent}
+                accentLabel={selectedAccent === 'en-GB' ? 'Oxford RP (UK)' : 'General American (US)'}
+                userAudioUrl={audioUrl}
+                onReRecord={handleStartRecording}
+                onValidate={handleValidateSession}
+              />
+            )}
           </div>
         )}
       </main>

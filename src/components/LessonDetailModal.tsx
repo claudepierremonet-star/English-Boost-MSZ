@@ -6,6 +6,7 @@ import confetti from 'canvas-confetti';
 import { recordAttempt } from '../firebase/client';
 import { DualSpeakerButton } from './DualSpeakerButton';
 import { RhetoricalAnalyzerView } from './RhetoricalAnalyzerView';
+import { awardMszCoins } from '../utils/mszCoinsManager';
 
 interface LessonDetailModalProps {
   lesson: SchoolLesson | null;
@@ -180,6 +181,8 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
         spread: 60,
         origin: { y: 0.6 }
       });
+      // Récompense : 1 MSZ Coin sur la validation d'une leçon de cursus
+      awardMszCoins('cursus', lesson.id, 1, 14, lesson.title);
       if (onCompleteLesson) {
         onCompleteLesson(lesson.id, 100);
       }

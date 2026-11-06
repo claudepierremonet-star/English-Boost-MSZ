@@ -152,6 +152,24 @@ export function getLocalUserProfile(): UserProfile {
           }
         } catch (e) {}
       }
+      // Synchronize with MSZ Coins, card instances and equipped character if present
+      const mszBalanceRaw = localStorage.getItem('eb_msz_coins_balance');
+      if (mszBalanceRaw) {
+        const parsedCoins = parseInt(mszBalanceRaw, 10);
+        if (!isNaN(parsedCoins)) {
+          parsed.mszCoinsBalance = parsedCoins;
+        }
+      }
+      const mszInstancesRaw = localStorage.getItem('eb_msz_owned_card_instances');
+      if (mszInstancesRaw) {
+        try {
+          parsed.ownedCardInstances = JSON.parse(mszInstancesRaw);
+        } catch {}
+      }
+      const mszEquipped = localStorage.getItem('eb_msz_equipped_character');
+      if (mszEquipped) {
+        parsed.equippedCharacterId = mszEquipped;
+      }
       return parsed;
     }
   } catch (e) {
@@ -162,6 +180,10 @@ export function getLocalUserProfile(): UserProfile {
     const arcadeRaw = localStorage.getItem('msz_arcade_progression_v1');
     if (arcadeRaw) {
       defaultProf.arcadeProgression = JSON.parse(arcadeRaw);
+    }
+    const mszBalanceRaw = localStorage.getItem('eb_msz_coins_balance');
+    if (mszBalanceRaw) {
+      defaultProf.mszCoinsBalance = parseInt(mszBalanceRaw, 10) || 150;
     }
   } catch (e) {}
   return defaultProf;
@@ -175,6 +197,17 @@ export function saveLocalUserProfile(profile: UserProfile): void {
     localStorage.setItem(LOCAL_USER_KEY, JSON.stringify(profile));
     if (profile.arcadeProgression) {
       localStorage.setItem('msz_arcade_progression_v1', JSON.stringify(profile.arcadeProgression));
+    }
+    if (typeof profile.mszCoinsBalance === 'number') {
+      localStorage.setItem('eb_msz_coins_balance', profile.mszCoinsBalance.toString());
+    }
+    if (profile.ownedCardInstances && Array.isArray(profile.ownedCardInstances)) {
+      localStorage.setItem('eb_msz_owned_card_instances', JSON.stringify(profile.ownedCardInstances));
+      const ids = Array.from(new Set(profile.ownedCardInstances.map(i => i.characterId)));
+      localStorage.setItem('eb_msz_owned_characters', JSON.stringify(ids));
+    }
+    if (profile.equippedCharacterId) {
+      localStorage.setItem('eb_msz_equipped_character', profile.equippedCharacterId);
     }
   } catch (e) {
     console.error('Error saving local user profile', e);
@@ -326,14 +359,37 @@ export function subscribeToAuthState(callback: (profile: UserProfile | null) => 
               weeklyXp: Math.max(data.stats?.weeklyXp || 0, currentLocal.stats?.weeklyXp || 0)
             };
 
+            // Merge MSZ Coins balance & card instances (by serial code)
+            const localInstances = currentLocal.ownedCardInstances || [];
+            const firestoreInstances = data.ownedCardInstances || [];
+            const instancesMap = new Map<string, any>();
+            firestoreInstances.forEach((inst) => instancesMap.set(inst.serialCode, inst));
+            localInstances.forEach((inst) => instancesMap.set(inst.serialCode, inst));
+            const mergedInstances = Array.from(instancesMap.values());
+
+            data.ownedCardInstances = mergedInstances.length > 0 ? mergedInstances : localInstances;
+            data.mszCoinsBalance = Math.max(data.mszCoinsBalance || 0, currentLocal.mszCoinsBalance || 150);
+            data.equippedCharacterId = data.equippedCharacterId || currentLocal.equippedCharacterId || 'char_eclat';
+
             saveLocalUserProfile(data);
             saveProfileToIndexedDB(data).catch(console.warn);
 
-            // Sync to Firestore if local had higher values
-            if ((localArcade?.points || 0) > (firestoreArcade?.points || 0)) {
+            // Sync to Firestore if local had higher values or newer card instances
+            const needsSync =
+              (localArcade?.points || 0) > (firestoreArcade?.points || 0) ||
+              mergedInstances.length > firestoreInstances.length ||
+              (currentLocal.mszCoinsBalance || 0) > (firestoreInstances.length ? (data.mszCoinsBalance || 0) : 0);
+
+            if (needsSync) {
               setDoc(
                 userRef,
-                { arcadeProgression: data.arcadeProgression, stats: data.stats },
+                {
+                  arcadeProgression: data.arcadeProgression,
+                  stats: data.stats,
+                  ownedCardInstances: data.ownedCardInstances,
+                  mszCoinsBalance: data.mszCoinsBalance,
+                  equippedCharacterId: data.equippedCharacterId
+                },
                 { merge: true }
               ).catch(console.warn);
             }

@@ -439,39 +439,41 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
                   </span>
                   <span className="text-[#99907c] text-xs">•</span>
                   <span className="text-[10px] text-[#d4c78f] uppercase font-sans">
-                    Prosodie & Accent
+                    Dictée & Élocution
                   </span>
                 </div>
-                <h3 className="font-serif text-lg font-bold text-[#dce2f8]">Speaking Studio</h3>
+                <h3 className="font-serif text-lg font-bold text-[#dce2f8]">
+                  Studio d'Élocution & Dictée Vocale
+                </h3>
               </div>
             </div>
 
             <div className="flex flex-col items-end">
-              <span className="px-2 py-0.5 rounded-full bg-[#070e1d] text-[10px] font-bold text-[#f2ca50] font-mono">
-                STUDIO HD
+              <span className="px-2 py-0.5 rounded-full bg-[#070e1d] text-[10px] font-bold text-[#f2ca50] font-mono border border-[#f2ca50]/30">
+                RECONNAISSANCE IA
               </span>
-              <span className="text-[11px] text-[#d0c5af]/80 mt-1">Enregistrement Voix</span>
+              <span className="text-[11px] text-[#d0c5af]/80 mt-1">Dictée & Phonétique</span>
             </div>
           </div>
 
           <p className="text-xs text-[#d0c5af] mt-3 leading-relaxed">
-            Écoute du locuteur de référence britannique ou nord-américain, capture de votre flux vocal en direct, réécoute synchronisée et feedback visuel de l'intonation.
+            Dictez votre pratique vocale en direct grâce à la reconnaissance vocale, recevez une correction orthographique et phonétique immédiate mot à mot (lettres muettes, /θ/, rhotisme UK/US), et comparez votre onde acoustique.
           </p>
 
           <div className="w-full bg-[#070e1d] h-1.5 rounded-full mt-4 overflow-hidden">
-            <div className="bg-[#e9cd67] h-full rounded-full" style={{ width: '48%' }} />
+            <div className="bg-[#e9cd67] h-full rounded-full" style={{ width: '65%' }} />
           </div>
 
           <div className="flex items-center justify-between mt-4 pt-1 border-t border-[#232a3a]">
             <span className="text-xs text-[#d4c78f] italic truncate">
-              Calibration : Micro actif HD
+              Reconnaissance vocale active • UK 🇬🇧 & US 🇺🇸
             </span>
             <button
               type="button"
               onClick={onOpenSpeaking}
-              className="px-4 py-2 rounded-xl bg-[#232a3a] text-[#dce2f8] hover:text-[#f2ca50] hover:bg-[#2e3545] font-semibold text-xs flex items-center gap-1 shadow-sm active:scale-95 transition-all shrink-0 ml-2"
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#f2ca50] to-[#ffd700] text-[#2c2000] hover:from-[#ffe088] hover:to-[#ffe566] font-bold text-xs flex items-center gap-1 shadow-md shadow-[#f2ca50]/20 active:scale-95 transition-all shrink-0 ml-2 cursor-pointer"
             >
-              <span>Lancer l'Enregistrement</span>
+              <span>Ouvrir le Studio d'Élocution</span>
               <span className="material-symbols-outlined text-sm">chevron_right</span>
             </button>
           </div>

@@ -55,6 +55,8 @@ import {
   AstroHangmanWord,
   AstroHangmanQuestion
 } from '../data/twentyGamesData';
+import { StackedGamesShowcase } from './StackedGamesShowcase';
+import { awardMszCoins } from '../utils/mszCoinsManager';
 
 interface TwentyGamesHubProps {
   onXpEarned?: (xp: number) => void;
@@ -279,8 +281,29 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({
     clearStoredActiveGameSession();
     setResumableSession(null);
 
+    // Gain de MSZ Coins (ex: +2 MSZ Coins avec anti-spam et limite quotidienne selon le niveau)
+    const gameId = activeGame ? activeGame.id : 'arcade_game';
+    const coinResult = awardMszCoins('game', gameId, 2, newLevel, activeGame?.title || 'Mini-Jeu');
+
     // Toast de gain
-    setPointsToast({ text: '+10 Points de niveau gagnés ! (+10 pts)', isGain: true });
+    if (coinResult.awarded > 0) {
+      setPointsToast({
+        text: `+10 Points • +${coinResult.awarded} MSZ Coins gagnés ! 🪙`,
+        isGain: true
+      });
+    } else if (coinResult.alreadyPlayedToday) {
+      setPointsToast({
+        text: '+10 Points de niveau ! (MSZ Coins déjà obtenus aujourd’hui sur ce jeu)',
+        isGain: true
+      });
+    } else if (coinResult.reachedDailyLimit) {
+      setPointsToast({
+        text: '+10 Points ! (Plafond quotidien MSZ Coins atteint pour aujourd’hui)',
+        isGain: true
+      });
+    } else {
+      setPointsToast({ text: '+10 Points de niveau gagnés ! (+10 pts)', isGain: true });
+    }
     setTimeout(() => setPointsToast(null), 3500);
 
     // Célébration niveau supérieur
@@ -520,14 +543,14 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({
               <div className="flex-1 md:flex-none px-3 py-2 rounded-xl bg-[#090f1d] border border-white/5 text-center">
                 <span className="text-[10px] font-mono text-gray-400 uppercase block">Jeux Débloqués</span>
                 <span className="text-sm font-mono font-black text-emerald-400">
-                  🔓 {progression.unlockedMaxGameNumber} / 20
+                  🔓 {progression.unlockedMaxGameNumber} / 21
                 </span>
               </div>
 
               <div className="flex-1 md:flex-none px-3 py-2 rounded-xl bg-[#090f1d] border border-white/5 text-center">
                 <span className="text-[10px] font-mono text-gray-400 uppercase block">Jeux Réussis</span>
                 <span className="text-sm font-mono font-black text-blue-400">
-                  🏆 {progression.completedGames.length} / 20
+                  🏆 {progression.completedGames.length} / 21
                 </span>
               </div>
             </div>
@@ -566,26 +589,39 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({
                 <span className="text-rose-400 font-bold">-5 pts</span> par défaite
               </span>
               <span className="text-amber-300/90 font-medium">
-                Débloque les 20 jeux séquentiellement en réussissant chaque jeu !
+                Débloque les 21 jeux séquentiellement en réussissant chaque jeu !
               </span>
             </div>
           </div>
         </div>
 
-        <p className="text-sm text-[#d0c5af]/80 max-w-2xl leading-relaxed">
-          Découvre les mini-jeux interactifs conçus pour transformer ton apprentissage de l'anglais en pur plaisir !
-        </p>
+        {/* ==============================================================
+            COMPOSANT D'AFFICHAGE SUPERPOSÉ DES 21 JEUX (CHEVAUCHEMENT 1/3)
+            Déploiement en éventail au clic avec les 21 jeux intégrés
+            ============================================================== */}
+        <StackedGamesShowcase
+          games={TWENTY_GAMES_METADATA}
+          isGameUnlocked={isGameUnlocked}
+          onSelectGame={handleLaunchGame}
+          progression={progression}
+        />
+
+        <div className="flex items-center justify-between gap-3 mt-2">
+          <p className="text-sm text-[#d0c5af]/80 max-w-2xl leading-relaxed">
+            Parcourez également la bibliothèque complète des 21 mini-jeux interactifs ci-dessous :
+          </p>
+        </div>
 
         {/* Filter Chips */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 mt-5 no-scrollbar">
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 mt-3 no-scrollbar">
           {[
-            { id: 'all', label: 'Tous (20)', icon: 'apps' },
+            { id: 'all', label: 'Tous (21)', icon: 'apps' },
             { id: 'vocabulaire', label: 'Vocabulaire', icon: 'extension' },
             { id: 'verbes', label: 'Verbes Irréguliers', icon: 'sports_martial_arts' },
             { id: 'traduction', label: 'Traduction Express', icon: 'bolt' },
             { id: 'duolingo', label: 'Style Duolingo', icon: 'reorder' },
             { id: 'audio', label: 'Écoute & Prononciation', icon: 'headphones' },
-            { id: 'defi', label: 'Boss Battle', icon: 'military_tech' }
+            { id: 'defi', label: 'Boss Battle & Math', icon: 'military_tech' }
           ].map((tab) => (
             <button
               key={tab.id}

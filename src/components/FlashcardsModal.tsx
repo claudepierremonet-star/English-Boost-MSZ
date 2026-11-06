@@ -6,6 +6,7 @@ import type { CEFRLevel } from '../firebase/types';
 import confetti from 'canvas-confetti';
 import { DualSpeakerButton } from './DualSpeakerButton';
 import { VoiceStudioModal } from './VoiceStudioModal';
+import { EtymologyDetailModal } from './EtymologyDetailModal';
 import {
   triggerAutoPlayIfEnabled,
   triggerFlipAutoPlay,
@@ -51,6 +52,7 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
   const [isAutoPlayOnFlip, setIsAutoPlayOnFlip] = useState<boolean>(getAutoPlayOnFlip());
   const [isAutoPlay, setIsAutoPlay] = useState<boolean>(getAutoPlayOnDisplay());
   const [isVoiceStudioOpen, setIsVoiceStudioOpen] = useState<boolean>(false);
+  const [isEtymologyModalOpen, setIsEtymologyModalOpen] = useState<boolean>(false);
   const [showFilterBar, setShowFilterBar] = useState<boolean>(true);
   const [showJumper, setShowJumper] = useState<boolean>(false);
   const [shuffledOrder, setShuffledOrder] = useState<number[] | null>(null);
@@ -261,6 +263,9 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
       } else if (e.key === 'm' || e.key === 'M') {
         e.preventDefault();
         handleShuffle();
+      } else if (e.key === 'e' || e.key === 'E') {
+        e.preventDefault();
+        setIsEtymologyModalOpen((prev) => !prev);
       } else if (e.code === 'Escape') {
         e.preventDefault();
         if (isFocusMode) {
@@ -506,6 +511,17 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
               >
                 <span className="material-symbols-outlined text-sm">tune</span>
                 <span className="hidden md:inline">30 Voix Réelles</span>
+              </button>
+
+              {/* Étymologie Philologique Button */}
+              <button
+                type="button"
+                onClick={() => setIsEtymologyModalOpen(true)}
+                className="px-2.5 py-1.5 rounded-xl border border-[#2e3b55] bg-[#121824] hover:border-[#f2ca50]/50 text-[#8391ac] hover:text-[#f2ca50] text-xs font-mono font-medium flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95"
+                title="Origine philologique et racines latines, grecques, vieil anglais (Touche E)"
+              >
+                <span className="material-symbols-outlined text-sm text-[#f2ca50]">history_edu</span>
+                <span className="hidden md:inline">Étymologie</span>
               </button>
 
               {/* Focus mode button */}
@@ -874,7 +890,7 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
                         </p>
                       )}
 
-                      {/* Prononciations UK 🇬🇧 & US 🇺🇸 avec Audio direct */}
+                      {/* Prononciations UK 🇬🇧 & US 🇺🇸 avec Audio direct & Bouton Étymologie */}
                       <div className="flex items-center justify-center gap-3 my-3 sm:my-4 flex-wrap">
                         <span className="text-sm sm:text-base text-[#dce2f8] font-mono italic tracking-wide">
                           {card.phonetic}
@@ -886,6 +902,18 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
                           explanation={card.frenchDef}
                           variant="pill"
                         />
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsEtymologyModalOpen(true);
+                          }}
+                          className="px-3 py-1.5 rounded-full bg-[#1b253b]/90 hover:bg-[#253554] border border-[#f2ca50]/50 hover:border-[#f2ca50] text-[#f2ca50] hover:text-[#ffe082] text-xs font-mono font-semibold flex items-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer"
+                          title="Afficher l'origine philologique (racines latines, grecques, vieil anglais) (Touche E)"
+                        >
+                          <span className="material-symbols-outlined text-sm">history_edu</span>
+                          <span>Étymologie</span>
+                        </button>
                       </div>
 
                       {/* Register & Pedagogical Scope */}
@@ -1035,17 +1063,33 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
                       )}
 
                       {/* 3. Etymology Philologique */}
-                      <div className="p-3.5 rounded-xl bg-[#152038]/70 border border-[#f2ca50]/30 flex items-start gap-2.5">
-                        <span className="material-symbols-outlined text-[#f2ca50] text-lg mt-0.5 shrink-0">
-                          history_edu
-                        </span>
-                        <div>
-                          <p className="text-[10px] text-[#f2ca50] uppercase font-bold tracking-wider">
-                            Étymologie Philologique (Racines & Évolution)
-                          </p>
-                          <p className="text-xs text-[#dce2f8] mt-0.5 leading-relaxed">
-                            {card.etymology}
-                          </p>
+                      <div className="p-3.5 rounded-xl bg-[#152038]/70 border border-[#f2ca50]/30 flex flex-col gap-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-start gap-2.5">
+                            <span className="material-symbols-outlined text-[#f2ca50] text-lg mt-0.5 shrink-0">
+                              history_edu
+                            </span>
+                            <div>
+                              <p className="text-[10px] text-[#f2ca50] uppercase font-bold tracking-wider">
+                                Étymologie Philologique (Racines & Évolution)
+                              </p>
+                              <p className="text-xs text-[#dce2f8] mt-0.5 leading-relaxed">
+                                {card.etymology}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setIsEtymologyModalOpen(true);
+                            }}
+                            className="shrink-0 px-2.5 py-1.5 rounded-lg bg-[#1f2c46] hover:bg-[#f2ca50] text-[#ffe082] hover:text-[#0c1322] border border-[#f2ca50]/40 text-[10px] font-mono font-bold flex items-center gap-1 transition-all cursor-pointer shadow-sm active:scale-95"
+                            title="Ouvrir l'analyse philologique complète (racines latines, grecques, vieil anglais)"
+                          >
+                            <span className="material-symbols-outlined text-xs">zoom_in</span>
+                            <span>Analyse Détaillée</span>
+                          </button>
                         </div>
                       </div>
 
@@ -1373,6 +1417,15 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
           setIsAutoPlayOnFlip(getAutoPlayOnFlip());
         }}
       />
+
+      {/* Etymology Philologique Deep Dive Modal */}
+      {card && (
+        <EtymologyDetailModal
+          card={card}
+          isOpen={isEtymologyModalOpen}
+          onClose={() => setIsEtymologyModalOpen(false)}
+        />
+      )}
     </div>
   );
 };
