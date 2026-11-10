@@ -5,6 +5,7 @@ import type { CEFRLevel } from '../firebase/types';
 import { DualSpeakerButton } from './DualSpeakerButton';
 import { SpeechWaveformComparator } from './SpeechWaveformComparator';
 import { SpeechRecognitionDiagnosticCard } from './SpeechRecognitionDiagnosticCard';
+import { PronunciationDuelArena } from './PronunciationDuelArena';
 import {
   generateNativeProsodyModel,
   extractWaveformFromAudioBlob,
@@ -43,12 +44,15 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
   // Accent model selection: en-GB (Oxford RP) or en-US (General American)
   const [selectedAccent, setSelectedAccent] = useState<'en-GB' | 'en-US'>('en-GB');
 
-  // Practice Mode: Curriculum Passage vs Free Custom Dictation
-  const [isFreeDictationMode, setIsFreeDictationMode] = useState<boolean>(false);
+  // Practice Mode: 'cursus' | 'dictation' | 'duel'
+  const [practiceMode, setPracticeMode] = useState<'cursus' | 'dictation' | 'duel'>('cursus');
+  const isFreeDictationMode = practiceMode === 'dictation';
+  const isDuelMode = practiceMode === 'duel';
+
   const [customPracticeText, setCustomPracticeText] = useState<string>('');
 
-  // Active view tab once recorded: 'diagnostic' (orthographic & phonetic) vs 'waveform' (acoustic wave)
-  const [activeTab, setActiveTab] = useState<'diagnostic' | 'waveform'>('diagnostic');
+  // Active view tab once recorded: 'diagnostic' (orthographic & phonetic) vs 'waveform' (acoustic wave) vs 'duel'
+  const [activeTab, setActiveTab] = useState<'diagnostic' | 'waveform' | 'duel'>('diagnostic');
 
   // Studio workflow states
   const [isRecording, setIsRecording] = useState<boolean>(false);
@@ -464,15 +468,15 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
           </div>
 
           {/* Practice Mode Toggle */}
-          <div className="flex items-center gap-1 bg-[#0a101f] p-1 rounded-xl border border-white/5 w-full sm:w-auto justify-center">
+          <div className="flex items-center gap-1 bg-[#0a101f] p-1 rounded-xl border border-white/5 w-full sm:w-auto justify-center flex-wrap">
             <button
               type="button"
               onClick={() => {
-                setIsFreeDictationMode(false);
+                setPracticeMode('cursus');
                 resetRecordingState();
               }}
               className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-medium transition-all cursor-pointer ${
-                !isFreeDictationMode
+                practiceMode === 'cursus'
                   ? 'bg-[#1e293b] text-[#f2ca50] font-bold border border-[#f2ca50]/30 shadow-sm'
                   : 'text-[#8391ac] hover:text-white'
               }`}
@@ -482,90 +486,164 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
             <button
               type="button"
               onClick={() => {
-                setIsFreeDictationMode(true);
+                setPracticeMode('dictation');
                 resetRecordingState();
               }}
               className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-medium transition-all cursor-pointer ${
-                isFreeDictationMode
+                practiceMode === 'dictation'
                   ? 'bg-[#1e293b] text-[#f2ca50] font-bold border border-[#f2ca50]/30 shadow-sm'
                   : 'text-[#8391ac] hover:text-white'
               }`}
             >
               Dictée Libre
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                setPracticeMode('duel');
+                resetRecordingState();
+              }}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-medium transition-all cursor-pointer flex items-center gap-1 ${
+                practiceMode === 'duel'
+                  ? 'bg-gradient-to-r from-amber-500/25 to-yellow-500/25 text-[#ffd700] font-bold border border-[#f2ca50]/50 shadow-sm'
+                  : 'text-[#8391ac] hover:text-[#ffd700]'
+              }`}
+            >
+              <span className="material-symbols-outlined text-xs">swords</span>
+              <span>Duel de Prononciation</span>
+            </button>
           </div>
         </div>
 
-        {/* Free Custom Dictation Input Mode */}
-        {isFreeDictationMode && (
-          <div className="p-4 rounded-2xl bg-[#151b2b] border border-[#f2ca50]/40 shadow-lg flex flex-col gap-2.5 animate-fadeIn">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-[#f2ca50] flex items-center gap-1">
-                <span className="material-symbols-outlined text-sm">edit_note</span>
-                Phrase Cible Personnalisée pour votre Dictée
-              </span>
-              <span className="text-[10px] text-[#8391ac] font-mono">
-                Tapez votre phrase ou dictez-la directement
-              </span>
-            </div>
-            <textarea
-              value={customPracticeText}
-              onChange={(e) => setCustomPracticeText(e.target.value)}
-              placeholder="Entrez la phrase anglaise que vous souhaitez dicter (ex: 'The ambassador delivered a thoughtful address on international trade.')..."
-              rows={2}
-              className="w-full bg-[#0a101f] border border-[#2e3b55] focus:border-[#f2ca50] rounded-xl p-3 text-sm text-[#dce2f8] font-serif focus:outline-none placeholder-[#8391ac]/60 transition-colors"
+        {/* PRONUNCIATION DUEL ARENA (When Duel mode is chosen) */}
+        {isDuelMode ? (
+          <PronunciationDuelArena
+            targetText={effectiveTargetText}
+            phoneticHint={item.phoneticHints}
+            sourceTitle={item.title}
+            targetAccent={selectedAccent}
+            onAccentChange={(acc) => {
+              setSelectedAccent(acc);
+              resetRecordingState();
+            }}
+            onDuelCompleted={async (score) => {
+              await recordAttempt({
+                moduleId: `duel-${item.id}`,
+                moduleType: 'speaking',
+                title: `${item.title} (Pronunciation Duel)`,
+                level: item.level,
+                score,
+                durationSeconds: 15
+              });
+            }}
+            onExitDuel={() => {
+              setPracticeMode('cursus');
+              resetRecordingState();
+            }}
+          />
+        ) : (
+          <>
+            {/* Free Custom Dictation Input Mode */}
+            {isFreeDictationMode && (
+              <div className="p-4 rounded-2xl bg-[#151b2b] border border-[#f2ca50]/40 shadow-lg flex flex-col gap-2.5 animate-fadeIn">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-[#f2ca50] flex items-center gap-1">
+                    <span className="material-symbols-outlined text-sm">edit_note</span>
+                    Phrase Cible Personnalisée pour votre Dictée
+                  </span>
+                  <span className="text-[10px] text-[#8391ac] font-mono">
+                    Tapez votre phrase ou dictez-la directement
+                  </span>
+                </div>
+                <textarea
+                  value={customPracticeText}
+                  onChange={(e) => setCustomPracticeText(e.target.value)}
+                  placeholder="Entrez la phrase anglaise que vous souhaitez dicter (ex: 'The ambassador delivered a thoughtful address on international trade.')..."
+                  rows={2}
+                  className="w-full bg-[#0a101f] border border-[#2e3b55] focus:border-[#f2ca50] rounded-xl p-3 text-sm text-[#dce2f8] font-serif focus:outline-none placeholder-[#8391ac]/60 transition-colors"
+                />
+              </div>
+            )}
+
+            {/* Text To Read Excerpt Card (Curriculum Passage) */}
+            {!isFreeDictationMode && (
+              <div className="p-5 sm:p-6 rounded-2xl bg-[#151b2b] border border-[#4d4635]/40 shadow-xl flex flex-col gap-3.5 relative overflow-hidden">
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] uppercase font-bold text-[#f2ca50] tracking-wider">
+                      {item.source}
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-[#232a3a] text-[#d4c78f] font-mono">
+                      Niveau {item.level}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-[#99907c] font-mono">
+                    Cible : {selectedAccent === 'en-GB' ? 'British RP' : 'American GenAm'}
+                  </span>
+                </div>
+
+                <h2 className="font-serif text-base sm:text-lg font-bold text-[#dce2f8]">
+                  {item.title}
+                </h2>
+
+                <blockquote className="font-serif italic text-base sm:text-lg text-[#f1e3a9] leading-relaxed bg-[#070e1d]/80 p-4 sm:p-5 rounded-xl border border-[#4d4635]/30">
+                  {item.textToRead}
+                </blockquote>
+
+                {/* Phonetic transcription & Rhythm tips */}
+                <div className="flex flex-col gap-1.5 pt-2 border-t border-[#232a3a] text-xs">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[#99907c] uppercase text-[10px] font-bold">Transcription Phonétique :</span>
+                    <span className="text-[#d4c78f] font-mono bg-[#070e1d] px-2 py-0.5 rounded border border-[#232a3a]">
+                      {item.phoneticHints}
+                    </span>
+                  </div>
+                  <p className="text-[#d0c5af]/80 text-[11px] leading-relaxed mt-1">
+                    <strong className="text-[#f2ca50]">Conseil de prosodie :</strong> {item.rhythmTips}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Dual Audio Reference buttons */}
+            <DualSpeakerButton
+              text={effectiveTargetText}
+              id={`speaking-ref-${item.id}`}
+              phonetic={item.phoneticHints}
+              explanation="Écoutez le modèle britannique ou américain pour imprégner votre mémoire auditive avant de dicter"
+              variant="prominent"
             />
-          </div>
-        )}
 
-        {/* Text To Read Excerpt Card (Curriculum Passage) */}
-        {!isFreeDictationMode && (
-          <div className="p-5 sm:p-6 rounded-2xl bg-[#151b2b] border border-[#4d4635]/40 shadow-xl flex flex-col gap-3.5 relative overflow-hidden">
-            <div className="flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] uppercase font-bold text-[#f2ca50] tracking-wider">
-                  {item.source}
-                </span>
-                <span className="text-[10px] px-2 py-0.5 rounded bg-[#232a3a] text-[#d4c78f] font-mono">
-                  Niveau {item.level}
-                </span>
+            {/* Pronunciation Duel Quick Launch Banner */}
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-[#f2ca50]/15 to-yellow-500/10 border border-[#f2ca50]/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#070c17] border border-[#f2ca50]/50 flex items-center justify-center text-[#ffd700] shadow-inner shrink-0">
+                  <span className="material-symbols-outlined text-xl">swords</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-xs font-mono font-black text-[#ffd700] uppercase tracking-wider flex items-center gap-1.5">
+                    Pronunciation Duel • Défi Spectral Temps Réel
+                    <span className="px-1.5 py-0.2 rounded bg-amber-400/20 text-[#ffe082] text-[9px] font-mono">
+                      TEMPS RÉEL
+                    </span>
+                  </span>
+                  <span className="text-[11px] text-[#cbd5e1] leading-tight">
+                    Comparez en direct votre spectre audio 60 FPS avec le modèle natif ({selectedAccent === 'en-GB' ? 'UK 🇬🇧' : 'US 🇺🇸'}).
+                  </span>
+                </div>
               </div>
-              <span className="text-[10px] text-[#99907c] font-mono">
-                Cible : {selectedAccent === 'en-GB' ? 'British RP' : 'American GenAm'}
-              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  resetRecordingState();
+                  setPracticeMode('duel');
+                }}
+                className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#f2ca50] to-[#ffd700] hover:from-[#ffe088] hover:to-[#ffe566] text-[#2c2000] text-xs font-mono font-black flex items-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer shrink-0 justify-center"
+              >
+                <span className="material-symbols-outlined text-sm">swords</span>
+                <span>Lancer le Duel</span>
+              </button>
             </div>
-
-            <h2 className="font-serif text-base sm:text-lg font-bold text-[#dce2f8]">
-              {item.title}
-            </h2>
-
-            <blockquote className="font-serif italic text-base sm:text-lg text-[#f1e3a9] leading-relaxed bg-[#070e1d]/80 p-4 sm:p-5 rounded-xl border border-[#4d4635]/30">
-              {item.textToRead}
-            </blockquote>
-
-            {/* Phonetic transcription & Rhythm tips */}
-            <div className="flex flex-col gap-1.5 pt-2 border-t border-[#232a3a] text-xs">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[#99907c] uppercase text-[10px] font-bold">Transcription Phonétique :</span>
-                <span className="text-[#d4c78f] font-mono bg-[#070e1d] px-2 py-0.5 rounded border border-[#232a3a]">
-                  {item.phoneticHints}
-                </span>
-              </div>
-              <p className="text-[#d0c5af]/80 text-[11px] leading-relaxed mt-1">
-                <strong className="text-[#f2ca50]">Conseil de prosodie :</strong> {item.rhythmTips}
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Dual Audio Reference buttons */}
-        <DualSpeakerButton
-          text={effectiveTargetText}
-          id={`speaking-ref-${item.id}`}
-          phonetic={item.phoneticHints}
-          explanation="Écoutez le modèle britannique ou américain pour imprégner votre mémoire auditive avant de dicter"
-          variant="prominent"
-        />
 
         {/* ============================================================== */}
         {/* VOICE RECORDING & LIVE SPEECH RECOGNITION STUDIO CONTROLS */}
@@ -679,7 +757,7 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
         {(phoneticReport || (userWaveform && analysisResult)) && (
           <div className="flex flex-col gap-4 animate-fadeIn">
             {/* View Mode Selector Tabs */}
-            <div className="flex items-center justify-center p-1.5 rounded-2xl bg-[#151b2b] border border-[#232a3a]">
+            <div className="flex items-center justify-center p-1.5 rounded-2xl bg-[#151b2b] border border-[#232a3a] flex-wrap gap-1">
               <button
                 type="button"
                 onClick={() => setActiveTab('diagnostic')}
@@ -715,6 +793,19 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
                   </span>
                 )}
               </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('duel')}
+                className={`flex-1 py-2 px-3 rounded-xl text-xs font-mono font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                  activeTab === 'duel'
+                    ? 'bg-gradient-to-r from-[#f2ca50] to-[#ffd700] text-[#0c1322] shadow-md'
+                    : 'text-[#ffd700] hover:text-white'
+                }`}
+              >
+                <span className="material-symbols-outlined text-sm">swords</span>
+                <span>Duel Spectral Temps Réel</span>
+              </button>
             </div>
 
             {/* TAB 1: IMMEDIATE ORTHOGRAPHIC & PHONETIC DIAGNOSTIC CARD */}
@@ -744,8 +835,37 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
                 onValidate={handleValidateSession}
               />
             )}
+
+            {/* TAB 3: REAL-TIME PRONUNCIATION DUEL ARENA */}
+            {activeTab === 'duel' && (
+              <PronunciationDuelArena
+                targetText={effectiveTargetText}
+                phoneticHint={item.phoneticHints}
+                sourceTitle={item.title}
+                targetAccent={selectedAccent}
+                onAccentChange={(acc) => {
+                  setSelectedAccent(acc);
+                  resetRecordingState();
+                }}
+                onDuelCompleted={async (score) => {
+                  await recordAttempt({
+                    moduleId: `duel-${item.id}`,
+                    moduleType: 'speaking',
+                    title: `${item.title} (Pronunciation Duel)`,
+                    level: item.level,
+                    score,
+                    durationSeconds: 15
+                  });
+                }}
+                onExitDuel={() => {
+                  setActiveTab('diagnostic');
+                }}
+              />
+            )}
           </div>
         )}
+      </>
+    )}
       </main>
     </div>
   );

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import {
   SHOP_CATEGORIES,
@@ -26,6 +26,32 @@ interface MszShopProps {
 }
 
 /**
+ * Generates dynamic golden light refraction beam simulating refined metallic gold luster.
+ * Sweeps pure 24K gold, champagne, and warm amber reflections without rainbow dispersion.
+ */
+const getGoldenRefractionGradient = (angle: number, sweep: number) => {
+  return `linear-gradient(
+    ${angle}deg,
+    transparent 0%,
+    rgba(212, 175, 55, 0) ${Math.max(0, sweep - 32)}%,
+    rgba(245, 158, 11, 0.12) ${Math.max(0, sweep - 18)}%,
+    rgba(255, 215, 0, 0.28) ${Math.max(0, sweep - 7)}%,
+    rgba(255, 250, 225, 0.45) ${sweep}%,
+    rgba(255, 215, 0, 0.28) ${Math.min(100, sweep + 7)}%,
+    rgba(245, 158, 11, 0.12) ${Math.min(100, sweep + 18)}%,
+    rgba(212, 175, 55, 0) ${Math.min(100, sweep + 32)}%,
+    transparent 100%
+  )`;
+};
+
+const getGoldenSpecularGlareGradient = (x: number, y: number, angle: number) => {
+  return `
+    radial-gradient(ellipse at ${x}% ${y}%, rgba(255, 255, 245, 0.48) 0%, rgba(255, 235, 160, 0.25) 16%, rgba(245, 158, 11, 0.12) 34%, transparent 65%),
+    linear-gradient(${angle}deg, rgba(255, 215, 0, 0.08) 0%, rgba(255, 245, 180, 0.1) 35%, rgba(245, 158, 11, 0.1) 70%, transparent 100%)
+  `;
+};
+
+/**
  * Individual 3D Recto-Verso Card with click flip rotation animation
  */
 const MszShopCard3D: React.FC<{
@@ -47,6 +73,223 @@ const MszShopCard3D: React.FC<{
 }) => {
   const [isFlipped, setIsFlipped] = useState<boolean>(false);
   const [isHovered, setIsHovered] = useState<boolean>(false);
+  const [rotateX, setRotateX] = useState<number>(0);
+  const [rotateY, setRotateY] = useState<number>(0);
+  const [isFlipping, setIsFlipping] = useState<boolean>(false);
+  const [glarePosition, setGlarePosition] = useState<{
+    x: number;
+    y: number;
+    opacity: number;
+    angle: number;
+    hueShift: number;
+    fresnel: number;
+    sweepOffset: number;
+  }>({
+    x: 50,
+    y: 50,
+    opacity: 0,
+    angle: 135,
+    hueShift: 180,
+    fresnel: 0,
+    sweepOffset: 50
+  });
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  // Physical Inertia & Mass Simulation Refs
+  const rotXRef = useRef<number>(0);
+  const rotYRef = useRef<number>(0);
+  const velXRef = useRef<number>(0);
+  const velYRef = useRef<number>(0);
+  const targetRotXRef = useRef<number>(0);
+  const targetRotYRef = useRef<number>(0);
+  const prevTargetXRef = useRef<number>(0);
+  const prevTargetYRef = useRef<number>(0);
+  const lastMoveTimeRef = useRef<number>(0);
+  const isInteractingRef = useRef<boolean>(false);
+  const animFrameRef = useRef<number | null>(null);
+  const isFlippingRef = useRef<boolean>(false);
+
+  /**
+   * Physical Inertia simulation loop:
+   * Simulates weight, momentum carry-over on release and on movement halt.
+   */
+  const updatePhysics = useCallback(() => {
+    const isInteracting = isInteractingRef.current;
+    const isFlippingCurrent = isFlippingRef.current;
+
+    if (isFlippingCurrent) {
+      velXRef.current *= 0.8;
+      velYRef.current *= 0.8;
+    } else if (isInteracting) {
+      const springK = 0.18;
+      const damping = 0.76;
+
+      const forceX = (targetRotXRef.current - rotXRef.current) * springK;
+      const forceY = (targetRotYRef.current - rotYRef.current) * springK;
+
+      velXRef.current = (velXRef.current + forceX) * damping;
+      velYRef.current = (velYRef.current + forceY) * damping;
+
+      rotXRef.current += velXRef.current;
+      rotYRef.current += velYRef.current;
+    } else {
+      const restoringK = 0.052;
+      const inertiaAirResistance = 0.912;
+
+      const forceX = -rotXRef.current * restoringK;
+      const forceY = -rotYRef.current * restoringK;
+
+      velXRef.current = (velXRef.current + forceX) * inertiaAirResistance;
+      velYRef.current = (velYRef.current + forceY) * inertiaAirResistance;
+
+      rotXRef.current += velXRef.current;
+      rotYRef.current += velYRef.current;
+    }
+
+    const currentX = rotXRef.current;
+    const currentY = rotYRef.current;
+    const currentVelX = velXRef.current;
+    const currentVelY = velYRef.current;
+
+    if (
+      !isInteracting &&
+      Math.abs(currentX) < 0.02 &&
+      Math.abs(currentY) < 0.02 &&
+      Math.abs(currentVelX) < 0.008 &&
+      Math.abs(currentVelY) < 0.008
+    ) {
+      rotXRef.current = 0;
+      rotYRef.current = 0;
+      velXRef.current = 0;
+      velYRef.current = 0;
+      setRotateX(0);
+      setRotateY(0);
+      setGlarePosition({
+        x: 50,
+        y: 50,
+        opacity: 0,
+        angle: 135,
+        hueShift: 180,
+        fresnel: 0,
+        sweepOffset: 50
+      });
+      if (animFrameRef.current) {
+        cancelAnimationFrame(animFrameRef.current);
+        animFrameRef.current = null;
+      }
+      return;
+    }
+
+    setRotateX(currentX);
+    setRotateY(currentY);
+
+    const normX = Math.max(-1, Math.min(1, currentY / 13));
+    const normY = Math.max(-1, Math.min(1, -currentX / 13));
+    const glareX = 50 + normX * 36;
+    const glareY = 50 + normY * 36;
+    const angleDeg = ((Math.atan2(normY, normX) * 180) / Math.PI + 90 + 360) % 360;
+    const tiltIntensity = Math.min(1, Math.sqrt(normX * normX + normY * normY));
+
+    const hueShift = Math.round(((currentY * 11 + currentX * 9) + 3600) % 360);
+    const sweepOffset = Math.round(50 + normX * 42 + normY * 26);
+    const fresnel = Math.min(1, Math.pow(tiltIntensity, 0.85));
+
+    // Subtle golden luster: dialed-back opacity so artwork and card details stay sharp
+    const targetOpacity = isInteracting
+      ? Math.min(0.48, 0.18 + tiltIntensity * 0.26)
+      : Math.min(0.36, 0.06 + tiltIntensity * 0.28);
+
+    setGlarePosition({
+      x: glareX,
+      y: glareY,
+      opacity: targetOpacity,
+      angle: angleDeg,
+      hueShift,
+      fresnel,
+      sweepOffset
+    });
+
+    animFrameRef.current = requestAnimationFrame(updatePhysics);
+  }, []);
+
+  const startPhysicsLoop = useCallback(() => {
+    if (!animFrameRef.current) {
+      animFrameRef.current = requestAnimationFrame(updatePhysics);
+    }
+  }, [updatePhysics]);
+
+  const handlePointerInteraction = useCallback((clientX: number, clientY: number) => {
+    if (!cardRef.current) return;
+    const rect = cardRef.current.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+
+    const normX = Math.max(-1, Math.min(1, (x - centerX) / centerX));
+    const normY = Math.max(-1, Math.min(1, (y - centerY) / centerY));
+
+    const newTargetX = -normY * 13;
+    const newTargetY = normX * 13;
+
+    const now = performance.now();
+    const dt = Math.max(8, Math.min(100, now - (lastMoveTimeRef.current || now)));
+    lastMoveTimeRef.current = now;
+
+    const deltaTargetX = newTargetX - prevTargetXRef.current;
+    const deltaTargetY = newTargetY - prevTargetYRef.current;
+
+    const frameFactor = 16.67 / dt;
+    const impulseX = deltaTargetX * frameFactor * 0.45;
+    const impulseY = deltaTargetY * frameFactor * 0.45;
+
+    velXRef.current = Math.max(-9, Math.min(9, velXRef.current * 0.5 + impulseX));
+    velYRef.current = Math.max(-9, Math.min(9, velYRef.current * 0.5 + impulseY));
+
+    targetRotXRef.current = newTargetX;
+    targetRotYRef.current = newTargetY;
+    prevTargetXRef.current = newTargetX;
+    prevTargetYRef.current = newTargetY;
+
+    isInteractingRef.current = true;
+    setIsHovered(true);
+    startPhysicsLoop();
+  }, [startPhysicsLoop]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    handlePointerInteraction(e.clientX, e.clientY);
+  }, [handlePointerInteraction]);
+
+  const handleMouseLeave = useCallback(() => {
+    isInteractingRef.current = false;
+    setIsHovered(false);
+    targetRotXRef.current = 0;
+    targetRotYRef.current = 0;
+    startPhysicsLoop();
+  }, [startPhysicsLoop]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    if (e.touches.length === 0) return;
+    const touch = e.touches[0];
+    handlePointerInteraction(touch.clientX, touch.clientY);
+  }, [handlePointerInteraction]);
+
+  const handleTouchEnd = useCallback(() => {
+    isInteractingRef.current = false;
+    setIsHovered(false);
+    targetRotXRef.current = 0;
+    targetRotYRef.current = 0;
+    startPhysicsLoop();
+  }, [startPhysicsLoop]);
+
+  useEffect(() => {
+    return () => {
+      if (animFrameRef.current) {
+        cancelAnimationFrame(animFrameRef.current);
+      }
+    };
+  }, []);
 
   // Mint & Supply
   const currentMint = getCharacterMintCount(character.id);
@@ -111,26 +354,62 @@ const MszShopCard3D: React.FC<{
   const rarityConfig = getRarityConfig(character.rarity);
 
   const handleCardClick = () => {
+    setIsFlipping(true);
+    isFlippingRef.current = true;
     setIsFlipped((prev) => !prev);
+    velXRef.current *= 0.2;
+    velYRef.current *= 0.2;
+    setTimeout(() => {
+      setIsFlipping(false);
+      isFlippingRef.current = false;
+    }, 650);
   };
 
   return (
     <div
+      ref={cardRef}
       onClick={handleCardClick}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
       className="group relative select-none cursor-pointer w-full max-w-[300px] h-[450px]"
-      style={{ perspective: '1200px' }}
+      style={{ perspective: '1200px', touchAction: 'pan-y' }}
       title="Cliquer pour retourner la carte en 3D (Recto / Verso)"
     >
-      {/* 3D Rotating Flippable Stage */}
+      {/* 3D Rotating Flippable Stage with Reactive Parallax */}
       <div
-        className="w-full h-full relative transition-transform duration-700 ease-out"
+        className="w-full h-full relative"
         style={{
           transformStyle: 'preserve-3d',
-          transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)'
+          transform: `rotateX(${rotateX}deg) rotateY(${rotateY + (isFlipped ? 180 : 0)}deg)`,
+          transition: isFlipping
+            ? 'transform 0.65s cubic-bezier(0.23, 1, 0.32, 1)'
+            : 'none',
+          filter: (isHovered || Math.abs(rotateX) > 0.4 || Math.abs(rotateY) > 0.4)
+            ? `drop-shadow(${-rotateY * 1.4}px ${rotateX * 1.4 + 14}px 22px rgba(0,0,0,0.75))`
+            : 'drop-shadow(0px 10px 20px rgba(0,0,0,0.6))'
         }}
       >
+        {/* 3D Physical Slab Thickness Facets */}
+        <div className="pointer-events-none absolute inset-0 rounded-2xl" style={{ transformStyle: 'preserve-3d' }}>
+          <div
+            className="absolute top-3 bottom-3 right-0 w-[8px] rounded-r-sm pointer-events-none"
+            style={{
+              transformOrigin: 'right center',
+              transform: 'rotateY(90deg) translateZ(4px)',
+              background: 'linear-gradient(to right, rgba(15,23,42,0.9), rgba(71,85,105,0.75) 40%, rgba(255,255,255,0.25) 75%, rgba(15,23,42,0.9))'
+            }}
+          />
+          <div
+            className="absolute top-3 bottom-3 left-0 w-[8px] rounded-l-sm pointer-events-none"
+            style={{
+              transformOrigin: 'left center',
+              transform: 'rotateY(-90deg) translateZ(4px)',
+              background: 'linear-gradient(to left, rgba(15,23,42,0.9), rgba(71,85,105,0.75) 40%, rgba(255,255,255,0.25) 75%, rgba(15,23,42,0.9))'
+            }}
+          />
+        </div>
         {/* ============================================================== */}
         {/* RECTO (FACE AVANT) */}
         {/* ============================================================== */}
@@ -196,6 +475,43 @@ const MszShopCard3D: React.FC<{
             </span>
           </div>
 
+          {/* Dynamic Golden Refraction Glare Layer */}
+          <div
+            className="pointer-events-none absolute inset-0 rounded-2xl z-24 mix-blend-color-dodge transition-opacity duration-150 overflow-hidden"
+            style={{
+              transform: 'translateZ(28px)',
+              backgroundImage: getGoldenRefractionGradient(
+                glarePosition.angle,
+                glarePosition.sweepOffset
+              ),
+              opacity: glarePosition.opacity * 0.72
+            }}
+          />
+
+          {/* Dynamic Golden Specular Hotspot Glare */}
+          <div
+            className="pointer-events-none absolute inset-0 rounded-2xl z-26 mix-blend-screen transition-opacity duration-200 overflow-hidden"
+            style={{
+              transform: 'translateZ(32px)',
+              backgroundImage: getGoldenSpecularGlareGradient(
+                glarePosition.x,
+                glarePosition.y,
+                glarePosition.angle
+              ),
+              opacity: glarePosition.opacity * 0.55
+            }}
+          />
+
+          {/* Dynamic Golden Fresnel Perimeter */}
+          <div
+            className="pointer-events-none absolute inset-0 rounded-2xl z-28 transition-opacity duration-200 overflow-hidden"
+            style={{
+              transform: 'translateZ(34px)',
+              boxShadow: `inset 0 0 20px rgba(255, 215, 0, ${glarePosition.fresnel * 0.22})`,
+              opacity: glarePosition.opacity * 0.65
+            }}
+          />
+
           {/* Character Artwork */}
           <div className="relative my-auto flex flex-col items-center justify-center z-10">
             <div
@@ -212,7 +528,17 @@ const MszShopCard3D: React.FC<{
                   e.currentTarget.src = '/assets/aistudio/VOLT.png';
                 }}
               />
-              <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/10 to-transparent pointer-events-none" />
+              {/* Dynamic Subtle Golden Luster Sheen on Artwork */}
+              <div
+                className="absolute inset-0 rounded-xl pointer-events-none mix-blend-color-dodge transition-opacity duration-150 overflow-hidden"
+                style={{
+                  backgroundImage: getGoldenRefractionGradient(
+                    glarePosition.angle + 35,
+                    glarePosition.sweepOffset
+                  ),
+                  opacity: glarePosition.opacity * 0.32
+                }}
+              />
             </div>
 
             <span className="mt-2 px-2.5 py-0.5 rounded-full bg-[#070e1d]/90 border border-white/10 text-[9px] font-mono text-[#d4c78f] uppercase tracking-wider">
@@ -287,6 +613,18 @@ const MszShopCard3D: React.FC<{
             borderColor: character.colorTheme.border
           }}
         >
+          {/* Dynamic Golden Refraction Glare on Verso */}
+          <div
+            className="pointer-events-none absolute inset-0 rounded-2xl z-30 mix-blend-screen transition-opacity duration-200 overflow-hidden"
+            style={{
+              transform: 'translateZ(30px)',
+              background: `
+                radial-gradient(circle at ${100 - glarePosition.x}% ${glarePosition.y}%, rgba(255, 250, 220, 0.32) 0%, rgba(255, 215, 0, 0.12) 25%, transparent 65%),
+                linear-gradient(${glarePosition.angle + 180}deg, transparent 20%, rgba(245, 158, 11, 0.1) 50%, transparent 80%)
+              `,
+              opacity: glarePosition.opacity * 0.48
+            }}
+          />
           {/* Top Bar: Identity & Level */}
           <div className="flex items-start justify-between border-b border-white/10 pb-2">
             <div className="flex flex-col">
@@ -526,7 +864,7 @@ export const MszShop: React.FC<MszShopProps> = ({
         name: 'Toutes les Séries',
         tag: 'ALL-SERIES',
         startingPrice: 50,
-        description: 'Collection intégrale des 8 Personnages Officiels sans aucun doublon, classés de Classique (Niveau 5) jusqu’à Souveraine (Niveau 100).',
+        description: 'Collection intégrale des 9 Personnages Officiels sans aucun doublon, classés de Classique (Niveau 5) jusqu’à Souveraine (Niveau 100).',
         icon: 'stars',
         accentColor: '#f2ca50',
         rankBadge: 'Collection Complète'
@@ -566,7 +904,7 @@ export const MszShop: React.FC<MszShopProps> = ({
               <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#f2ca50] bg-[#f2ca50]/15 px-2.5 py-0.5 rounded-full border border-[#f2ca50]/30">
                 COLLECTION OFFICIELLE MSZ
               </span>
-              <span className="text-[10px] text-[#38bdf8] font-mono">8 Personnages Authentiques • Zéro Doublon</span>
+              <span className="text-[10px] text-[#38bdf8] font-mono">9 Personnages Authentiques • Zéro Doublon</span>
             </div>
             <h3 className="font-serif text-xl sm:text-2xl font-black text-white mt-0.5">
               Boutique Officielle des Cartes & Icônes MSZ
@@ -653,7 +991,7 @@ export const MszShop: React.FC<MszShopProps> = ({
               stars
             </span>
             <span>Toutes les Séries</span>
-            <span className="text-[10px] opacity-75 font-normal">(8 Cartes)</span>
+            <span className="text-[10px] opacity-75 font-normal">({MSZ_CHARACTERS.length} Cartes)</span>
           </button>
 
           {SHOP_CATEGORIES.map((cat) => {

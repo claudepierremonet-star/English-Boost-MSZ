@@ -18,6 +18,117 @@
 
 export type CharacterRarity = 'Commune' | 'Rare' | 'Épique' | 'Légendaire' | 'Mythique' | 'Souveraine';
 
+export interface RarityConfig {
+  key: CharacterRarity;
+  label: string;
+  icon: string;
+  badgeClass: string;
+  cardBorderClass: string;
+  glowShadow: string;
+  goldenBorder: boolean;
+  accentColor: string;
+  gradientText: string;
+  description: string;
+  tierTag: string;
+  levelRange: string;
+}
+
+export const RARITY_ORDER: CharacterRarity[] = [
+  'Commune',
+  'Rare',
+  'Épique',
+  'Légendaire',
+  'Mythique',
+  'Souveraine'
+];
+
+export const RARITY_CONFIGS: Record<CharacterRarity, RarityConfig> = {
+  Commune: {
+    key: 'Commune',
+    label: 'Commune',
+    icon: 'verified',
+    badgeClass: 'border border-cyan-400/60 text-cyan-300 bg-cyan-950/80 shadow-[0_0_12px_rgba(56,189,248,0.4)]',
+    cardBorderClass: 'border-cyan-400/50 hover:border-cyan-400 hover:shadow-[0_0_20px_rgba(56,189,248,0.35)]',
+    glowShadow: '0 0 16px rgba(56,189,248,0.4)',
+    goldenBorder: false,
+    accentColor: '#38bdf8',
+    gradientText: 'from-cyan-300 to-sky-100',
+    description: 'Archétypes fondateurs de l’Académie, essentiels pour forger les réflexes d’élocution et la rapidité lexicale.',
+    tierTag: 'TIER I • INITIATION',
+    levelRange: 'Niveau 5'
+  },
+  Rare: {
+    key: 'Rare',
+    label: 'Rare',
+    icon: 'auto_awesome',
+    badgeClass: 'border border-blue-400/70 text-blue-200 bg-blue-950/85 shadow-[0_0_16px_rgba(59,130,246,0.45)]',
+    cardBorderClass: 'border-blue-400/60 hover:border-blue-400 hover:shadow-[0_0_22px_rgba(59,130,246,0.4)]',
+    glowShadow: '0 0 20px rgba(59,130,246,0.45)',
+    goldenBorder: false,
+    accentColor: '#60a5fa',
+    gradientText: 'from-blue-300 to-indigo-100',
+    description: 'Guerriers cinétiques et astraux canalisant la régularité du tempo phonétique et la rétention mémorielle.',
+    tierTag: 'TIER II • AVANCÉ',
+    levelRange: 'Niveaux 12 à 25'
+  },
+  Épique: {
+    key: 'Épique',
+    label: 'Épique',
+    icon: 'diamond',
+    badgeClass: 'border border-purple-400/80 text-purple-200 bg-purple-950/90 shadow-[0_0_20px_rgba(168,85,247,0.55)] font-bold',
+    cardBorderClass: 'border-purple-400/70 hover:border-purple-300 hover:shadow-[0_0_26px_rgba(168,85,247,0.5)]',
+    glowShadow: '0 0 24px rgba(168,85,247,0.55)',
+    goldenBorder: false,
+    accentColor: '#c084fc',
+    gradientText: 'from-purple-300 to-pink-100',
+    description: 'Titans du zénith solaire dissipant toute anxiété oratoire et instaurant une clarté royale.',
+    tierTag: 'TIER III • ÉLITE SOLAIRE',
+    levelRange: 'Niveau 45'
+  },
+  Légendaire: {
+    key: 'Légendaire',
+    label: 'Légendaire',
+    icon: 'military_tech',
+    badgeClass: 'border-2 border-amber-400 text-amber-200 bg-gradient-to-r from-amber-950/90 via-[#2a1a02] to-amber-900/90 shadow-[0_0_24px_rgba(245,158,11,0.7)] font-black ring-1 ring-amber-400/50',
+    cardBorderClass: 'border-2 border-amber-400/80 hover:border-amber-300 shadow-[0_0_25px_rgba(245,158,11,0.4)] hover:shadow-[0_0_35px_rgba(245,158,11,0.65)]',
+    glowShadow: '0 0 28px rgba(245,158,11,0.7)',
+    goldenBorder: true,
+    accentColor: '#f59e0b',
+    gradientText: 'from-amber-200 via-yellow-100 to-amber-400',
+    description: 'Entités d’énergie thermonucléaire et spectres abyssaux dotés d’une prestigieuse bordure dorée incandescente.',
+    tierTag: 'TIER IV • BORDURE DORÉE PRESTIGE',
+    levelRange: 'Niveaux 62 à 78'
+  },
+  Mythique: {
+    key: 'Mythique',
+    label: 'Mythique',
+    icon: 'flare',
+    badgeClass: 'border-2 border-emerald-400 text-emerald-200 bg-gradient-to-r from-emerald-950/95 via-[#022c22] to-teal-900/95 shadow-[0_0_28px_rgba(52,211,153,0.75)] font-black ring-1 ring-emerald-300/60',
+    cardBorderClass: 'border-2 border-emerald-400/90 hover:border-emerald-300 shadow-[0_0_28px_rgba(52,211,153,0.45)] hover:shadow-[0_0_38px_rgba(52,211,153,0.75)]',
+    glowShadow: '0 0 32px rgba(52,211,153,0.75)',
+    goldenBorder: true,
+    accentColor: '#34d399',
+    gradientText: 'from-emerald-200 via-teal-100 to-emerald-400',
+    description: 'Sentinelles des aurores polaires façonnées dans le givre éternel, conférant une précision grammaticale infaillible.',
+    tierTag: 'TIER V • CRISTAL MYTHIQUE',
+    levelRange: 'Niveau 90'
+  },
+  Souveraine: {
+    key: 'Souveraine',
+    label: 'Souveraine',
+    icon: 'crown',
+    badgeClass: 'border-2 border-[#ffd700] text-yellow-100 bg-gradient-to-r from-amber-600/95 via-yellow-400/90 to-amber-500/95 shadow-[0_0_35px_rgba(255,215,0,0.95)] font-black ring-2 ring-[#ffd700] shadow-amber-500/50',
+    cardBorderClass: 'border-2 border-[#ffd700] ring-2 ring-[#ffd700]/60 shadow-[0_0_35px_rgba(255,215,0,0.65)] hover:shadow-[0_0_50px_rgba(255,215,0,0.9)]',
+    glowShadow: '0 0 40px rgba(255,215,0,0.95)',
+    goldenBorder: true,
+    accentColor: '#ffd700',
+    gradientText: 'from-yellow-100 via-amber-200 to-yellow-400',
+    description: 'Le sommet absolu de la rareté MSZ : Bordure d’or pur 24K, couronne souveraine et aura céleste au Niveau 100.',
+    tierTag: 'TIER SUPRÊME • OR PUR 24K',
+    levelRange: 'Niveau 100 Absolu'
+  }
+};
+
 export interface CharacterStats {
   elocution: number;  // 0 - 100
   memoire: number;    // 0 - 100
@@ -202,7 +313,43 @@ export const MSZ_CHARACTERS: MszCharacter[] = [
   },
 
   // ==========================================
-  // 2. VOLT (Classique / Rare - Niveau 12)
+  // 2. EKLAH (Cyber Néon / Initiation+ - Niveau 8)
+  // ==========================================
+  {
+    id: 'char_eklah',
+    name: 'EKLAH',
+    categoryId: 1,
+    categoryName: 'Cyber Néon (Classique)',
+    categoryTag: 'CYBER-NEON-01',
+    price: 65,
+    level: 8,
+    rarity: 'Commune',
+    image: '/assets/aistudio/ECLAT_4c46a7cc.png',
+    isOfficialAsset: true,
+    maxSupply: 100,
+    initialMintCount: 19,
+    serialPrefix: 'MSZ-EKLAH',
+    element: 'Radiant Resonance',
+    colorTheme: {
+      primary: '#0284c7',
+      border: 'rgba(2, 132, 199, 0.6)',
+      glow: 'rgba(2, 132, 199, 0.35)',
+      gradient: 'from-[#071326] via-[#0b1e3b] to-[#161f36]',
+      badgeBg: 'bg-sky-500/15 text-sky-200 border-sky-400/30'
+    },
+    description: 'Variante d’éveil cybernétique aux fréquences harmoniques stabilisées. Eklah amplifie l’amplitude phonique et renforce l’assurance oratoire, idéale pour consolider la mémoire auditive et la fluidité syntaxique.',
+    loreQuote: '« Dans l’écho du verbe se révèle la résonance de la vérité. »',
+    passiveBonus: '+6% de stabilité d’élocution et bonus d’oratoire en vitesse',
+    stats: {
+      elocution: 90,
+      memoire: 87,
+      vitesse: 96,
+      maitrise: 86
+    }
+  },
+
+  // ==========================================
+  // 3. VOLT (Classique / Rare - Niveau 12)
   // ==========================================
   {
     id: 'char_volt',
@@ -238,7 +385,7 @@ export const MSZ_CHARACTERS: MszCharacter[] = [
   },
 
   // ==========================================
-  // 3. NYX (Astrale / Rare+ - Niveau 25)
+  // 4. NYX (Astrale / Rare+ - Niveau 25)
   // ==========================================
   {
     id: 'char_nyx',
@@ -274,7 +421,7 @@ export const MSZ_CHARACTERS: MszCharacter[] = [
   },
 
   // ==========================================
-  // 4. SOLARIA (Solaire / Épique - Niveau 45)
+  // 5. SOLARIA (Solaire / Épique - Niveau 45)
   // ==========================================
   {
     id: 'char_solaria',
@@ -310,7 +457,7 @@ export const MSZ_CHARACTERS: MszCharacter[] = [
   },
 
   // ==========================================
-  // 5. INFERNO (Incandescente / Légendaire - Niveau 62)
+  // 6. INFERNO (Incandescente / Légendaire - Niveau 62)
   // ==========================================
   {
     id: 'char_inferno',
@@ -346,7 +493,7 @@ export const MSZ_CHARACTERS: MszCharacter[] = [
   },
 
   // ==========================================
-  // 6. UMBRA (Ténébreuse / Légendaire+ - Niveau 78)
+  // 7. UMBRA (Ténébreuse / Légendaire+ - Niveau 78)
   // ==========================================
   {
     id: 'char_umbra',
@@ -382,7 +529,7 @@ export const MSZ_CHARACTERS: MszCharacter[] = [
   },
 
   // ==========================================
-  // 7. FROST (Boréale / Mythique - Niveau 90)
+  // 8. FROST (Boréale / Mythique - Niveau 90)
   // ==========================================
   {
     id: 'char_frost',
@@ -418,7 +565,7 @@ export const MSZ_CHARACTERS: MszCharacter[] = [
   },
 
   // ==========================================
-  // 8. ETERNIS (Souveraine Suprême - Niveau 100)
+  // 9. ETERNIS (Souveraine Suprême - Niveau 100)
   // ==========================================
   {
     id: 'char_eternis',

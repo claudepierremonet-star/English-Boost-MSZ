@@ -3,6 +3,9 @@ import confetti from 'canvas-confetti';
 import {
   SHOP_CATEGORIES,
   MSZ_CHARACTERS,
+  RARITY_CONFIGS,
+  RARITY_ORDER,
+  type CharacterRarity,
   type MszCharacter,
   type MarketListing,
   type MszTransaction
@@ -41,7 +44,7 @@ export const MszShopModal: React.FC<MszShopModalProps> = ({
   const [activeTab, setActiveTab] = useState<'shop' | 'inventory' | 'marketplace' | 'crypto'>('shop');
   const [selectedCategory, setSelectedCategory] = useState<number | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [selectedRarity, setSelectedRarity] = useState<string>('all');
+  const [selectedRarity, setSelectedRarity] = useState<'all' | CharacterRarity>('all');
 
   // Dynamic economy states
   const [balance, setBalance] = useState<number>(getMszCoinsBalance());
@@ -51,11 +54,21 @@ export const MszShopModal: React.FC<MszShopModalProps> = ({
   const [listings, setListings] = useState<MarketListing[]>(getMarketplaceListings());
   const [transactions, setTransactions] = useState<MszTransaction[]>(getTransactionHistory());
 
-  // Modal / Toast states
+  // Modal / Toast states & Zoom Inspector
   const [inspectedCharacter, setInspectedCharacter] = useState<MszCharacter | null>(null);
+  const [inspectMode, setInspectMode] = useState<'zoomLoupe' | 'card3d'>('zoomLoupe');
+  const [zoomScale, setZoomScale] = useState<number>(1.85);
+  const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 50, y: 40 });
   const [sellModalChar, setSellModalChar] = useState<MszCharacter | null>(null);
   const [sellPriceInput, setSellPriceInput] = useState<number>(75);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const handleOpenInspect = useCallback((char: MszCharacter, startZoomed = true) => {
+    setInspectedCharacter(char);
+    setInspectMode(startZoomed ? 'zoomLoupe' : 'card3d');
+    setZoomScale(1.85);
+    setPanOffset({ x: 50, y: 40 });
+  }, []);
 
   // Daily budget info
   const { dailyLimit, state: dailyState } = useMemo(() => {
@@ -117,6 +130,27 @@ export const MszShopModal: React.FC<MszShopModalProps> = ({
       return true;
     });
   }, [selectedCategory, selectedRarity, searchQuery]);
+
+  // Card count for each rarity tier
+  const rarityCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: MSZ_CHARACTERS.length };
+    RARITY_ORDER.forEach((r) => {
+      counts[r] = MSZ_CHARACTERS.filter((c) => c.rarity === r).length;
+    });
+    return counts;
+  }, []);
+
+  // Group filtered characters by rarity tier for structured display
+  const charactersByRarity = useMemo(() => {
+    const map = new Map<CharacterRarity, MszCharacter[]>();
+    RARITY_ORDER.forEach((rarity) => {
+      const chars = filteredShopCharacters.filter((c) => c.rarity === rarity);
+      if (chars.length > 0) {
+        map.set(rarity, chars);
+      }
+    });
+    return map;
+  }, [filteredShopCharacters]);
 
   // Owned characters in inventory
   const ownedCharacters = useMemo(() => {
@@ -349,77 +383,108 @@ export const MszShopModal: React.FC<MszShopModalProps> = ({
         {/* ================================================================ */}
         {activeTab === 'shop' && (
           <div className="flex flex-col gap-6 animate-fadeIn">
-            {/* Featured Official Characters Hero Banner (8 Personnages Officiels) */}
-            <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-[#121b30] via-[#1a1236] to-[#0d1629] border border-[#f2ca50]/50 shadow-2xl relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6">
-              <div className="absolute top-0 right-0 w-80 h-80 bg-[#f2ca50]/5 rounded-full blur-3xl pointer-events-none" />
+            {/* Featured Official Characters Hero Banner (9 Personnages Officiels) */}
+            <div className="p-5 sm:p-7 rounded-3xl bg-gradient-to-r from-[#0d1527] via-[#151a33] to-[#0a1122] border border-[#d4af37]/40 shadow-[0_20px_50px_rgba(0,0,0,0.7)] relative overflow-hidden flex flex-col lg:flex-row items-center justify-between gap-6">
+              <div className="absolute top-0 right-0 w-96 h-96 bg-[#d4af37]/5 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute -bottom-10 -left-10 w-72 h-72 bg-[#38bdf8]/5 rounded-full blur-3xl pointer-events-none" />
 
-              <div className="flex flex-col gap-2 relative z-10 max-w-xl text-center md:text-left">
-                <div className="flex items-center justify-center md:justify-start gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 text-[10px] font-mono font-bold border border-cyan-400/40">
-                    Série 1 : Cyber Néon (50 MSZ)
+              <div className="flex flex-col gap-2.5 relative z-10 max-w-xl text-center lg:text-left">
+                <div className="flex items-center justify-center lg:justify-start gap-2 flex-wrap">
+                  <span className="px-3 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 text-[10px] font-mono font-bold border border-cyan-400/30">
+                    9 Comptes Officiels Rares
                   </span>
-                  <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-[#ffd700] text-[10px] font-mono font-bold border border-amber-400/30">
-                    100 Exemplaires Max / Carte
+                  <span className="px-3 py-0.5 rounded-full bg-[#d4af37]/15 text-[#ffd700] text-[10px] font-mono font-bold border border-[#d4af37]/30">
+                    Max 100 Exemplaires / Carte
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 text-[10px] font-mono font-bold border border-emerald-400/30">
+                    Bourse P2P Active
                   </span>
                 </div>
-                <h2 className="font-serif text-2xl sm:text-3xl font-black text-white leading-tight">
-                  La Galerie des Cartes d'Élite MSZ
+                <h2 className="font-serif text-2xl sm:text-3xl font-black text-white leading-tight tracking-tight">
+                  Grand Pavillon des Maîtres MSZ
                 </h2>
-                <p className="text-xs text-[#d0c5af] leading-relaxed">
-                  Incarnez les 8 personnages officiels (<strong>ÉCLAT, VOLT, NYX, SOLARIA, INFERNO, UMBRA, FROST, ETERNIS</strong>). Chaque carte possède son <strong>numéro d'identité unique (1/100 à 100/100)</strong>, augmentant sa valeur lors de la revente sur la bourse P2P.
+                <p className="text-xs text-[#cbd5e1] leading-relaxed">
+                  Découvrez les 9 personnages officiels certifiés : <strong>ÉCLAT, EKLAH, VOLT, NYX, SOLARIA, INFERNO, UMBRA, FROST</strong> et le souverain <strong>ETERNIS</strong>. Chaque pièce possède son <strong>matricule d'identité unique gravé (№ 001/100 à 100/100)</strong>, garantissant sa rareté absolue et sa valeur lors des échanges sur la bourse P2P.
                 </p>
-                <div className="flex items-center justify-center md:justify-start gap-3 pt-2 text-xs font-mono text-[#8391ac] flex-wrap">
-                  <span className="flex items-center gap-1 text-[#38bdf8]">
-                    <span className="material-symbols-outlined text-sm">3d_rotation</span>
-                    Parallaxe 3D & Holo
+                <div className="flex items-center justify-center lg:justify-start gap-3 pt-2 text-xs font-mono text-[#94a3b8] flex-wrap">
+                  <span className="flex items-center gap-1.5 text-[#38bdf8]">
+                    <span className="material-symbols-outlined text-sm">view_in_ar</span>
+                    Scène 3D & Parallaxe Holo
                   </span>
                   <span>&bull;</span>
-                  <span className="flex items-center gap-1 text-[#f2ca50]">
-                    <span className="material-symbols-outlined text-sm">confirmation_number</span>
-                    Numéro Unique (ex: #001/100)
+                  <span className="flex items-center gap-1.5 text-[#ffd700]">
+                    <span className="material-symbols-outlined text-sm">verified</span>
+                    Série Numérotée (1/100)
                   </span>
                   <span>&bull;</span>
-                  <span className="flex items-center gap-1 text-emerald-400">
-                    <span className="material-symbols-outlined text-sm">swap_horiz</span>
-                    Achat-Revente P2P
+                  <span className="flex items-center gap-1.5 text-emerald-400">
+                    <span className="material-symbols-outlined text-sm">currency_exchange</span>
+                    Liquidité & Revente P2P
                   </span>
                 </div>
               </div>
 
-              {/* Quick showcase of ECLAT & VOLT & ETERNIS */}
-              <div className="flex items-center justify-center gap-3 relative z-10">
-                <div className="w-20 sm:w-24 rounded-2xl overflow-hidden border-2 border-cyan-400/60 shadow-xl bg-[#070e1d] transform -rotate-3 hover:rotate-0 transition-transform">
-                  <img
-                    src="/assets/aistudio/ECLAT.png"
-                    alt="ÉCLAT"
-                    className="w-full h-auto object-cover"
-                  />
-                  <div className="p-1 text-center bg-[#070e1d]">
-                    <span className="text-[9px] font-mono font-bold text-cyan-300 block">ÉCLAT</span>
-                    <span className="text-[8px] text-[#f2ca50] font-mono font-black">50 MSZ</span>
+              {/* Showcase Pedestal with Master Cards: ÉCLAT, EKLAH, VOLT & ETERNIS */}
+              <div className="flex items-center justify-center gap-2 sm:gap-3 relative z-10 overflow-x-auto py-2">
+                {/* ÉCLAT */}
+                <div className="w-18 sm:w-22 rounded-2xl overflow-hidden border border-cyan-400/40 shadow-xl bg-[#060a16] transform -rotate-3 hover:rotate-0 hover:scale-105 transition-all duration-300 group">
+                  <div className="h-20 sm:h-24 overflow-hidden relative bg-gradient-to-b from-[#091024] to-[#040711]">
+                    <img
+                      src="/assets/aistudio/ECLAT.png"
+                      alt="ÉCLAT"
+                      className="w-full h-full object-contain p-1 group-hover:scale-110 transition-transform duration-300"
+                    />
+                  </div>
+                  <div className="p-1.5 text-center bg-[#070d1e] border-t border-white/5">
+                    <span className="text-[9px] font-mono font-bold text-cyan-300 block truncate">ÉCLAT</span>
+                    <span className="text-[8px] text-[#ffd700] font-mono font-black">50 MSZ</span>
                   </div>
                 </div>
 
-                <div className="w-20 sm:w-24 rounded-2xl overflow-hidden border-2 border-fuchsia-400/60 shadow-xl bg-[#070e1d] transform hover:rotate-0 transition-transform">
-                  <img
-                    src="/assets/aistudio/VOLT.png"
-                    alt="VOLT"
-                    className="w-full h-auto object-cover"
-                  />
-                  <div className="p-1 text-center bg-[#070e1d]">
-                    <span className="text-[9px] font-mono font-bold text-fuchsia-300 block">VOLT</span>
-                    <span className="text-[8px] text-[#f2ca50] font-mono font-black">75 MSZ</span>
+                {/* EKLAH */}
+                <div className="w-18 sm:w-22 rounded-2xl overflow-hidden border border-emerald-400/40 shadow-xl bg-[#060a16] transform -rotate-1 hover:rotate-0 hover:scale-105 transition-all duration-300 group">
+                  <div className="h-20 sm:h-24 overflow-hidden relative bg-gradient-to-b from-[#051a14] to-[#040711]">
+                    <img
+                      src="/assets/aistudio/ECLAT_4c46a7cc.png"
+                      alt="EKLAH"
+                      className="w-full h-full object-contain p-1 group-hover:scale-110 transition-transform duration-300"
+                    />
+                  </div>
+                  <div className="p-1.5 text-center bg-[#070d1e] border-t border-white/5">
+                    <span className="text-[9px] font-mono font-bold text-emerald-300 block truncate">EKLAH</span>
+                    <span className="text-[8px] text-[#ffd700] font-mono font-black">65 MSZ</span>
                   </div>
                 </div>
 
-                <div className="w-20 sm:w-24 rounded-2xl overflow-hidden border-2 border-amber-400/80 shadow-xl shadow-amber-500/20 bg-[#070e1d] transform rotate-3 hover:rotate-0 transition-transform">
-                  <img
-                    src="/assets/aistudio/ETERNIS.png"
-                    alt="ETERNIS"
-                    className="w-full h-auto object-cover"
-                  />
-                  <div className="p-1 text-center bg-[#070e1d]">
-                    <span className="text-[9px] font-mono font-bold text-amber-300 block">ETERNIS</span>
+                {/* VOLT */}
+                <div className="w-18 sm:w-22 rounded-2xl overflow-hidden border border-fuchsia-400/40 shadow-xl bg-[#060a16] transform rotate-1 hover:rotate-0 hover:scale-105 transition-all duration-300 group">
+                  <div className="h-20 sm:h-24 overflow-hidden relative bg-gradient-to-b from-[#180a24] to-[#040711]">
+                    <img
+                      src="/assets/aistudio/VOLT.png"
+                      alt="VOLT"
+                      className="w-full h-full object-contain p-1 group-hover:scale-110 transition-transform duration-300"
+                    />
+                  </div>
+                  <div className="p-1.5 text-center bg-[#070d1e] border-t border-white/5">
+                    <span className="text-[9px] font-mono font-bold text-fuchsia-300 block truncate">VOLT</span>
+                    <span className="text-[8px] text-[#ffd700] font-mono font-black">75 MSZ</span>
+                  </div>
+                </div>
+
+                {/* ETERNIS */}
+                <div className="w-20 sm:w-24 rounded-2xl overflow-hidden border-2 border-[#d4af37] shadow-xl shadow-[#d4af37]/20 bg-[#060a16] transform rotate-3 hover:rotate-0 hover:scale-105 transition-all duration-300 group">
+                  <div className="h-22 sm:h-26 overflow-hidden relative bg-gradient-to-b from-[#241705] to-[#040711]">
+                    <div className="absolute top-1 right-1 px-1 py-0.2 rounded bg-[#d4af37] text-black text-[7px] font-mono font-black uppercase">
+                      Lvl 100
+                    </div>
+                    <img
+                      src="/assets/aistudio/ETERNIS.png"
+                      alt="ETERNIS"
+                      className="w-full h-full object-contain p-1 group-hover:scale-110 transition-transform duration-300"
+                    />
+                  </div>
+                  <div className="p-1.5 text-center bg-[#0e0a05] border-t border-[#d4af37]/30">
+                    <span className="text-[9px] font-mono font-bold text-amber-300 block truncate">ETERNIS</span>
                     <span className="text-[8px] text-[#ffd700] font-mono font-black">2500 MSZ</span>
                   </div>
                 </div>
@@ -475,10 +540,9 @@ export const MszShopModal: React.FC<MszShopModalProps> = ({
               </div>
             </div>
 
-            {/* Search & Rarity Filter Bar */}
+            {/* Search Bar & Stats Strip */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 rounded-2xl bg-[#121929] border border-[#232a3a]">
-              {/* Search input */}
-              <div className="relative w-full sm:w-72">
+              <div className="relative w-full sm:w-80">
                 <span className="material-symbols-outlined absolute left-3 top-2.5 text-sm text-[#8391ac]">
                   search
                 </span>
@@ -486,49 +550,352 @@ export const MszShopModal: React.FC<MszShopModalProps> = ({
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Rechercher par nom, élément..."
-                  className="w-full bg-[#0a101f] border border-[#2e3b55] rounded-xl pl-9 pr-3 py-2 text-xs text-[#dce2f8] focus:border-[#f2ca50] focus:outline-none"
+                  placeholder="Rechercher par nom, élément, série..."
+                  className="w-full bg-[#0a101f] border border-[#2e3b55] rounded-xl pl-9 pr-8 py-2 text-xs text-[#dce2f8] focus:border-[#f2ca50] focus:outline-none placeholder:text-[#526079]"
                 />
-              </div>
-
-              {/* Rarity filter pills */}
-              <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto">
-                <span className="text-[10px] uppercase font-bold text-[#8391ac] font-mono px-2">
-                  Rareté :
-                </span>
-                {['all', 'Commune', 'Rare', 'Épique', 'Légendaire', 'Mythique', 'Souveraine'].map((r) => (
+                {searchQuery && (
                   <button
-                    key={r}
                     type="button"
-                    onClick={() => setSelectedRarity(r)}
-                    className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-medium transition-all cursor-pointer ${
-                      selectedRarity === r
-                        ? 'bg-[#f2ca50] text-[#0c1322] font-bold shadow-sm'
-                        : 'bg-[#19243d] text-[#8391ac] hover:text-white'
-                    }`}
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-2.5 top-2.5 text-[#8391ac] hover:text-white"
                   >
-                    {r === 'all' ? 'Toutes' : r}
+                    <span className="material-symbols-outlined text-xs">close</span>
                   </button>
-                ))}
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 text-xs font-mono text-[#8391ac]">
+                <span>Affichage :</span>
+                <span className="font-bold text-[#ffd700]">
+                  {filteredShopCharacters.length} / {MSZ_CHARACTERS.length} cartes
+                </span>
+                <span className="text-white/20">&bull;</span>
+                <span className="text-[#38bdf8]">6 Rangs de Rareté</span>
               </div>
             </div>
 
-            {/* Characters 3D Cards Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 justify-items-center">
-              {filteredShopCharacters.map((character) => (
-                <MszCard3D
-                  key={character.id}
-                  character={character}
-                  isOwned={ownedIds.includes(character.id)}
-                  ownedInstance={getInstanceForChar(character.id)}
-                  isEquipped={equippedId === character.id}
-                  userCoins={balance}
-                  onBuy={handleBuyCharacter}
-                  onEquip={handleEquipCharacter}
-                  onInspect={(char) => setInspectedCharacter(char)}
-                />
-              ))}
+            {/* ============================================================== */}
+            {/* ONGLETS FILTRABLES PAR RARETÉ (VISUAL RARITY TABS) */}
+            {/* ============================================================== */}
+            <div className="flex flex-col gap-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs uppercase font-bold tracking-wider text-[#d4c78f] flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-sm text-[#ffd700]">diamond</span>
+                  Onglets Filtrables par Rareté & Rang de Puissance
+                </span>
+                <span className="text-[10px] text-[#8391ac] font-mono hidden sm:inline">
+                  Cliquez sur un rang pour isoler sa catégorie de cartes
+                </span>
+              </div>
+
+              {/* Rarity Tabs Pill Bar */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+                {/* All Rarities Tab */}
+                <button
+                  type="button"
+                  onClick={() => setSelectedRarity('all')}
+                  className={`p-2.5 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer relative overflow-hidden ${
+                    selectedRarity === 'all'
+                      ? 'bg-gradient-to-b from-[#f2ca50] to-[#ffd700] text-[#0c1322] font-black shadow-lg shadow-[#f2ca50]/25 ring-2 ring-[#ffd700]'
+                      : 'bg-[#101726] border border-[#232a3a] text-[#8391ac] hover:border-white/20 hover:text-white'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-base">apps</span>
+                    <span className="text-xs font-mono font-bold tracking-wide">Toutes</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span
+                      className={`text-[9px] font-mono px-1.5 py-0.2 rounded-full ${
+                        selectedRarity === 'all'
+                          ? 'bg-[#0c1322]/25 text-[#0c1322] font-black'
+                          : 'bg-[#19243d] text-[#38bdf8]'
+                      }`}
+                    >
+                      {rarityCounts.all} cartes
+                    </span>
+                  </div>
+                </button>
+
+                {/* Individual Rarity Tabs with Glow & Golden Borders */}
+                {RARITY_ORDER.map((rarityKey) => {
+                  const config = RARITY_CONFIGS[rarityKey];
+                  const isSelected = selectedRarity === rarityKey;
+                  const count = rarityCounts[rarityKey] || 0;
+
+                  return (
+                    <button
+                      key={rarityKey}
+                      type="button"
+                      onClick={() => setSelectedRarity(rarityKey)}
+                      className={`p-2.5 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer relative overflow-hidden text-center ${
+                        isSelected
+                          ? `${config.badgeClass} ${
+                              config.goldenBorder
+                                ? 'ring-2 ring-[#ffd700] shadow-[0_0_22px_rgba(255,215,0,0.6)]'
+                                : 'ring-2 ring-white/40'
+                            }`
+                          : 'bg-[#101726] border border-[#232a3a] text-[#8391ac] hover:border-white/25 hover:text-white'
+                      }`}
+                      style={
+                        isSelected
+                          ? { boxShadow: config.glowShadow }
+                          : undefined
+                      }
+                    >
+                      {/* Golden Shimmer Bar for Legendary, Mythic & Sovereign */}
+                      {config.goldenBorder && (
+                        <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-amber-400 via-[#ffd700] to-yellow-300" />
+                      )}
+
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className="material-symbols-outlined text-base"
+                          style={{
+                            color: isSelected ? undefined : config.accentColor,
+                            fontVariationSettings: "'FILL' 1"
+                          }}
+                        >
+                          {config.icon}
+                        </span>
+                        <span className="text-xs font-mono font-black tracking-wide">
+                          {config.label}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <span
+                          className={`text-[8px] font-mono px-1.5 py-0.2 rounded-full font-bold ${
+                            isSelected
+                              ? 'bg-black/30 text-white'
+                              : 'bg-[#19243d] text-[#cbd5e1]'
+                          }`}
+                        >
+                          {config.levelRange.replace('Niveau ', 'Niv. ').replace('Niveaux ', 'Niv. ')}
+                        </span>
+                        <span
+                          className={`text-[9px] font-mono font-black px-1.5 py-0.2 rounded-full ${
+                            isSelected
+                              ? 'bg-white/20 text-white'
+                              : 'bg-[#070e1d] text-[#f2ca50]'
+                          }`}
+                        >
+                          {count}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
+
+            {/* ============================================================== */}
+            {/* CARDS DISPLAY: ORGANIZED BY RARITY SECTIONS OR SINGLE RARITY SPOTLIGHT */}
+            {/* ============================================================== */}
+            {filteredShopCharacters.length === 0 ? (
+              /* Empty state if search or category returns 0 characters */
+              <div className="p-10 rounded-3xl bg-[#0c1426] border border-[#232a3a] text-center flex flex-col items-center justify-center gap-3">
+                <span className="material-symbols-outlined text-4xl text-[#8391ac]">search_off</span>
+                <h3 className="font-serif text-lg font-bold text-white">
+                  Aucun personnage ne correspond à vos critères
+                </h3>
+                <p className="text-xs text-[#8391ac] max-w-sm">
+                  Essayez de réinitialiser la rareté sélectionnée ou le terme de recherche pour afficher les cartes d’élite.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedRarity('all');
+                    setSelectedCategory('all');
+                    setSearchQuery('');
+                  }}
+                  className="px-4 py-2 rounded-xl bg-[#19243d] hover:bg-[#25355a] text-[#ffe082] text-xs font-mono font-bold border border-[#f2ca50]/30 transition-all cursor-pointer"
+                >
+                  Réinitialiser tous les filtres
+                </button>
+              </div>
+            ) : selectedRarity === 'all' ? (
+              /* MODE 1: ALL RARITIES ORGANIZED INTO DISTINCT LABELED RARITY TIERS */
+              <div className="flex flex-col gap-8">
+                {Array.from(charactersByRarity.entries()).map(([rarity, chars]) => {
+                  const config = RARITY_CONFIGS[rarity];
+
+                  return (
+                    <section
+                      key={rarity}
+                      className="p-5 sm:p-6 rounded-3xl bg-[#0c1426]/75 border border-[#232a3a] shadow-xl flex flex-col gap-5 relative overflow-hidden"
+                    >
+                      {/* Subtle Ambient Halo */}
+                      <div
+                        className="absolute top-0 right-0 w-64 h-64 rounded-full blur-3xl pointer-events-none opacity-10"
+                        style={{ backgroundColor: config.accentColor }}
+                      />
+
+                      {/* Tier Section Header Banner with Glowing Badge & Golden Border */}
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-white/10 pb-4 relative z-10">
+                        <div className="flex items-center gap-3.5 flex-wrap">
+                          {/* Visual Rarity Badge with Glow & Golden Border */}
+                          <div
+                            className={`px-3 py-1.5 rounded-xl font-mono text-xs uppercase flex items-center gap-2 ${
+                              config.badgeClass
+                            } ${
+                              config.goldenBorder
+                                ? 'ring-2 ring-[#ffd700]/70'
+                                : ''
+                            }`}
+                            style={{ boxShadow: config.glowShadow }}
+                          >
+                            <span
+                              className="material-symbols-outlined text-base"
+                              style={{
+                                color: config.accentColor,
+                                fontVariationSettings: "'FILL' 1"
+                              }}
+                            >
+                              {config.icon}
+                            </span>
+                            <span className="font-black tracking-wider text-sm">
+                              {config.label}
+                            </span>
+                          </div>
+
+                          <div className="flex flex-col">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-mono font-black text-[#f2ca50] uppercase tracking-wider">
+                                {config.tierTag}
+                              </span>
+                              <span className="text-white/30">•</span>
+                              <span className="text-[10px] font-mono text-[#38bdf8] font-bold">
+                                {config.levelRange}
+                              </span>
+                            </div>
+                            <p className="text-xs text-[#cbd5e1] mt-0.5 line-clamp-1 max-w-xl">
+                              {config.description}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Right tags: Golden Border indicator & Card counts */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          {config.goldenBorder && (
+                            <span className="px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-500/20 via-[#ffd700]/15 to-yellow-500/20 border border-amber-400/60 text-[#ffd700] text-[10px] font-mono font-black flex items-center gap-1 shadow-sm">
+                              <span className="material-symbols-outlined text-xs">workspace_premium</span>
+                              Bordure Dorée
+                            </span>
+                          )}
+                          <span className="px-2.5 py-1 rounded-xl bg-[#070e1d] border border-white/10 text-[10px] font-mono text-[#d4c78f] font-bold">
+                            {chars.length} {chars.length > 1 ? 'cartes' : 'carte'} &bull; 100 Ex.
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 3D Cards Grid for this Rarity Tier */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 justify-items-center relative z-10">
+                        {chars.map((character) => (
+                          <MszCard3D
+                            key={character.id}
+                            character={character}
+                            isOwned={ownedIds.includes(character.id)}
+                            ownedInstance={getInstanceForChar(character.id)}
+                            isEquipped={equippedId === character.id}
+                            userCoins={balance}
+                            onBuy={handleBuyCharacter}
+                            onEquip={handleEquipCharacter}
+                            onInspect={(char, startZoomed) => handleOpenInspect(char, startZoomed ?? true)}
+                            onZoom={(char) => handleOpenInspect(char, true)}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
+            ) : (
+              /* MODE 2: SINGLE RARITY TAB SELECTED WITH SPOTLIGHT HERO BANNER */
+              <div className="flex flex-col gap-6">
+                {(() => {
+                  const config = RARITY_CONFIGS[selectedRarity];
+                  return (
+                    <div
+                      className={`p-5 sm:p-6 rounded-3xl bg-[#0c1426] border shadow-2xl relative overflow-hidden flex flex-col sm:flex-row items-center justify-between gap-5 ${
+                        config.goldenBorder
+                          ? 'border-2 border-[#ffd700]/70 ring-1 ring-[#ffd700]/40'
+                          : 'border-white/10'
+                      }`}
+                      style={{ boxShadow: config.glowShadow }}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div
+                          className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 ${config.badgeClass}`}
+                        >
+                          <span
+                            className="material-symbols-outlined text-3xl"
+                            style={{
+                              color: config.accentColor,
+                              fontVariationSettings: "'FILL' 1"
+                            }}
+                          >
+                            {config.icon}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-mono font-black uppercase text-[#f2ca50]">
+                              {config.tierTag}
+                            </span>
+                            <span className="text-white/30">•</span>
+                            <span className="text-xs font-mono text-[#38bdf8] font-bold">
+                              {config.levelRange}
+                            </span>
+                            {config.goldenBorder && (
+                              <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-[#ffd700] text-[9px] font-mono font-bold border border-amber-400/40">
+                                Finition Dorée Prestige
+                              </span>
+                            )}
+                          </div>
+                          <h3 className="font-serif text-xl sm:text-2xl font-black text-white">
+                            Rang : Cartes {config.label}s
+                          </h3>
+                          <p className="text-xs text-[#cbd5e1] max-w-xl leading-relaxed">
+                            {config.description}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedRarity('all')}
+                          className="px-3 py-1.5 rounded-xl bg-[#19243d] hover:bg-[#25355a] text-[#8391ac] hover:text-white text-xs font-mono transition-all flex items-center gap-1 cursor-pointer"
+                        >
+                          <span className="material-symbols-outlined text-sm">visibility</span>
+                          <span>Voir Toutes les Raretés</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Cards Grid for Selected Rarity */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 justify-items-center">
+                  {filteredShopCharacters.map((character) => (
+                    <MszCard3D
+                      key={character.id}
+                      character={character}
+                      isOwned={ownedIds.includes(character.id)}
+                      ownedInstance={getInstanceForChar(character.id)}
+                      isEquipped={equippedId === character.id}
+                      userCoins={balance}
+                      onBuy={handleBuyCharacter}
+                      onEquip={handleEquipCharacter}
+                      onInspect={(char, startZoomed) => handleOpenInspect(char, startZoomed ?? true)}
+                      onZoom={(char) => handleOpenInspect(char, true)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -556,7 +923,7 @@ export const MszShopModal: React.FC<MszShopModalProps> = ({
               <div className="flex items-center gap-3 font-mono">
                 <div className="text-center px-4 py-2 rounded-xl bg-[#0a101f] border border-white/5">
                   <span className="text-[10px] text-[#8391ac] uppercase block">Cartes Possédées</span>
-                  <span className="text-lg font-black text-[#f2ca50]">{ownedCharacters.length}/8</span>
+                  <span className="text-lg font-black text-[#f2ca50]">{ownedCharacters.length}/{MSZ_CHARACTERS.length}</span>
                 </div>
                 <div className="text-center px-4 py-2 rounded-xl bg-[#0a101f] border border-white/5">
                   <span className="text-[10px] text-[#8391ac] uppercase block">Niveau Moyen</span>
@@ -581,7 +948,8 @@ export const MszShopModal: React.FC<MszShopModalProps> = ({
                   userCoins={balance}
                   onEquip={handleEquipCharacter}
                   onSell={handleOpenSellModal}
-                  onInspect={(char) => setInspectedCharacter(char)}
+                  onInspect={(char, startZoomed) => handleOpenInspect(char, startZoomed ?? true)}
+                  onZoom={(char) => handleOpenInspect(char, true)}
                 />
               ))}
             </div>
@@ -660,6 +1028,30 @@ export const MszShopModal: React.FC<MszShopModalProps> = ({
                             <h4 className="font-serif text-base font-bold text-white">
                               {character.name}
                             </h4>
+                            {/* Visual Rarity Badge in Marketplace */}
+                            {(() => {
+                              const rConfig =
+                                RARITY_CONFIGS[character.rarity as CharacterRarity] ||
+                                RARITY_CONFIGS['Commune'];
+                              return (
+                                <span
+                                  className={`text-[9px] font-mono uppercase px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${
+                                    rConfig.badgeClass
+                                  } ${rConfig.goldenBorder ? 'ring-1 ring-[#ffd700]/60' : ''}`}
+                                >
+                                  <span
+                                    className="material-symbols-outlined text-[10px]"
+                                    style={{
+                                      color: rConfig.accentColor,
+                                      fontVariationSettings: "'FILL' 1"
+                                    }}
+                                  >
+                                    {rConfig.icon}
+                                  </span>
+                                  <span>{rConfig.label}</span>
+                                </span>
+                              );
+                            })()}
                             <span className="text-[10px] font-mono font-black text-[#ffd700] px-2 py-0.5 rounded bg-[#0a101f] border border-[#f2ca50]/40">
                               N° {item.editionNumber}/{item.maxSupply || 100} &bull; {item.serialNumber}
                             </span>
@@ -798,43 +1190,511 @@ export const MszShopModal: React.FC<MszShopModalProps> = ({
       {/* ================================================================ */}
       {/* DETAILED CARD INSPECT MODAL (RECTO / VERSO FULLSCREEN PREVIEW) */}
       {/* ================================================================ */}
+      {/* ================================================================ */}
+      {/* STUDIO D'EXAMEN ARTISTIQUE & ZOOM HD (MODAL HAUTE DÉFINITION) */}
+      {/* ================================================================ */}
       {inspectedCharacter && (
         <div
-          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-xl flex items-center justify-center p-4 animate-fadeIn"
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-2xl flex items-center justify-center p-3 sm:p-5 animate-fadeIn"
           onClick={() => setInspectedCharacter(null)}
         >
           <div
-            className="w-full max-w-md p-6 rounded-3xl bg-[#0c1426] border-2 border-[#f2ca50]/70 shadow-2xl flex flex-col items-center gap-5 relative animate-scaleUp"
+            className="w-full max-w-4xl max-h-[92vh] overflow-y-auto rounded-3xl bg-gradient-to-br from-[#0c1426] via-[#0f1b33] to-[#070e1c] border-2 border-[#f2ca50]/70 shadow-[0_0_50px_rgba(242,202,80,0.25)] flex flex-col relative animate-scaleUp scrollbar-thin"
             onClick={(e) => e.stopPropagation()}
           >
-            <button
-              type="button"
-              onClick={() => setInspectedCharacter(null)}
-              className="absolute top-4 right-4 w-9 h-9 rounded-full bg-[#19243d] flex items-center justify-center text-[#8391ac] hover:text-white"
-            >
-              <span className="material-symbols-outlined text-sm">close</span>
-            </button>
+            {/* Header: Title, Rarity Badge & Mode Switcher */}
+            <div className="sticky top-0 z-20 px-5 sm:px-7 py-4 bg-[#0a1222]/95 backdrop-blur-md border-b border-white/10 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono text-[#f2ca50] uppercase font-bold tracking-wider">
+                      {inspectedCharacter.categoryName} • Niv. {inspectedCharacter.level}
+                    </span>
+                    <span className="text-white/30">•</span>
+                    <span className="text-[10px] font-mono text-[#38bdf8] font-bold">
+                      {inspectedCharacter.element}
+                    </span>
+                  </div>
+                  <h3 className="font-serif text-xl sm:text-2xl font-black text-white flex items-center gap-2.5">
+                    {inspectedCharacter.name}
+                    {/* Visual Rarity Badge in Header */}
+                    {(() => {
+                      const rConfig =
+                        RARITY_CONFIGS[inspectedCharacter.rarity as CharacterRarity] ||
+                        RARITY_CONFIGS['Commune'];
+                      return (
+                        <span
+                          className={`text-[10px] font-mono uppercase px-2.5 py-0.5 rounded-full inline-flex items-center gap-1.5 ${
+                            rConfig.badgeClass
+                          } ${rConfig.goldenBorder ? 'ring-1 ring-[#ffd700]' : ''}`}
+                          style={{ boxShadow: rConfig.glowShadow }}
+                        >
+                          <span
+                            className="material-symbols-outlined text-xs"
+                            style={{
+                              color: rConfig.accentColor,
+                              fontVariationSettings: "'FILL' 1"
+                            }}
+                          >
+                            {rConfig.icon}
+                          </span>
+                          <span>{rConfig.label}</span>
+                        </span>
+                      );
+                    })()}
+                  </h3>
+                </div>
+              </div>
 
-            <MszCard3D
-              character={inspectedCharacter}
-              isOwned={ownedIds.includes(inspectedCharacter.id)}
-              ownedInstance={getInstanceForChar(inspectedCharacter.id)}
-              isEquipped={equippedId === inspectedCharacter.id}
-              userCoins={balance}
-              onBuy={handleBuyCharacter}
-              onEquip={handleEquipCharacter}
-              onSell={handleOpenSellModal}
-            />
+              {/* Mode Switcher & Close button */}
+              <div className="flex items-center gap-2">
+                <div className="hidden sm:flex items-center bg-[#070e1d] p-1 rounded-xl border border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => setInspectMode('zoomLoupe')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      inspectMode === 'zoomLoupe'
+                        ? 'bg-[#38bdf8] text-[#0c1322] shadow-sm'
+                        : 'text-[#8391ac] hover:text-white'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-sm">zoom_in</span>
+                    <span>Zoom Loupe HD</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInspectMode('card3d')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      inspectMode === 'card3d'
+                        ? 'bg-[#f2ca50] text-[#0c1322] shadow-sm'
+                        : 'text-[#8391ac] hover:text-white'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-sm">3d_rotation</span>
+                    <span>Carte 3D</span>
+                  </button>
+                </div>
 
-            {/* Audio Quote button */}
-            <button
-              type="button"
-              onClick={() => handlePlayQuoteAudio(inspectedCharacter.loreQuote)}
-              className="px-4 py-2 rounded-xl bg-[#19243d] hover:bg-[#25355a] border border-[#f2ca50]/40 text-[#ffe082] text-xs font-mono font-bold flex items-center gap-2 transition-all cursor-pointer shadow-md active:scale-95"
-            >
-              <span className="material-symbols-outlined text-sm text-[#f2ca50]">volume_up</span>
-              <span>Écouter la Devise Oratoire de {inspectedCharacter.name}</span>
-            </button>
+                <button
+                  type="button"
+                  onClick={() => setInspectedCharacter(null)}
+                  className="w-9 h-9 rounded-full bg-[#19243d] hover:bg-[#25355a] text-[#8391ac] hover:text-white flex items-center justify-center transition-all cursor-pointer"
+                  title="Fermer l'examen"
+                >
+                  <span className="material-symbols-outlined text-sm">close</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Mobile Mode Switcher Bar */}
+            <div className="sm:hidden px-5 py-2 bg-[#070e1d] border-b border-white/5 flex items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => setInspectMode('zoomLoupe')}
+                className={`px-3 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 ${
+                  inspectMode === 'zoomLoupe'
+                    ? 'bg-[#38bdf8] text-[#0c1322]'
+                    : 'text-[#8391ac] bg-[#121929]'
+                }`}
+              >
+                <span className="material-symbols-outlined text-xs">zoom_in</span>
+                <span>Zoom Loupe HD</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setInspectMode('card3d')}
+                className={`px-3 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 ${
+                  inspectMode === 'card3d'
+                    ? 'bg-[#f2ca50] text-[#0c1322]'
+                    : 'text-[#8391ac] bg-[#121929]'
+                }`}
+              >
+                <span className="material-symbols-outlined text-xs">3d_rotation</span>
+                <span>Carte 3D</span>
+              </button>
+            </div>
+
+            {/* Content Body */}
+            {inspectMode === 'zoomLoupe' ? (
+              /* ============================================================== */
+              /* MODE ZOOM LOUPE HD: INTERACTIVE MAGNIFIER + COMFORTABLE TEXT */
+              /* ============================================================== */
+              <div className="p-5 sm:p-7 flex flex-col lg:flex-row gap-6 items-start">
+                {/* Left Column: Interactive Loupe Viewport */}
+                <div className="w-full lg:w-[48%] flex flex-col gap-3">
+                  <div className="flex items-center justify-between text-xs font-mono text-[#8391ac]">
+                    <span className="flex items-center gap-1 text-[#38bdf8]">
+                      <span className="material-symbols-outlined text-sm">center_focus_strong</span>
+                      Viseur Loupe Artistique HD
+                    </span>
+                    <span className="text-[#ffd700] font-bold">
+                      {zoomScale.toFixed(2)}x &bull; X:{panOffset.x}% Y:{panOffset.y}%
+                    </span>
+                  </div>
+
+                  {/* Artwork Viewport with Cursor Tracking & Magnification */}
+                  <div
+                    onMouseMove={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const x = Math.max(0, Math.min(100, Math.round(((e.clientX - rect.left) / rect.width) * 100)));
+                      const y = Math.max(0, Math.min(100, Math.round(((e.clientY - rect.top) / rect.height) * 100)));
+                      setPanOffset({ x, y });
+                    }}
+                    onTouchMove={(e) => {
+                      if (e.touches.length === 0) return;
+                      const touch = e.touches[0];
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const x = Math.max(0, Math.min(100, Math.round(((touch.clientX - rect.left) / rect.width) * 100)));
+                      const y = Math.max(0, Math.min(100, Math.round(((touch.clientY - rect.top) / rect.height) * 100)));
+                      setPanOffset({ x, y });
+                    }}
+                    className="relative w-full aspect-square max-h-[380px] rounded-2xl overflow-hidden border-2 border-white/20 bg-[#070e1d] shadow-2xl cursor-crosshair group/zoom select-none flex items-center justify-center"
+                    style={{
+                      boxShadow: RARITY_CONFIGS[inspectedCharacter.rarity as CharacterRarity]?.glowShadow
+                    }}
+                  >
+                    {/* High-Resolution Artwork Image with Dynamic Transform Origin */}
+                    <img
+                      src={inspectedCharacter.image}
+                      alt={inspectedCharacter.name}
+                      className="w-full h-full object-cover transition-transform duration-75 ease-out pointer-events-none"
+                      style={{
+                        transform: `scale(${zoomScale})`,
+                        transformOrigin: `${panOffset.x}% ${panOffset.y}%`
+                      }}
+                      onError={(e) => {
+                        const target = e.currentTarget;
+                        if (!target.src.includes('/public/')) {
+                          target.src = `/public${inspectedCharacter.image}`;
+                        } else {
+                          target.src = '/assets/aistudio/VOLT.png';
+                        }
+                      }}
+                    />
+
+                    {/* Cybernetic Reticle Overlay */}
+                    <div className="absolute inset-0 pointer-events-none border border-cyan-400/20 mix-blend-screen">
+                      {/* Central Crosshairs Target */}
+                      <div
+                        className="absolute w-8 h-8 -ml-4 -mt-4 border border-[#38bdf8]/70 rounded-full transition-all duration-75 pointer-events-none flex items-center justify-center shadow-[0_0_10px_rgba(56,189,248,0.5)]"
+                        style={{
+                          left: `${panOffset.x}%`,
+                          top: `${panOffset.y}%`
+                        }}
+                      >
+                        <div className="w-1.5 h-1.5 bg-[#ffd700] rounded-full" />
+                      </div>
+                    </div>
+
+                    {/* Corner Tech Badges */}
+                    <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-[#070e1d]/80 border border-white/10 text-[9px] font-mono text-[#38bdf8] pointer-events-none">
+                      MACRO RES 4K
+                    </div>
+
+                    <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-[#070e1d]/80 border border-[#f2ca50]/30 text-[9px] font-mono text-[#ffd700] pointer-events-none">
+                      TIRAGE 100 EX.
+                    </div>
+                  </div>
+
+                  {/* Zoom Scale Buttons */}
+                  <div className="flex flex-col gap-2 pt-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-mono text-[#8391ac]">Facteur d'Agrandissement :</span>
+                      <div className="flex items-center gap-1">
+                        {[1.0, 1.5, 2.0, 2.75].map((scale) => (
+                          <button
+                            key={scale}
+                            type="button"
+                            onClick={() => setZoomScale(scale)}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                              zoomScale === scale
+                                ? 'bg-[#38bdf8] text-[#0c1322] shadow-sm'
+                                : 'bg-[#151f33] text-[#8391ac] hover:text-white'
+                            }`}
+                          >
+                            {scale.toFixed( scale === 1 ? 0 : scale === 2 ? 0 : 2 )}x
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Preset Focus Points */}
+                    <div className="flex items-center gap-1.5 overflow-x-auto text-[10px] font-mono pt-1">
+                      <span className="text-[#8391ac]">Cible :</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPanOffset({ x: 50, y: 35 });
+                          setZoomScale(2.2);
+                        }}
+                        className="px-2 py-0.5 rounded-md bg-[#121929] hover:bg-[#1f2c48] text-[#dce2f8] border border-white/5"
+                      >
+                        🎯 Visière Cyber
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPanOffset({ x: 50, y: 65 });
+                          setZoomScale(2.2);
+                        }}
+                        className="px-2 py-0.5 rounded-md bg-[#121929] hover:bg-[#1f2c48] text-[#dce2f8] border border-white/5"
+                      >
+                        ⚡ Emblème
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPanOffset({ x: 25, y: 55 });
+                          setZoomScale(2.0);
+                        }}
+                        className="px-2 py-0.5 rounded-md bg-[#121929] hover:bg-[#1f2c48] text-[#dce2f8] border border-white/5"
+                      >
+                        🛡️ Épaulettes
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPanOffset({ x: 50, y: 50 });
+                          setZoomScale(1.0);
+                        }}
+                        className="px-2 py-0.5 rounded-md bg-[#121929] hover:bg-[#1f2c48] text-[#8391ac] border border-white/5"
+                      >
+                        🔄 Vue Globale
+                      </button>
+                    </div>
+
+                    <p className="text-[10px] text-[#64748b] leading-tight pt-1">
+                      Astuce : Déplacez votre souris ou votre doigt sur l'image pour explorer les moindres nuances artistiques en temps réel.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Right Column: Comfortable Textual Lore & Stats */}
+                <div className="w-full lg:w-[52%] flex flex-col gap-4">
+                  {/* Oral Lore Quote with Audio Playback */}
+                  <div className="p-3.5 sm:p-4 rounded-2xl bg-[#070e1d] border border-[#f2ca50]/40 flex flex-col gap-2 shadow-inner">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-mono text-[#f2ca50] uppercase font-bold flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-sm">record_voice_over</span>
+                        Devise Oratoire Officielle
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() => handlePlayQuoteAudio(inspectedCharacter.loreQuote)}
+                        className="px-2.5 py-1 rounded-lg bg-[#19243d] hover:bg-[#25355a] border border-[#f2ca50]/30 text-[#ffe082] text-[10px] font-mono font-bold flex items-center gap-1 transition-all cursor-pointer shadow-sm active:scale-95"
+                        title="Écouter la prononciation"
+                      >
+                        <span className="material-symbols-outlined text-xs text-[#f2ca50]">volume_up</span>
+                        <span>Écouter</span>
+                      </button>
+                    </div>
+
+                    <blockquote className="font-serif italic text-xs sm:text-sm text-[#ffe082] leading-relaxed">
+                      « {inspectedCharacter.loreQuote} »
+                    </blockquote>
+                  </div>
+
+                  {/* Character Narrative Biography */}
+                  <div className="flex flex-col gap-1.5 bg-[#091122] p-4 rounded-2xl border border-white/5">
+                    <span className="text-[10px] font-mono uppercase text-[#8391ac] font-bold tracking-wider">
+                      Présentation & Récit du Personnage :
+                    </span>
+                    <p className="text-xs sm:text-[13px] text-[#cbd5e1] leading-relaxed">
+                      {inspectedCharacter.description}
+                    </p>
+                  </div>
+
+                  {/* Radar / 4 Oratorical Stats Gauges */}
+                  <div className="flex flex-col gap-1.5 bg-[#091122] p-4 rounded-2xl border border-white/5">
+                    <span className="text-[10px] font-mono uppercase text-[#8391ac] font-bold tracking-wider mb-1">
+                      Matrice des Compétences Oratoires (Niv. {inspectedCharacter.level}) :
+                    </span>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* Élocution */}
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center justify-between text-xs font-mono">
+                          <span className="text-[#8391ac]">Élocution</span>
+                          <span className="text-cyan-400 font-bold">{inspectedCharacter.stats.elocution}/100</span>
+                        </div>
+                        <div className="h-1.5 bg-[#141e33] rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-cyan-400 rounded-full"
+                            style={{ width: `${inspectedCharacter.stats.elocution}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Mémoire */}
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center justify-between text-xs font-mono">
+                          <span className="text-[#8391ac]">Mémoire</span>
+                          <span className="text-purple-400 font-bold">{inspectedCharacter.stats.memoire}/100</span>
+                        </div>
+                        <div className="h-1.5 bg-[#141e33] rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-purple-400 rounded-full"
+                            style={{ width: `${inspectedCharacter.stats.memoire}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Vitesse */}
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center justify-between text-xs font-mono">
+                          <span className="text-[#8391ac]">Vitesse</span>
+                          <span className="text-amber-400 font-bold">{inspectedCharacter.stats.vitesse}/100</span>
+                        </div>
+                        <div className="h-1.5 bg-[#141e33] rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-amber-400 rounded-full"
+                            style={{ width: `${inspectedCharacter.stats.vitesse}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Maîtrise */}
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center justify-between text-xs font-mono">
+                          <span className="text-[#8391ac]">Maîtrise</span>
+                          <span className="text-emerald-400 font-bold">{inspectedCharacter.stats.maitrise}/100</span>
+                        </div>
+                        <div className="h-1.5 bg-[#141e33] rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-emerald-400 rounded-full"
+                            style={{ width: `${inspectedCharacter.stats.maitrise}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Passive Bonus Pill */}
+                  <div className="p-3 rounded-2xl bg-gradient-to-r from-amber-500/10 to-yellow-500/10 border border-[#f2ca50]/30 flex items-center gap-2.5 text-xs text-[#ffe082]">
+                    <span className="material-symbols-outlined text-lg text-[#f2ca50] shrink-0">
+                      military_tech
+                    </span>
+                    <span className="leading-snug">
+                      <strong className="text-[#ffd700]">Bonus Actif :</strong> {inspectedCharacter.passiveBonus}
+                    </span>
+                  </div>
+
+                  {/* Blockchain & Serial Identity Certificate */}
+                  <div className="p-3.5 rounded-2xl bg-[#070e1d] border border-white/10 flex items-center justify-between text-xs font-mono">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] text-[#8391ac] uppercase">Matricule Unique Certifié</span>
+                      <span className="text-[#ffd700] font-black">
+                        {getInstanceForChar(inspectedCharacter.id)
+                          ? getInstanceForChar(inspectedCharacter.id)?.serialCode
+                          : `${inspectedCharacter.serialPrefix}-#001/100`}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-col items-end">
+                      <span className="text-[10px] text-[#8391ac] uppercase">Tirage Limité Mondial</span>
+                      <span className="text-white font-bold">100 Exemplaires Absolus</span>
+                    </div>
+                  </div>
+
+                  {/* Bottom Action Footer inside Zoom View */}
+                  <div className="pt-2 flex items-center justify-between gap-3 border-t border-white/10 mt-auto">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-mono text-[#8391ac]">Prix Officiel</span>
+                      <span className="font-mono text-base font-black text-[#ffd700]">
+                        {inspectedCharacter.price} MSZ Coins
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {equippedId === inspectedCharacter.id ? (
+                        <span className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-300 text-slate-950 text-xs font-mono font-bold flex items-center gap-1.5 shadow-md">
+                          <span className="material-symbols-outlined text-sm">verified</span>
+                          Actuellement Équipé
+                        </span>
+                      ) : ownedIds.includes(inspectedCharacter.id) ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleEquipCharacter(inspectedCharacter)}
+                            className="px-4 py-2 rounded-xl bg-[#1e293b] hover:bg-[#f2ca50] text-[#ffe082] hover:text-[#0c1322] border border-[#f2ca50]/40 text-xs font-mono font-bold transition-all shadow-sm cursor-pointer"
+                          >
+                            Équiper sur mon Profil
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setInspectedCharacter(null);
+                              handleOpenSellModal(inspectedCharacter);
+                            }}
+                            className="px-3.5 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white border border-rose-500/40 text-xs font-mono font-bold transition-all cursor-pointer"
+                          >
+                            Vendre P2P
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleBuyCharacter(inspectedCharacter)}
+                          disabled={balance < inspectedCharacter.price}
+                          className={`px-5 py-2 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer ${
+                            balance >= inspectedCharacter.price
+                              ? 'bg-gradient-to-r from-[#f2ca50] to-[#ffd700] hover:from-[#ffe088] hover:to-[#ffe566] text-[#2c2000]'
+                              : 'bg-[#1e293b] text-[#8391ac] border border-white/10 opacity-70'
+                          }`}
+                        >
+                          <span className="material-symbols-outlined text-sm">shopping_bag</span>
+                          <span>Acheter ({inspectedCharacter.price} MSZ)</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* ============================================================== */
+              /* MODE CARTE 3D MANIPULABLE (RECTO / VERSO) */
+              /* ============================================================== */
+              <div className="p-6 sm:p-8 flex flex-col items-center justify-center gap-6">
+                <div className="flex items-center justify-center">
+                  <MszCard3D
+                    character={inspectedCharacter}
+                    isOwned={ownedIds.includes(inspectedCharacter.id)}
+                    ownedInstance={getInstanceForChar(inspectedCharacter.id)}
+                    isEquipped={equippedId === inspectedCharacter.id}
+                    userCoins={balance}
+                    onBuy={handleBuyCharacter}
+                    onEquip={handleEquipCharacter}
+                    onSell={(c) => {
+                      setInspectedCharacter(null);
+                      handleOpenSellModal(c);
+                    }}
+                    onInspect={(c) => handleOpenInspect(c, true)}
+                    onZoom={(c) => handleOpenInspect(c, true)}
+                  />
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setInspectMode('zoomLoupe')}
+                    className="px-4 py-2 rounded-xl bg-[#38bdf8] hover:bg-[#7dd3fc] text-[#0c1322] text-xs font-mono font-black flex items-center gap-2 transition-all cursor-pointer shadow-md"
+                  >
+                    <span className="material-symbols-outlined text-sm">zoom_in</span>
+                    <span>Ouvrir le Mode Zoom Loupe HD</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handlePlayQuoteAudio(inspectedCharacter.loreQuote)}
+                    className="px-4 py-2 rounded-xl bg-[#19243d] hover:bg-[#25355a] border border-[#f2ca50]/40 text-[#ffe082] text-xs font-mono font-bold flex items-center gap-2 transition-all cursor-pointer shadow-md"
+                  >
+                    <span className="material-symbols-outlined text-sm text-[#f2ca50]">volume_up</span>
+                    <span>Écouter la Devise</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
