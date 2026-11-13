@@ -3,6 +3,7 @@ import type { UserProfile, CEFRLevel, AcademicBadge } from '../firebase/types';
 import { signInWithGoogle, signOutUser, isFirebaseConfigured, auth, isUserSignedInWithGoogle } from '../firebase/client';
 import { useAppTheme, type AppTheme, type FloralBorderWidth } from '../theme/ThemeContext';
 import { BadgesSection } from './BadgesSection';
+import { LinguisticRadarSection } from './LinguisticRadarSection';
 import { computeUserBadges } from '../data/badges';
 import { BadgeUnlockModal } from './BadgeUnlockModal';
 import { ErrorJournalModal } from './ErrorJournalModal';
@@ -504,6 +505,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             )}
           </div>
         </div>
+
+        {/* Section 'Statistiques Avancées' (Radar des compétences linguistiques) */}
+        <LinguisticRadarSection user={user} />
 
         {/* Section 'Journal d'Erreurs & Révision Ciblée' */}
         <div className="p-5 rounded-2xl bg-gradient-to-br from-[#1a2336] via-[#131b2c] to-[#0d1424] border border-[#f2ca50]/50 shadow-xl flex flex-col gap-3.5">

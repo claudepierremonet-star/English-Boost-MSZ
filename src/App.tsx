@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import { Header } from './components/Header';
 import { BottomNav, type TabKey } from './components/BottomNav';
 import { HeroSection } from './components/HeroSection';
 import { QuoteSection } from './components/QuoteSection';
 import { StackedCards } from './components/StackedCards';
 import { DailyChallengeCard } from './components/DailyChallengeCard';
+import { SevenDayStreakSection } from './components/SevenDayStreakSection';
+import { GlobalRankCard } from './components/GlobalRankCard';
 import { CabinetCuriosities } from './components/CabinetCuriosities';
 import { DashboardView } from './components/DashboardView';
 import { ProgressHistorySection } from './components/ProgressHistorySection';
@@ -28,14 +31,20 @@ import {
   getLocalUserProfile,
   subscribeToAuthState,
   updateUserProfile,
-  uploadHeroPhoto
+  uploadHeroPhoto,
+  getFavoriteLessonIds,
+  toggleFavoriteLesson
 } from './firebase/client';
 import type { UserProfile, CEFRLevel } from './firebase/types';
-import type { StudyFolio, CurioWord } from './data/curriculum';
+import { ALL_200_LESSONS, type StudyFolio, type CurioWord, type SchoolLesson } from './data/curriculum';
 import { calculateLevel } from './utils/levelUtils';
 import { LevelUpCelebrationModal, type LevelUpData } from './components/LevelUpCelebrationModal';
 import { XpGainToast, type XpToastInfo } from './components/XpGainToast';
 import { MszShopModal } from './components/MszShopModal';
+import { GlobalSearchBar } from './components/GlobalSearchBar';
+import { FloatingSpeakingStudioShortcut } from './components/FloatingSpeakingStudioShortcut';
+import { LessonDetailModal } from './components/LessonDetailModal';
+import { FavoriteLessonsQuickAccess } from './components/FavoriteLessonsQuickAccess';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabKey>('accueil');
@@ -62,6 +71,68 @@ export default function App() {
   const [isShopModalOpen, setIsShopModalOpen] = useState<boolean>(false);
   const [activeFolioForStudy, setActiveFolioForStudy] = useState<StudyFolio | null>(null);
 
+  // Active Lesson selected across Curriculum / Search
+  const [activeSelectedLesson, setActiveSelectedLesson] = useState<SchoolLesson | null>(() => {
+    try {
+      const saved = localStorage.getItem('eb_msz_selected_lesson');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [searchLessonForDetail, setSearchLessonForDetail] = useState<SchoolLesson | null>(null);
+  const [favoriteLessonIds, setFavoriteLessonIds] = useState<string[]>(() => getFavoriteLessonIds());
+
+  useEffect(() => {
+    const handleFavEvt = (e: Event) => {
+      const customEvt = e as CustomEvent<string[]>;
+      if (Array.isArray(customEvt.detail)) {
+        setFavoriteLessonIds(customEvt.detail);
+      } else {
+        setFavoriteLessonIds(getFavoriteLessonIds());
+      }
+    };
+    window.addEventListener('eb_favorites_updated', handleFavEvt);
+    return () => window.removeEventListener('eb_favorites_updated', handleFavEvt);
+  }, []);
+
+  const handleToggleFavoriteLesson = async (lessonId: string) => {
+    const nextIds = await toggleFavoriteLesson(lessonId);
+    setFavoriteLessonIds(nextIds);
+    setUser(getLocalUserProfile());
+  };
+
+  useEffect(() => {
+    if (activeSelectedLesson) {
+      localStorage.setItem('eb_msz_selected_lesson', JSON.stringify(activeSelectedLesson));
+    } else {
+      localStorage.removeItem('eb_msz_selected_lesson');
+    }
+  }, [activeSelectedLesson]);
+
+  useEffect(() => {
+    const handleSelectEvent = (e: Event) => {
+      const customEvt = e as CustomEvent<SchoolLesson | null>;
+      if (customEvt.detail !== undefined) {
+        setActiveSelectedLesson(customEvt.detail);
+      }
+    };
+    window.addEventListener('eb_select_lesson', handleSelectEvent);
+    return () => window.removeEventListener('eb_select_lesson', handleSelectEvent);
+  }, []);
+
+  const [curriculumModalLesson, setCurriculumModalLesson] = useState<SchoolLesson | null>(null);
+  useEffect(() => {
+    const handleSessionEvt = (e: Event) => {
+      const customEvt = e as CustomEvent<SchoolLesson | null>;
+      setCurriculumModalLesson(customEvt.detail ?? null);
+    };
+    window.addEventListener('eb_lesson_session_state', handleSessionEvt);
+    return () => window.removeEventListener('eb_lesson_session_state', handleSessionEvt);
+  }, []);
+
+  const activeSessionLesson = activeSelectedLesson || searchLessonForDetail || curriculumModalLesson;
+
   // Level-Up celebration modal & fluid XP Toast states (Framer Motion)
   const [levelUpData, setLevelUpData] = useState<LevelUpData | null>(null);
   const [isLevelUpModalOpen, setIsLevelUpModalOpen] = useState<boolean>(false);
@@ -85,6 +156,9 @@ export default function App() {
         setCurrentLevel(profile.level);
         if (profile.heroImageURL) {
           setHeroPhotoUrl(profile.heroImageURL);
+        }
+        if (Array.isArray(profile.favoriteLessonIds)) {
+          setFavoriteLessonIds(profile.favoriteLessonIds);
         }
       }
     });
@@ -112,10 +186,27 @@ export default function App() {
   };
 
   const handleUpdateStudyTarget = async (mins: number) => {
+    const latest = getLocalUserProfile();
     const updated = await updateUserProfile({
       stats: {
-        ...user.stats,
+        ...latest.stats,
         studyMinutesTarget: mins
+      }
+    });
+    setUser(updated);
+  };
+
+  const handleAddStudyMinute = async () => {
+    const latest = getLocalUserProfile();
+    const todayStr = new Date().toISOString().split('T')[0];
+    const isSameDay = latest.stats?.lastActiveDate === todayStr;
+    const baseTodayMinutes = isSameDay ? (latest.stats?.studyMinutesToday || 0) : 0;
+    const updated = await updateUserProfile({
+      stats: {
+        ...latest.stats,
+        studyMinutesToday: baseTodayMinutes + 1,
+        totalImmersionMinutes: (latest.stats?.totalImmersionMinutes || 0) + 1,
+        lastActiveDate: todayStr
       }
     });
     setUser(updated);
@@ -219,6 +310,9 @@ export default function App() {
         user={user}
         currentLevel={currentLevel}
         isAuthenticated={isAuthenticated}
+        activeLesson={activeSessionLesson}
+        onUpdateStudyTarget={handleUpdateStudyTarget}
+        onAddStudyMinute={handleAddStudyMinute}
         onOpenProfile={() => setIsProfileOpen(true)}
         onLevelChange={handleLevelChange}
         onOpenThemeSelector={() => setIsThemeSelectorOpen(true)}
@@ -287,6 +381,28 @@ export default function App() {
       <main className="flex-1 w-full pb-20">
         {activeTab === 'accueil' && (
           <div className="flex flex-col w-full max-w-4xl mx-auto animate-fadeIn">
+            {/* Barre de Recherche Globale (200 Leçons & Cartes Mémoire) */}
+            <GlobalSearchBar
+              onSelectLesson={(lesson) => {
+                setActiveSelectedLesson(lesson);
+                setSearchLessonForDetail(lesson);
+              }}
+              onSelectFlashcard={(_card) => {
+                setIsFlashcardsOpen(true);
+              }}
+              onOpenFlashcardsModal={() => setIsFlashcardsOpen(true)}
+              activeLessonId={activeSelectedLesson?.id}
+              favoriteLessonIds={favoriteLessonIds}
+              onToggleFavorite={handleToggleFavoriteLesson}
+            />
+
+            {/* Global Rank Card sous le Header */}
+            <GlobalRankCard
+              totalXp={user.stats?.totalXp || 4850}
+              weeklyXp={user.stats?.weeklyXp || 2450}
+              onNavigateLeaderboard={() => setActiveTab('classement')}
+            />
+
             {/* Monumental Hero Section with background-clip text & scroll zoom */}
             <HeroSection
               currentPhotoUrl={heroPhotoUrl}
@@ -337,10 +453,12 @@ export default function App() {
 
             {/* Editorial Banner for 6e-Terminale School Curriculum */}
             <div
-              onClick={() => setActiveTab('cursus')}
-              className="mx-4 sm:mx-6 my-4 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#191f2f] via-[#151b2b] to-[#232a3a] border border-[#f2ca50]/40 shadow-xl flex items-center justify-between gap-4 cursor-pointer hover:border-[#f2ca50] transition-all group"
+              className="mx-4 sm:mx-6 my-4 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#191f2f] via-[#151b2b] to-[#232a3a] border border-[#f2ca50]/40 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all group"
             >
-              <div className="flex items-center gap-3.5">
+              <div
+                onClick={() => setActiveTab('cursus')}
+                className="flex items-center gap-3.5 cursor-pointer flex-1"
+              >
                 <div className="w-12 h-12 rounded-xl bg-[#0c1322] border border-[#f2ca50]/40 flex items-center justify-center text-[#f2ca50] shadow-md group-hover:scale-105 transition-transform shrink-0">
                   <span className="material-symbols-outlined text-2xl">school</span>
                 </div>
@@ -352,6 +470,12 @@ export default function App() {
                     <span className="px-2 py-0.2 rounded-full bg-emerald-500/20 text-emerald-400 text-[9px] font-mono font-bold">
                       200 LEÇONS COMPLÈTES
                     </span>
+                    {activeSelectedLesson && (
+                      <span className="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/50 text-[#f2ca50] text-[10px] font-mono font-bold flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[13px] text-amber-400">check_circle</span>
+                        <span>Active : {activeSelectedLesson.class_label || activeSelectedLesson.class_level} · {activeSelectedLesson.title}</span>
+                      </span>
+                    )}
                   </div>
                   <h3 className="font-serif font-bold text-base sm:text-lg text-[#dce2f8] group-hover:text-[#f2ca50] transition-colors mt-0.5">
                     Programme Pédagogique par Classe & 10 Thèmes
@@ -361,14 +485,61 @@ export default function App() {
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
-                className="px-4 py-2.5 rounded-xl bg-[#f2ca50] text-[#3c2f00] font-bold text-xs uppercase tracking-wider hidden sm:flex items-center gap-1 shrink-0 group-hover:bg-[#ffe088] shadow-md"
-              >
-                <span>Explorer</span>
-                <span className="material-symbols-outlined text-sm">arrow_forward</span>
-              </button>
+              <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                {!activeSelectedLesson ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveSelectedLesson(ALL_200_LESSONS[0]);
+                    }}
+                    className="px-3 py-2 rounded-xl bg-[#f2ca50]/15 hover:bg-[#f2ca50]/25 border border-[#f2ca50]/50 text-[#f2ca50] font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95"
+                    title="Sélectionner la leçon 1 pour activer le raccourci du Studio d'Élocution"
+                  >
+                    <span className="material-symbols-outlined text-sm">bookmark_add</span>
+                    <span>Activer Leçon 1</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveSelectedLesson(null);
+                    }}
+                    className="px-3 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 font-bold text-xs uppercase tracking-wider flex items-center gap-1 transition-all cursor-pointer shadow-sm active:scale-95"
+                    title="Désélectionner la leçon active"
+                  >
+                    <span className="material-symbols-outlined text-sm">close</span>
+                    <span>Désactiver</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('cursus')}
+                  className="px-4 py-2.5 rounded-xl bg-[#f2ca50] text-[#3c2f00] font-bold text-xs uppercase tracking-wider flex items-center gap-1 shrink-0 hover:bg-[#ffe088] shadow-md transition-all cursor-pointer"
+                >
+                  <span>Explorer</span>
+                  <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                </button>
+              </div>
             </div>
+
+            {/* Accès Rapide aux Leçons Favorites (Cœur) */}
+            <FavoriteLessonsQuickAccess
+              favoriteLessonIds={favoriteLessonIds}
+              activeSelectedLessonId={activeSelectedLesson?.id}
+              onOpenLesson={(lesson) => {
+                setActiveSelectedLesson(lesson);
+                setSearchLessonForDetail(lesson);
+              }}
+              onToggleFavorite={handleToggleFavoriteLesson}
+              onSelectActiveLesson={(lesson) =>
+                setActiveSelectedLesson(
+                  activeSelectedLesson?.id === lesson.id ? null : lesson
+                )
+              }
+              onNavigateToCursus={() => setActiveTab('cursus')}
+            />
 
             {/* Editorial Banner for 20 Mini-Games Arcade */}
             <div
@@ -453,6 +624,14 @@ export default function App() {
             {/* Daily Challenge (The Nuance Matrix) */}
             <DailyChallengeCard onChallengeComplete={handleChallengeComplete} />
 
+            {/* Streak 7 Jours (Icônes Calendrier Remplies & Gamification) */}
+            <SevenDayStreakSection
+              streakDays={user.stats?.streakDays || 24}
+              studyMinutesToday={user.stats?.studyMinutesToday || 25}
+              studyMinutesTarget={user.stats?.studyMinutesTarget || 30}
+              onNavigateToCurriculum={() => setActiveTab('cursus')}
+            />
+
             {/* Rare Lexicon Showcase */}
             <CabinetCuriosities
               onWordClick={() => {
@@ -475,6 +654,10 @@ export default function App() {
           <div className="max-w-4xl mx-auto animate-fadeIn pt-2">
             <SchoolCurriculumView
               onLessonCompleted={(_lessonId, xp) => handleChallengeComplete(xp)}
+              activeSelectedLessonId={activeSelectedLesson?.id}
+              onSelectLesson={(lesson) => setActiveSelectedLesson(lesson)}
+              favoriteLessonIds={favoriteLessonIds}
+              onToggleFavorite={handleToggleFavoriteLesson}
             />
           </div>
         )}
@@ -604,6 +787,7 @@ export default function App() {
           onSpeakingComplete={() => {
             setUser(getLocalUserProfile());
           }}
+          activeLesson={activeSelectedLesson}
         />
       )}
 
@@ -637,6 +821,7 @@ export default function App() {
         isOpen={isShopModalOpen}
         onClose={() => setIsShopModalOpen(false)}
         userLevel={calculateLevel(user.stats?.totalXp || 0)}
+        completedLessons={user.stats?.completedModules || 14}
         onProfileUpdated={() => setUser(getLocalUserProfile())}
       />
 
@@ -656,6 +841,32 @@ export default function App() {
         toast={xpToast}
         onDismiss={() => setXpToast(null)}
       />
+
+      {/* Interactive Lesson Detail Modal from Global Search */}
+      <LessonDetailModal
+        lesson={searchLessonForDetail}
+        isOpen={searchLessonForDetail !== null}
+        onClose={() => setSearchLessonForDetail(null)}
+        onCompleteLesson={(_id, xp) => handleChallengeComplete(xp)}
+        isFavorite={searchLessonForDetail ? favoriteLessonIds.includes(searchLessonForDetail.id) : false}
+        onToggleFavorite={
+          searchLessonForDetail
+            ? () => handleToggleFavoriteLesson(searchLessonForDetail.id)
+            : undefined
+        }
+      />
+
+      {/* Bouton de raccourci flottant vers le Studio d'Élocution (uniquement si une leçon est activement sélectionnée) */}
+      <AnimatePresence mode="wait">
+        {activeSelectedLesson && (
+          <FloatingSpeakingStudioShortcut
+            key={activeSelectedLesson.id}
+            activeLesson={activeSelectedLesson}
+            onOpenSpeakingStudio={() => setIsSpeakingOpen(true)}
+            onDismiss={() => setActiveSelectedLesson(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -3,7 +3,7 @@ import type { SchoolLesson, SchoolVocabularyItem } from '../data/schoolCurriculu
 import { GRAMMAR_6E_ITEMS } from '../data/grammar6eData';
 import { SentenceStructuringExercise } from './SentenceStructuringExercise';
 import confetti from 'canvas-confetti';
-import { recordAttempt } from '../firebase/client';
+import { recordAttempt, getFavoriteLessonIds, toggleFavoriteLesson } from '../firebase/client';
 import { DualSpeakerButton } from './DualSpeakerButton';
 import { RhetoricalAnalyzerView } from './RhetoricalAnalyzerView';
 import { awardMszCoins } from '../utils/mszCoinsManager';
@@ -13,6 +13,8 @@ interface LessonDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCompleteLesson?: (lessonId: string, xpEarned: number) => void;
+  isFavorite?: boolean;
+  onToggleFavorite?: () => void;
 }
 
 type LessonTab = 'overview' | 'vocab' | 'grammar' | 'dialogue' | 'quiz' | 'dictation' | 'rhetoric';
@@ -21,8 +23,33 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
   lesson,
   isOpen,
   onClose,
-  onCompleteLesson
+  onCompleteLesson,
+  isFavorite,
+  onToggleFavorite
 }) => {
+  const [internalFavIds, setInternalFavIds] = useState<string[]>(() => getFavoriteLessonIds());
+  useEffect(() => {
+    const onFavUpdate = (e: Event) => {
+      const customEvt = e as CustomEvent<string[]>;
+      if (Array.isArray(customEvt.detail)) {
+        setInternalFavIds(customEvt.detail);
+      } else {
+        setInternalFavIds(getFavoriteLessonIds());
+      }
+    };
+    window.addEventListener('eb_favorites_updated', onFavUpdate);
+    return () => window.removeEventListener('eb_favorites_updated', onFavUpdate);
+  }, []);
+
+  const currentIsFavorite = lesson ? (isFavorite ?? internalFavIds.includes(lesson.id)) : false;
+  const handleHeartClick = () => {
+    if (!lesson) return;
+    if (onToggleFavorite) {
+      onToggleFavorite();
+    } else {
+      toggleFavoriteLesson(lesson.id).then((next) => setInternalFavIds(next));
+    }
+  };
   const [activeTab, setActiveTab] = useState<LessonTab>('overview');
   const [isPlayingAudio, setIsPlayingAudio] = useState<string | null>(null);
   const [showTranslations, setShowTranslations] = useState<boolean>(true);
@@ -337,6 +364,27 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
               >
                 <span className="material-symbols-outlined text-base">translate</span>
                 <span className="hidden sm:inline text-[10px] font-mono uppercase font-bold">FR</span>
+              </button>
+
+              {/* Heart Favorite Toggle */}
+              <button
+                type="button"
+                onClick={handleHeartClick}
+                className={`p-2 rounded-xl border text-xs flex items-center gap-1 transition-all cursor-pointer active:scale-90 ${
+                  currentIsFavorite
+                    ? 'bg-rose-500/20 border-rose-400/70 text-rose-400 shadow-sm shadow-rose-500/20'
+                    : 'bg-[#0c1322] border-[#232a3a] text-[#99907c] hover:text-rose-400 hover:border-rose-500/40'
+                }`}
+                title={currentIsFavorite ? 'Retirer des favoris' : 'Ajouter aux leçons favorites'}
+                aria-label={currentIsFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+                aria-pressed={currentIsFavorite}
+              >
+                <span
+                  className="material-symbols-outlined text-base"
+                  style={{ fontVariationSettings: currentIsFavorite ? "'FILL' 1" : "'FILL' 0" }}
+                >
+                  {currentIsFavorite ? 'favorite' : 'favorite_border'}
+                </span>
               </button>
 
               <button

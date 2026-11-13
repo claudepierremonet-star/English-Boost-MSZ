@@ -19,18 +19,21 @@ import {
   isSpeechRecognitionAvailable,
   type PhoneticCorrectionReport
 } from '../utils/speechRecognitionHelper';
+import type { SchoolLesson } from '../data/schoolCurriculum';
 import { stopSpeech } from '../services/speechService';
 
 interface SpeakingStudioModalProps {
   currentLevel: CEFRLevel;
   onClose: () => void;
   onSpeakingComplete?: () => void;
+  activeLesson?: SchoolLesson | null;
 }
 
 export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
   currentLevel,
   onClose,
-  onSpeakingComplete
+  onSpeakingComplete,
+  activeLesson
 }) => {
   // Filter items matching level or fallback to full list
   const levelItems = useMemo(() => {
@@ -425,6 +428,49 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
 
       {/* Main Studio Body */}
       <main className="max-w-2xl mx-auto w-full px-4 sm:px-6 py-6 flex flex-col gap-5">
+        {/* Active Lesson Contextual Banner */}
+        {activeLesson && (
+          <div className="p-3.5 rounded-2xl bg-gradient-to-r from-[#1e293b] via-[#151b2b] to-[#232a3a] border border-[#f2ca50]/50 shadow-lg flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-[#0c1322] border border-[#f2ca50]/40 flex items-center justify-center text-[#f2ca50] shrink-0 shadow-md">
+                <span className="material-symbols-outlined text-xl">school</span>
+              </div>
+              <div className="flex flex-col min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-[#f2ca50] font-mono font-bold uppercase tracking-widest">
+                    LEÇON ACTIVE • {activeLesson.class_level}
+                  </span>
+                  <span className="px-1.5 py-0.2 rounded-full bg-[#f2ca50]/20 text-[#f2ca50] text-[9px] font-mono font-bold">
+                    {activeLesson.cefr_level}
+                  </span>
+                </div>
+                <h4 className="font-serif font-bold text-sm text-[#dce2f8] truncate">
+                  {activeLesson.title}
+                </h4>
+                <span className="text-[11px] text-[#94a3b8] truncate italic">
+                  {activeLesson.title_en}
+                </span>
+              </div>
+            </div>
+
+            {activeLesson.model_phrases && activeLesson.model_phrases.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setPracticeMode('dictation');
+                  setCustomPracticeText(activeLesson.model_phrases[0].en);
+                  resetRecordingState();
+                }}
+                className="px-3 py-1.5 rounded-xl bg-[#f2ca50] hover:bg-[#ffe088] text-[#3c2f00] font-mono text-xs font-bold transition-all active:scale-95 shadow-md shrink-0 cursor-pointer flex items-center gap-1.5"
+                title="S'entraîner sur la phrase modèle de la leçon"
+              >
+                <span className="material-symbols-outlined text-sm">record_voice_over</span>
+                <span>Phrasé de la Leçon</span>
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Top Control Bar: Accent Selector & Practice Mode Toggle */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-2 rounded-2xl bg-[#151b2b] border border-[#232a3a]">
           {/* Accent Selection */}

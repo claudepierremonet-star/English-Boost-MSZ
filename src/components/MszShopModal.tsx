@@ -27,11 +27,13 @@ import {
 } from '../utils/mszCoinsManager';
 import { MszCard3D } from './MszCard3D';
 import { speakText, stopSpeech } from '../services/speechService';
+import { getLocalUserProfile } from '../firebase/client';
 
 interface MszShopModalProps {
   isOpen: boolean;
   onClose: () => void;
   userLevel?: number; // e.g. 1 to 100
+  completedLessons?: number;
   onProfileUpdated?: () => void;
 }
 
@@ -39,8 +41,60 @@ export const MszShopModal: React.FC<MszShopModalProps> = ({
   isOpen,
   onClose,
   userLevel = 14,
+  completedLessons,
   onProfileUpdated
 }) => {
+  const [completedLessonsCount, setCompletedLessonsCount] = useState<number>(() => {
+    if (completedLessons !== undefined) return completedLessons;
+    try {
+      const p = getLocalUserProfile();
+      return p?.stats?.completedModules ?? 14;
+    } catch {
+      return 14;
+    }
+  });
+
+  const [isSparkling, setIsSparkling] = useState<boolean>(false);
+  const [lastMilestoneCelebrated, setLastMilestoneCelebrated] = useState<number>(() => {
+    try {
+      return parseInt(localStorage.getItem('eb_msz_last_sparkle_milestone') || '0', 10);
+    } catch {
+      return 0;
+    }
+  });
+
+  const triggerSparkle = useCallback(() => {
+    setIsSparkling(true);
+    try {
+      confetti({
+        particleCount: 18,
+        spread: 60,
+        origin: { y: 0.12, x: 0.32 },
+        colors: ['#ffd700', '#f2ca50', '#38bdf8', '#ffffff'],
+        ticks: 100,
+        gravity: 0.8,
+        scalar: 0.75
+      });
+    } catch {}
+    const timer = setTimeout(() => {
+      setIsSparkling(false);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (isOpen && completedLessonsCount > 0) {
+      const milestone = Math.floor(completedLessonsCount / 25) * 25;
+      if (milestone >= 25 && milestone !== lastMilestoneCelebrated) {
+        setLastMilestoneCelebrated(milestone);
+        try {
+          localStorage.setItem('eb_msz_last_sparkle_milestone', milestone.toString());
+        } catch {}
+        triggerSparkle();
+      }
+    }
+  }, [isOpen, completedLessonsCount, lastMilestoneCelebrated, triggerSparkle]);
+
   const [activeTab, setActiveTab] = useState<'shop' | 'inventory' | 'marketplace' | 'crypto'>('shop');
   const [selectedCategory, setSelectedCategory] = useState<number | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -53,6 +107,12 @@ export const MszShopModal: React.FC<MszShopModalProps> = ({
   const [equippedId, setEquippedId] = useState<string>(getEquippedCharacterId());
   const [listings, setListings] = useState<MarketListing[]>(getMarketplaceListings());
   const [transactions, setTransactions] = useState<MszTransaction[]>(getTransactionHistory());
+
+  const [isTreasuryOpen, setIsTreasuryOpen] = useState<boolean>(false);
+
+  const equippedCharacter = useMemo(() => {
+    return MSZ_CHARACTERS.find((c) => c.id === equippedId) || null;
+  }, [equippedId]);
 
   // Modal / Toast states & Zoom Inspector
   const [inspectedCharacter, setInspectedCharacter] = useState<MszCharacter | null>(null);
@@ -85,10 +145,20 @@ export const MszShopModal: React.FC<MszShopModalProps> = ({
   }, []);
 
   useEffect(() => {
+    if (completedLessons !== undefined) {
+      setCompletedLessonsCount(completedLessons);
+    } else if (isOpen) {
+      try {
+        const p = getLocalUserProfile();
+        if (p?.stats?.completedModules !== undefined) {
+          setCompletedLessonsCount(p.stats.completedModules);
+        }
+      } catch {}
+    }
     if (isOpen) {
       refreshState();
     }
-  }, [isOpen, refreshState]);
+  }, [isOpen, completedLessons, refreshState]);
 
   // Listen to custom economy events
   useEffect(() => {
@@ -240,66 +310,366 @@ export const MszShopModal: React.FC<MszShopModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-[#070d1a] flex flex-col animate-fadeIn select-none">
-      {/* Header with iPhone 18 safe area clearance */}
+      {/* Header with iPhone safe area clearance & 24K gold illumination filament */}
       <header
-        className="sticky top-0 z-30 px-4 sm:px-6 bg-[#070d1a]/95 backdrop-blur-xl border-b border-[#232a3a] flex items-center justify-between"
+        className="sticky top-0 z-30 px-4 sm:px-6 bg-[#060b16]/95 backdrop-blur-2xl border-b border-[#232a3a] flex items-center justify-between relative shadow-[0_10px_30px_rgba(0,0,0,0.65)]"
         style={{
-          paddingTop: 'max(env(safe-area-inset-top, 0px), 18px)',
-          minHeight: 'calc(max(env(safe-area-inset-top, 0px), 18px) + 64px)'
+          paddingTop: 'max(env(safe-area-inset-top, 0px), 16px)',
+          minHeight: 'calc(max(env(safe-area-inset-top, 0px), 16px) + 68px)'
         }}
       >
-        <div className="flex items-center gap-3">
+        {/* Top 24K Gold Illumination Filament */}
+        <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#ffd700] via-50% to-transparent opacity-85 shadow-[0_0_14px_rgba(255,215,0,0.6)] pointer-events-none" />
+
+        {/* Subtle Ambient Radial Lighting */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_75%_55%_at_50%_0%,rgba(212,175,55,0.08),transparent_70%)] pointer-events-none" />
+
+        {/* Left Section: Back Control + MSZ Monogram Seal + Gallery Title */}
+        <div className="flex items-center gap-3.5 relative z-10">
           <button
             type="button"
             onClick={onClose}
-            className="w-10 h-10 rounded-full flex items-center justify-center text-[#dce2f8] hover:text-[#f2ca50] hover:bg-[#151f33] transition-all cursor-pointer"
-            aria-label="Fermer la boutique"
+            className="group relative px-3 py-2 rounded-xl bg-gradient-to-b from-[#182235] to-[#0c1322] border border-[#2b3952] hover:border-[#ffd700]/60 text-[#b5c2d9] hover:text-[#ffd700] transition-all flex items-center gap-1.5 shadow-[0_4px_12px_rgba(0,0,0,0.4)] cursor-pointer active:scale-95"
+            aria-label="Fermer la galerie"
           >
-            <span className="material-symbols-outlined text-xl">arrow_back_ios_new</span>
+            <span className="material-symbols-outlined text-base group-hover:-translate-x-0.5 transition-transform text-[#d4af37]">arrow_back_ios_new</span>
+            <span className="hidden sm:inline text-xs font-mono uppercase tracking-wider font-semibold">Retour</span>
           </button>
 
-          <div className="flex flex-col">
-            <h1 className="font-serif text-lg sm:text-xl font-bold text-white flex items-center gap-2">
-              Boutique des Icônes & Cartes MSZ
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#f2ca50]/20 text-[#f2ca50] font-mono border border-[#f2ca50]/30 hidden sm:inline">
-                Tirage Limité 100 ex. • 10 Séries
-              </span>
-            </h1>
-            <span className="text-[10px] text-[#d4c78f] uppercase font-mono">
-              Écosystème MSZ Coins • Numérotation Unique (1/100) & Bourse P2P
+          {/* Sophisticated Yellow Square Button (MSZ Coins Gold) */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('inventory')}
+            className="group relative w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-b from-[#ffd700] via-[#f2ca50] to-[#e6b800] border-2 border-[#fff2a8] shadow-[0_0_16px_rgba(242,202,80,0.5),inset_0_1px_2px_rgba(255,255,255,0.7)] hover:shadow-[0_0_24px_rgba(242,202,80,0.75)] hover:scale-105 active:scale-95 transition-all flex flex-col items-center justify-center p-0.5 cursor-pointer shrink-0"
+            title={`Ma Collection MSZ (${ownedIds.length}/${MSZ_CHARACTERS.length} cartes)`}
+            aria-label="Accéder à ma collection MSZ"
+          >
+            <span className="font-serif font-black text-[11px] sm:text-xs tracking-wider text-[#0c1322] leading-none uppercase drop-shadow-sm">
+              MSZ
             </span>
+            <span className="font-mono font-black text-[8px] sm:text-[9px] text-[#2c1b00] leading-none mt-0.5 bg-[#0c1322]/15 px-1 py-0.5 rounded">
+              {ownedIds.length}/{MSZ_CHARACTERS.length}
+            </span>
+          </button>
+
+          {/* Gallery Button with Circular SVG Progress Ring */}
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => setActiveTab('shop')}
+            className="group flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-gradient-to-b from-[#141d2d] to-[#0a1120] border border-[#2b3952] hover:border-[#ffd700]/60 shadow-[0_2px_8px_rgba(0,0,0,0.3)] hover:shadow-[0_4px_16px_rgba(255,215,0,0.2)] transition-all cursor-pointer active:scale-95"
+            title={`Boutique & Galerie • Objectif : ${completedLessonsCount}/200 leçons terminées (${Math.round((completedLessonsCount / 200) * 100)}%)`}
+            aria-label="Boutique et Galerie"
+          >
+            {/* SVG Circular Progress Ring around Storefront Icon with Milestone Sparkle Effect */}
+            <div
+              className="relative w-8 h-8 flex items-center justify-center shrink-0 cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                triggerSparkle();
+              }}
+              title={`Cercle de progression : ${completedLessonsCount}/200 leçons terminées (Palier de 25 leçons)`}
+            >
+              {/* Sparkle Particles Aura when milestone reached */}
+              {isSparkling && (
+                <div className="absolute -inset-3 pointer-events-none z-20">
+                  <div className="absolute inset-1.5 rounded-full border border-[#ffd700]/70 animate-ping opacity-60" />
+                  {/* Floating Twinkling Sparkles */}
+                  <span className="absolute -top-1 -right-1 text-[#ffd700] text-xs font-bold animate-sparkle" style={{ animationDelay: '0ms' }}>
+                    ✦
+                  </span>
+                  <span className="absolute -top-1.5 left-0.5 text-[#38bdf8] text-[10px] font-bold animate-sparkle" style={{ animationDelay: '200ms' }}>
+                    ✧
+                  </span>
+                  <span className="absolute top-2.5 -right-2 text-[#ffffff] text-xs font-bold animate-sparkle" style={{ animationDelay: '400ms' }}>
+                    ✦
+                  </span>
+                  <span className="absolute -bottom-1 -right-0.5 text-[#f2ca50] text-[11px] font-bold animate-sparkle" style={{ animationDelay: '150ms' }}>
+                    ✧
+                  </span>
+                  <span className="absolute -bottom-2 left-2 text-[#ffd700] text-xs font-bold animate-sparkle" style={{ animationDelay: '500ms' }}>
+                    ✦
+                  </span>
+                  <span className="absolute -bottom-0.5 -left-1.5 text-[#38bdf8] text-[10px] font-bold animate-sparkle" style={{ animationDelay: '300ms' }}>
+                    ✧
+                  </span>
+                  <span className="absolute top-2 -left-2 text-[#ffd700] text-xs font-bold animate-sparkle" style={{ animationDelay: '100ms' }}>
+                    ✦
+                  </span>
+                  <span className="absolute -top-2 left-2.5 text-[#ffffff] text-[9px] font-bold animate-sparkle" style={{ animationDelay: '450ms' }}>
+                    ✧
+                  </span>
+                </div>
+              )}
+
+              <svg className="w-full h-full -rotate-90 transform" viewBox="0 0 32 32">
+                <defs>
+                  <linearGradient id="lessonCircleGold" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#ffd700" />
+                    <stop offset="100%" stopColor="#f59e0b" />
+                  </linearGradient>
+                </defs>
+                {/* Background track circle */}
+                <circle
+                  cx="16"
+                  cy="16"
+                  r="13"
+                  stroke="#1e293b"
+                  strokeWidth="2.4"
+                  fill="none"
+                />
+                {/* Dynamic progress circle filled towards 200 lessons */}
+                <circle
+                  cx="16"
+                  cy="16"
+                  r="13"
+                  stroke="url(#lessonCircleGold)"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  fill="none"
+                  strokeDasharray={81.68}
+                  strokeDashoffset={81.68 * (1 - Math.min(1, Math.max(0, completedLessonsCount / 200)))}
+                  className="transition-all duration-700 ease-out"
+                  style={{
+                    filter: isSparkling
+                      ? 'drop-shadow(0 0 6px rgba(255, 215, 0, 0.9))'
+                      : 'drop-shadow(0 0 3px rgba(255, 215, 0, 0.5))'
+                  }}
+                />
+              </svg>
+
+              {/* Centered Storefront Icon */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <span
+                  className={`material-symbols-outlined text-sm text-[#ffd700] transition-transform ${
+                    isSparkling ? 'scale-125' : 'group-hover:scale-110'
+                  }`}
+                  style={{ fontVariationSettings: "'FILL' 1" }}
+                >
+                  storefront
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-col text-left">
+              <span className="font-serif text-xs sm:text-sm font-bold text-white group-hover:text-[#ffd700] transition-colors tracking-wide leading-tight">
+                Boutique & Galerie
+              </span>
+              <span className="text-[9px] font-mono text-[#8ca1be] group-hover:text-[#cbd5e1] transition-colors leading-tight mt-0.5 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#38bdf8] animate-pulse"></span>
+                <span>
+                  <strong className="text-[#ffd700] font-semibold">{completedLessonsCount}</strong>/200 leçons ({Math.round((completedLessonsCount / 200) * 100)}%)
+                </span>
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* User Coins HUD & Daily Limit Gauge */}
-        <div className="flex items-center gap-3">
-          <div className="flex flex-col items-end bg-[#0f172a] border border-[#f2ca50]/40 px-3.5 py-1.5 rounded-xl shadow-inner">
-            <div className="flex items-center gap-1.5">
-              <span
-                className="material-symbols-outlined text-base text-[#f2ca50]"
-                style={{ fontVariationSettings: "'FILL' 1" }}
-              >
-                monetization_on
+        {/* Center Section: Equipped Companion Mini-HUD */}
+        <div className="relative z-10">
+          {equippedCharacter ? (
+            <button
+              type="button"
+              onClick={() => handleOpenInspect(equippedCharacter, false)}
+              className="hidden lg:flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#121c2e] to-[#0c1322] border border-[#2b3a53] hover:border-[#ffd700]/60 transition-all cursor-pointer shadow-md group active:scale-95"
+              title="Inspecter votre compagnon actif"
+            >
+              <div className="relative w-7 h-7 rounded-lg overflow-hidden border border-[#d4af37]/50 shrink-0 shadow-inner">
+                <img src={equippedCharacter.image} alt={equippedCharacter.name} className="w-full h-full object-cover" />
+                <span className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></span>
+              </div>
+              <div className="flex flex-col text-left">
+                <span className="text-[9px] font-mono uppercase tracking-wider text-[#d4af37] font-semibold leading-none flex items-center gap-1">
+                  <span className="w-1 h-1 rounded-full bg-[#ffd700]"></span>
+                  Compagnon Actif
+                </span>
+                <span className="text-xs font-serif font-bold text-white group-hover:text-[#ffd700] transition-colors leading-tight">
+                  {equippedCharacter.name}
+                  <span className="text-[10px] font-mono font-normal text-[#8391ac] ml-1.5">Niv. {userLevel}</span>
+                </span>
+              </div>
+              <span className="material-symbols-outlined text-[#8391ac] group-hover:text-[#ffd700] text-sm ml-1 transition-colors">
+                visibility
               </span>
-              <span className="font-mono text-base font-black text-[#ffd700]">
-                {balance.toLocaleString()}
-              </span>
-              <span className="text-[10px] font-mono text-[#f2ca50] font-bold">MSZ</span>
-            </div>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setActiveTab('inventory')}
+              className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#0e1626]/80 border border-dashed border-[#2b3a53] hover:border-[#d4af37]/60 text-[#8391ac] hover:text-[#ffd700] text-xs font-mono transition-all cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-sm text-[#d4af37]">add_moderator</span>
+              <span>Équiper une carte</span>
+            </button>
+          )}
+        </div>
 
-            <div className="flex items-center gap-1 text-[9px] font-mono text-[#8391ac]">
-              <span>Gains du jour :</span>
-              <span className="text-[#38bdf8] font-bold">
-                {dailyState.coinsEarnedToday}/{dailyLimit}
+        {/* Right Section: Interactive Treasury HUD & Exit Control */}
+        <div className="flex items-center gap-3 relative z-10">
+          {/* Treasury Toggle Button with Live Quota Gauge */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsTreasuryOpen(!isTreasuryOpen)}
+              className={`relative flex items-center gap-2.5 px-3 py-1.5 rounded-xl border transition-all cursor-pointer shadow-lg active:scale-95 ${
+                isTreasuryOpen
+                  ? 'bg-gradient-to-r from-[#1d273a] to-[#121c2d] border-[#ffd700] shadow-[0_0_20px_rgba(255,215,0,0.25)]'
+                  : 'bg-gradient-to-b from-[#141d2d] to-[#0a1120] border-[#d4af37]/45 hover:border-[#ffd700]/75'
+              }`}
+              aria-expanded={isTreasuryOpen}
+              aria-label="Ouvrir la trésorerie et le registre économique"
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#ffd700]/20 to-[#d4af37]/5 border border-[#ffd700]/40 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-base text-[#ffd700]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                    monetization_on
+                  </span>
+                </div>
+                <div className="flex flex-col items-start leading-tight">
+                  <div className="flex items-baseline gap-1">
+                    <span className="font-mono text-base font-black tracking-tight text-white">{balance.toLocaleString()}</span>
+                    <span className="text-[10px] font-mono font-bold text-[#ffd700]">MSZ</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[9px] font-mono">
+                    <div className="w-10 sm:w-12 h-1 rounded-full bg-[#1e293b] overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-[#38bdf8] to-[#ffd700] rounded-full transition-all duration-500"
+                        style={{ width: `${Math.min(100, Math.round((dailyState.coinsEarnedToday / dailyLimit) * 100))}%` }}
+                      />
+                    </div>
+                    <span className="text-[#8ca1be]">{dailyState.coinsEarnedToday}/{dailyLimit}</span>
+                  </div>
+                </div>
+              </div>
+              <span className={`material-symbols-outlined text-xs text-[#d4af37] transition-transform duration-300 ${isTreasuryOpen ? 'rotate-180 text-[#ffd700]' : ''}`}>
+                expand_more
               </span>
-            </div>
+            </button>
+
+            {/* Interactive Treasury Popover Drawer */}
+            {isTreasuryOpen && (
+              <div className="absolute right-0 top-full mt-3 w-80 sm:w-96 bg-[#0a1120]/98 backdrop-blur-2xl border border-[#d4af37]/50 rounded-2xl shadow-[0_25px_60px_rgba(0,0,0,0.9),0_0_35px_rgba(212,175,55,0.2)] p-5 z-50 animate-fadeIn text-left">
+                {/* Popover Header */}
+                <div className="flex items-center justify-between pb-3.5 border-b border-[#222d42]">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-[#ffd700]/10 border border-[#ffd700]/30 flex items-center justify-center">
+                      <span className="material-symbols-outlined text-[#ffd700] text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>
+                        account_balance_wallet
+                      </span>
+                    </div>
+                    <div>
+                      <h4 className="font-serif font-bold text-sm text-white">Le Trésor MSZ</h4>
+                      <p className="text-[10px] font-mono text-[#8ca1be]">Registre économique & Coffre</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsTreasuryOpen(false)}
+                    className="w-7 h-7 rounded-lg bg-[#141f33] hover:bg-[#202d48] text-[#8ca1be] hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-sm">close</span>
+                  </button>
+                </div>
+
+                {/* Vault Balance Display */}
+                <div className="my-3.5 p-3 rounded-xl bg-gradient-to-br from-[#121c2e] to-[#080d17] border border-[#d4af37]/30 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-[#d4af37] font-semibold">Solde Disponible</span>
+                    <div className="flex items-baseline gap-1.5 mt-0.5">
+                      <span className="font-mono text-2xl font-black text-white">{balance.toLocaleString()}</span>
+                      <span className="text-xs font-mono font-bold text-[#ffd700]">MSZ Coins</span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] font-mono text-[#38bdf8] bg-[#38bdf8]/10 px-2 py-0.5 rounded-full border border-[#38bdf8]/20">
+                      Niveau {userLevel}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Daily Cap & Anti-Spam Progress */}
+                <div className="space-y-2 mb-4 p-3 rounded-xl bg-[#0f172a]/70 border border-[#222d42]">
+                  <div className="flex items-center justify-between text-xs font-mono">
+                    <span className="text-[#b5c2d9]">Plafond d'apprentissage :</span>
+                    <span className="text-[#ffd700] font-bold">
+                      {dailyState.coinsEarnedToday} / {dailyLimit} MSZ
+                    </span>
+                  </div>
+                  <div className="w-full h-2 rounded-full bg-[#1b2537] overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-[#38bdf8] via-[#eab308] to-[#ffd700] rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min(100, Math.round((dailyState.coinsEarnedToday / dailyLimit) * 100))}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] font-mono text-[#8ca1be]">
+                    <span>Disponible aujourd'hui :</span>
+                    <span className="text-[#38bdf8] font-semibold">
+                      +{Math.max(0, dailyLimit - dailyState.coinsEarnedToday)} MSZ
+                    </span>
+                  </div>
+                </div>
+
+                {/* Certified Rarity Rules */}
+                <div className="mb-4 text-[11px] text-[#9bb0ce] leading-relaxed p-2.5 rounded-xl bg-[#141e30]/50 border border-[#27354b]">
+                  <div className="flex items-center gap-1.5 text-[#ffd700] font-mono font-semibold text-[10px] mb-1">
+                    <span className="material-symbols-outlined text-xs">verified</span>
+                    Tirage Strict 1/100
+                  </div>
+                  Chaque carte est frappée en 100 exemplaires uniques. Numéro de série infalsifiable (#001 à #100) certifié dans votre inventaire.
+                </div>
+
+                {/* Recent Transactions Preview */}
+                {transactions.length > 0 && (
+                  <div className="mb-4">
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-[#8ca1be] block mb-1.5">Activité Récente</span>
+                    <div className="space-y-1.5 max-h-28 overflow-y-auto pr-1">
+                      {transactions.slice(0, 3).map((tx) => (
+                        <div key={tx.id} className="flex items-center justify-between text-[11px] p-1.5 rounded-lg bg-[#0d1524] border border-[#1d273a]">
+                          <span className="text-[#dce2f8] truncate max-w-[190px]">{tx.description}</span>
+                          <span className={`font-mono font-bold ${tx.amount > 0 ? 'text-[#4ade80]' : 'text-[#f43f5e]'}`}>
+                            {tx.amount > 0 ? `+${tx.amount}` : tx.amount} MSZ
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Quick Navigation Shortcuts */}
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[#222d42]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('marketplace');
+                      setIsTreasuryOpen(false);
+                    }}
+                    className="px-2.5 py-1.5 rounded-lg bg-[#141f33] hover:bg-[#1e2d4a] text-white text-[11px] font-mono font-semibold transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-xs text-[#ffd700]">swap_horiz</span>
+                    Bourse P2P
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('inventory');
+                      setIsTreasuryOpen(false);
+                    }}
+                    className="px-2.5 py-1.5 rounded-lg bg-[#141f33] hover:bg-[#1e2d4a] text-white text-[11px] font-mono font-semibold transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-xs text-[#38bdf8]">collections_bookmark</span>
+                    Mes Cartes
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
+          {/* Close Modal Button */}
           <button
             type="button"
             onClick={onClose}
-            className="w-9 h-9 rounded-full bg-[#151f33] flex items-center justify-center text-[#8391ac] hover:text-white cursor-pointer"
-            title="Quitter"
+            className="w-10 h-10 rounded-xl bg-gradient-to-b from-[#182235] to-[#0c1322] border border-[#2b3952] hover:border-[#ffd700]/60 flex items-center justify-center text-[#8ca1be] hover:text-[#ffd700] transition-all cursor-pointer shadow-md active:scale-95"
+            title="Quitter la galerie"
           >
             <span className="material-symbols-outlined text-base">close</span>
           </button>
@@ -369,9 +739,17 @@ export const MszShopModal: React.FC<MszShopModalProps> = ({
             </button>
           </div>
 
-          <div className="hidden lg:flex items-center gap-2 text-xs font-mono text-[#d4c78f]">
-            <span className="material-symbols-outlined text-xs text-[#f2ca50]">workspace_premium</span>
-            <span>Limité à 100 exemplaires / carte</span>
+          {/* Harmonized Series & Limited Run Certificate Tag */}
+          <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-xl bg-[#0c1424] border border-[#d4af37]/35 text-xs font-mono shadow-sm">
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#f6de8c] uppercase tracking-wider">
+              <span className="material-symbols-outlined text-xs text-[#ffd700]">hotel_class</span>
+              Séries I – X
+            </span>
+            <span className="text-[#3b4860]">•</span>
+            <span className="inline-flex items-center gap-1.5 text-[10px] text-[#ffd700] font-semibold">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#ffd700] animate-pulse"></span>
+              Tirage Certifié 1/100
+            </span>
           </div>
         </div>
       </div>

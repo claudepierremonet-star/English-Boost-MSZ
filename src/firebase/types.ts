@@ -68,6 +68,7 @@ export interface UserProfile {
     obtainedPrice: number;
   }>;
   equippedCharacterId?: string;
+  favoriteLessonIds?: string[];
 }
 
 export interface LearningAttempt {

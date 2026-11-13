@@ -101,10 +101,58 @@ import {
 
 export { auth, db, storage };
 
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  };
+}
+
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth?.currentUser?.uid,
+      email: auth?.currentUser?.email,
+      emailVerified: auth?.currentUser?.emailVerified,
+      isAnonymous: auth?.currentUser?.isAnonymous,
+      tenantId: auth?.currentUser?.tenantId,
+      providerInfo: auth?.currentUser?.providerData?.map((provider) => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
 // Local storage keys for resilient fallback / offline operation
 const LOCAL_USER_KEY = 'eb_msz_user_profile';
 const LOCAL_ATTEMPTS_KEY = 'eb_msz_attempts';
 const LOCAL_CARDS_KEY = 'eb_msz_cards_progress';
+export const LOCAL_FAVORITES_KEY = 'eb_msz_favorite_lessons';
 
 // Default guest profile
 export const DEFAULT_USER_PROFILE: UserProfile = {
@@ -170,6 +218,15 @@ export function getLocalUserProfile(): UserProfile {
       if (mszEquipped) {
         parsed.equippedCharacterId = mszEquipped;
       }
+      const favLessonsRaw = localStorage.getItem(LOCAL_FAVORITES_KEY);
+      if (favLessonsRaw) {
+        try {
+          const parsedFavs = JSON.parse(favLessonsRaw);
+          if (Array.isArray(parsedFavs)) {
+            parsed.favoriteLessonIds = parsedFavs.filter((id): id is string => typeof id === 'string');
+          }
+        } catch {}
+      }
       return parsed;
     }
   } catch (e) {
@@ -184,6 +241,13 @@ export function getLocalUserProfile(): UserProfile {
     const mszBalanceRaw = localStorage.getItem('eb_msz_coins_balance');
     if (mszBalanceRaw) {
       defaultProf.mszCoinsBalance = parseInt(mszBalanceRaw, 10) || 150;
+    }
+    const favLessonsRaw = localStorage.getItem(LOCAL_FAVORITES_KEY);
+    if (favLessonsRaw) {
+      const parsedFavs = JSON.parse(favLessonsRaw);
+      if (Array.isArray(parsedFavs)) {
+        defaultProf.favoriteLessonIds = parsedFavs.filter((id): id is string => typeof id === 'string');
+      }
     }
   } catch (e) {}
   return defaultProf;
@@ -209,9 +273,57 @@ export function saveLocalUserProfile(profile: UserProfile): void {
     if (profile.equippedCharacterId) {
       localStorage.setItem('eb_msz_equipped_character', profile.equippedCharacterId);
     }
+    if (Array.isArray(profile.favoriteLessonIds)) {
+      localStorage.setItem(LOCAL_FAVORITES_KEY, JSON.stringify(profile.favoriteLessonIds));
+    }
   } catch (e) {
     console.error('Error saving local user profile', e);
   }
+}
+
+/**
+ * Retrieve favorite lesson IDs from localStorage / local profile
+ */
+export function getFavoriteLessonIds(): string[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_FAVORITES_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return Array.from(new Set(parsed.filter((id): id is string => typeof id === 'string')));
+      }
+    }
+    const prof = getLocalUserProfile();
+    if (Array.isArray(prof.favoriteLessonIds)) {
+      return Array.from(new Set(prof.favoriteLessonIds));
+    }
+  } catch (e) {
+    console.error('Error reading favorite lessons', e);
+  }
+  return [];
+}
+
+/**
+ * Toggle a lesson as favorite, persist immediately to localStorage + IndexedDB + Cloud Firestore
+ */
+export async function toggleFavoriteLesson(lessonId: string): Promise<string[]> {
+  const currentIds = getFavoriteLessonIds();
+  const exists = currentIds.includes(lessonId);
+  const nextIds = exists
+    ? currentIds.filter((id) => id !== lessonId)
+    : [lessonId, ...currentIds].slice(0, 200);
+
+  try {
+    localStorage.setItem(LOCAL_FAVORITES_KEY, JSON.stringify(nextIds));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('eb_favorites_updated', { detail: nextIds }));
+    }
+  } catch (e) {
+    console.error('Error saving favorite lesson locally', e);
+  }
+
+  await updateUserProfile({ favoriteLessonIds: nextIds });
+  return nextIds;
 }
 
 /**
@@ -235,6 +347,12 @@ export async function signInWithGoogle(): Promise<UserProfile> {
         profile = snap.data() as UserProfile;
         // Merge with existing local progress if current session has higher values
         const currentLocal = getLocalUserProfile();
+        const mergedFavs = Array.from(
+          new Set([...(currentLocal?.favoriteLessonIds || []), ...(profile.favoriteLessonIds || [])])
+        ).slice(0, 200);
+        const favsChanged = mergedFavs.length !== (profile.favoriteLessonIds || []).length;
+        profile.favoriteLessonIds = mergedFavs;
+
         if (currentLocal && (currentLocal.stats?.totalXp || 0) > (profile.stats?.totalXp || 0)) {
           profile.stats = {
             ...profile.stats,
@@ -243,7 +361,9 @@ export async function signInWithGoogle(): Promise<UserProfile> {
             completedModules: Math.max(profile.stats.completedModules, currentLocal.stats.completedModules),
             streakDays: Math.max(profile.stats.streakDays, currentLocal.stats.streakDays)
           };
-          await updateDoc(userRef, { stats: profile.stats });
+          await updateDoc(userRef, { stats: profile.stats, favoriteLessonIds: mergedFavs });
+        } else if (favsChanged) {
+          await updateDoc(userRef, { favoriteLessonIds: mergedFavs });
         }
       } else {
         // First-time scholar registration with Google
@@ -258,7 +378,8 @@ export async function signInWithGoogle(): Promise<UserProfile> {
           stats: {
             ...DEFAULT_USER_PROFILE.stats,
             ...(currentLocal.stats || {})
-          }
+          },
+          favoriteLessonIds: currentLocal.favoriteLessonIds || []
         };
         await setDoc(userRef, profile);
 
@@ -371,13 +492,20 @@ export function subscribeToAuthState(callback: (profile: UserProfile | null) => 
             data.mszCoinsBalance = Math.max(data.mszCoinsBalance || 0, currentLocal.mszCoinsBalance || 150);
             data.equippedCharacterId = data.equippedCharacterId || currentLocal.equippedCharacterId || 'char_eclat';
 
+            // Merge favorite lessons (union of local & Firestore)
+            const localFavs = currentLocal.favoriteLessonIds || [];
+            const firestoreFavs = data.favoriteLessonIds || [];
+            const mergedFavs = Array.from(new Set([...localFavs, ...firestoreFavs])).slice(0, 200);
+            data.favoriteLessonIds = mergedFavs;
+
             saveLocalUserProfile(data);
             saveProfileToIndexedDB(data).catch(console.warn);
 
-            // Sync to Firestore if local had higher values or newer card instances
+            // Sync to Firestore if local had higher values, newer card instances or new favorites
             const needsSync =
               (localArcade?.points || 0) > (firestoreArcade?.points || 0) ||
               mergedInstances.length > firestoreInstances.length ||
+              mergedFavs.length > firestoreFavs.length ||
               (currentLocal.mszCoinsBalance || 0) > (firestoreInstances.length ? (data.mszCoinsBalance || 0) : 0);
 
             if (needsSync) {
@@ -388,7 +516,8 @@ export function subscribeToAuthState(callback: (profile: UserProfile | null) => 
                   stats: data.stats,
                   ownedCardInstances: data.ownedCardInstances,
                   mszCoinsBalance: data.mszCoinsBalance,
-                  equippedCharacterId: data.equippedCharacterId
+                  equippedCharacterId: data.equippedCharacterId,
+                  favoriteLessonIds: data.favoriteLessonIds
                 },
                 { merge: true }
               ).catch(console.warn);
@@ -428,10 +557,15 @@ export async function updateUserProfile(profile: Partial<UserProfile>): Promise<
   saveProfileToIndexedDB(updated).catch(console.warn);
 
   if (navigator.onLine && isFirebaseConfigured && db && auth?.currentUser) {
+    const userPath = `users/${auth.currentUser.uid}`;
     try {
       const userRef = doc(db, 'users', auth.currentUser.uid);
       await setDoc(userRef, profile as Record<string, unknown>, { merge: true });
     } catch (e) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      if (errMsg.includes('Missing or insufficient permissions')) {
+        handleFirestoreError(e, OperationType.UPDATE, userPath);
+      }
       console.warn('Firestore update error, queuing sync:', e);
       await enqueueSyncOperation('UPDATE_PROFILE', profile, auth.currentUser.uid);
     }

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
+  ALL_200_LESSONS,
   CURRICULUM_200_STRUCTURE,
   getCurriculumByGrade,
   getCurriculum200Stats,
@@ -17,21 +18,55 @@ import {
 import { LessonDetailModal } from './LessonDetailModal';
 import { Grammar6eStudio } from './Grammar6eStudio';
 import { RhetoricalAnalyzerView } from './RhetoricalAnalyzerView';
+import { getBestVoice } from '../services/speechService';
+import { getFavoriteLessonIds, toggleFavoriteLesson } from '../firebase/client';
 
 interface SchoolCurriculumViewProps {
   onLessonCompleted?: (lessonId: string, xpEarned: number) => void;
+  activeSelectedLessonId?: string | null;
+  onSelectLesson?: (lesson: SchoolLesson | null) => void;
+  favoriteLessonIds?: string[];
+  onToggleFavorite?: (lessonId: string) => void;
 }
 
 export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
-  onLessonCompleted
+  onLessonCompleted,
+  activeSelectedLessonId,
+  onSelectLesson,
+  favoriteLessonIds,
+  onToggleFavorite
 }) => {
   const [selectedGrade, setSelectedGrade] = useState<SchoolGrade>('6e');
   const [subTab6e, setSubTab6e] = useState<'themes' | 'grammar' | 'rhetoric'>('themes');
   const [selectedThemeId, setSelectedThemeId] = useState<string>('all');
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [viewMode, setViewMode] = useState<'themes_sections' | 'compact_grid'>('themes_sections');
   const [activeLesson, setActiveLesson] = useState<SchoolLesson | null>(null);
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
+
+  const [internalFavorites, setInternalFavorites] = useState<string[]>(() => getFavoriteLessonIds());
+  useEffect(() => {
+    const handleFavUpdate = (e: Event) => {
+      const customEvt = e as CustomEvent<string[]>;
+      if (Array.isArray(customEvt.detail)) {
+        setInternalFavorites(customEvt.detail);
+      } else {
+        setInternalFavorites(getFavoriteLessonIds());
+      }
+    };
+    window.addEventListener('eb_favorites_updated', handleFavUpdate);
+    return () => window.removeEventListener('eb_favorites_updated', handleFavUpdate);
+  }, []);
+
+  const effectiveFavorites = favoriteLessonIds ?? internalFavorites;
+  const handleToggleFav = (lessonId: string) => {
+    if (onToggleFavorite) {
+      onToggleFavorite(lessonId);
+    } else {
+      toggleFavoriteLesson(lessonId).then((next) => setInternalFavorites(next));
+    }
+  };
 
   // Audio Summary TTS State
   const [audioSummaryLesson, setAudioSummaryLesson] = useState<SchoolLesson | null>(null);
@@ -54,9 +89,13 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
   // All lessons for the selected grade
   const allGradeLessons = gradeCurriculum.themes.flatMap((tg) => tg.lessons);
 
-  // Filter lessons dynamically based on theme and search query
-  const filteredLessons = allGradeLessons.filter((lesson) => {
-    const matchesTheme = selectedThemeId === 'all' || lesson.theme_id === selectedThemeId;
+  // Filter lessons dynamically based on theme, favorites mode, and search query
+  const sourcePool = showFavoritesOnly
+    ? ALL_200_LESSONS.filter((l) => effectiveFavorites.includes(l.id))
+    : allGradeLessons;
+
+  const filteredLessons = sourcePool.filter((lesson) => {
+    const matchesTheme = showFavoritesOnly || selectedThemeId === 'all' || lesson.theme_id === selectedThemeId;
     const query = searchQuery.trim().toLowerCase();
     if (!query) return matchesTheme;
 
@@ -85,6 +124,13 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
       )
     }))
     .filter((tg) => tg.matchingLessons.length > 0);
+
+  // Broadcast active lesson modal state so HeaderSessionTimer activates seamlessly
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('eb_lesson_session_state', { detail: activeLesson }));
+    }
+  }, [activeLesson]);
 
   // Stop speech when component unmounts
   useEffect(() => {
@@ -157,30 +203,44 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
     const voices = window.speechSynthesis.getVoices();
     let selectedVoice: SpeechSynthesisVoice | null = null;
 
-    if (accent === 'fr-FR') {
-      selectedVoice =
-        voices.find(
-          (v) =>
-            v.lang.toLowerCase() === 'fr-fr' ||
-            v.lang.toLowerCase() === 'fr_fr' ||
-            v.lang.startsWith('fr')
-        ) || null;
-    } else if (accent === 'en-US') {
-      selectedVoice =
-        voices.find(
-          (v) =>
-            v.lang.toLowerCase() === 'en-us' ||
-            v.lang.toLowerCase() === 'en_us' ||
-            (v.name.includes('US') && v.lang.startsWith('en'))
-        ) || null;
-    } else {
-      selectedVoice =
-        voices.find(
-          (v) =>
-            v.lang.toLowerCase() === 'en-gb' ||
-            v.lang.toLowerCase() === 'en_gb' ||
-            (v.name.includes('UK') && v.lang.startsWith('en'))
-        ) || null;
+    try {
+      if (accent === 'en-US' || accent === 'en-GB') {
+        selectedVoice = getBestVoice(accent);
+      }
+    } catch {
+      // Fallback below
+    }
+
+    if (!selectedVoice) {
+      if (accent === 'fr-FR') {
+        selectedVoice =
+          voices.find(
+            (v) =>
+              v.lang.toLowerCase() === 'fr-fr' ||
+              v.lang.toLowerCase() === 'fr_fr' ||
+              v.lang.startsWith('fr')
+          ) || null;
+      } else if (accent === 'en-US') {
+        selectedVoice =
+          voices.find(
+            (v) =>
+              v.lang.toLowerCase() === 'en-us' ||
+              v.lang.toLowerCase() === 'en_us' ||
+              v.name.toLowerCase().includes('united states') ||
+              v.name.toLowerCase().includes('us') ||
+              v.name.toLowerCase().includes('american')
+          ) || null;
+      } else {
+        selectedVoice =
+          voices.find(
+            (v) =>
+              v.lang.toLowerCase() === 'en-gb' ||
+              v.lang.toLowerCase() === 'en_gb' ||
+              v.name.toLowerCase().includes('united kingdom') ||
+              v.name.toLowerCase().includes('uk') ||
+              v.name.toLowerCase().includes('british')
+          ) || null;
+      }
     }
 
     function speakNext() {
@@ -229,11 +289,18 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
     };
   };
 
-  // Main action trigger: Open modal and start TTS
-  const handleGenerateAudioSummary = (lesson: SchoolLesson) => {
+  // Main action trigger: Start TTS with British or American native voice
+  const handlePlayAudioLesson = (lesson: SchoolLesson, preferredAccent?: 'en-GB' | 'en-US') => {
+    const chosenAccent = preferredAccent || (audioAccent === 'fr-FR' ? 'en-GB' : audioAccent);
+    setAudioAccent(chosenAccent);
     setAudioSummaryLesson(lesson);
     setShowAudioModal(true);
-    startAudioPlayback(lesson, audioAccent, audioRate);
+    startAudioPlayback(lesson, chosenAccent, audioRate);
+  };
+
+  // Legacy alias for existing handlers
+  const handleGenerateAudioSummary = (lesson: SchoolLesson) => {
+    handlePlayAudioLesson(lesson, audioAccent === 'fr-FR' ? 'en-GB' : audioAccent);
   };
 
   // Pause / Resume TTS
@@ -286,6 +353,33 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
     navigator.clipboard?.writeText(text);
     setCopiedTranscript(true);
     setTimeout(() => setCopiedTranscript(false), 2000);
+  };
+
+  const handleSelectLessonAndOpen = (lesson: SchoolLesson) => {
+    setActiveLesson(lesson);
+    if (onSelectLesson) {
+      onSelectLesson(lesson);
+    }
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('eb_msz_selected_lesson', JSON.stringify(lesson));
+      window.dispatchEvent(new CustomEvent('eb_select_lesson', { detail: lesson }));
+    }
+  };
+
+  const handleToggleSelectOnly = (lesson: SchoolLesson) => {
+    const isAlreadySelected = activeSelectedLessonId === lesson.id;
+    const target = isAlreadySelected ? null : lesson;
+    if (onSelectLesson) {
+      onSelectLesson(target);
+    }
+    if (typeof window !== 'undefined') {
+      if (target) {
+        localStorage.setItem('eb_msz_selected_lesson', JSON.stringify(target));
+      } else {
+        localStorage.removeItem('eb_msz_selected_lesson');
+      }
+      window.dispatchEvent(new CustomEvent('eb_select_lesson', { detail: target }));
+    }
   };
 
   return (
@@ -590,13 +684,49 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
               </div>
             </div>
 
-            {/* 10 Themes horizontal pill scroller with dynamic lesson counts */}
+            {/* 10 Themes + Favorites horizontal pill scroller with dynamic lesson counts */}
             <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
               <button
                 type="button"
-                onClick={() => setSelectedThemeId('all')}
+                onClick={() => {
+                  setShowFavoritesOnly(!showFavoritesOnly);
+                  if (!showFavoritesOnly) {
+                    setSelectedThemeId('all');
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shrink-0 transition-all cursor-pointer border ${
+                  showFavoritesOnly
+                    ? 'bg-rose-500 text-white border-rose-400 font-bold shadow-md shadow-rose-500/25'
+                    : 'bg-[#151b2b] text-rose-300 hover:text-rose-200 border-rose-500/40 hover:border-rose-400'
+                }`}
+                title="Afficher uniquement mes leçons favorites sauvegardées"
+              >
+                <span
+                  className="material-symbols-outlined text-sm"
+                  style={{ fontVariationSettings: showFavoritesOnly || effectiveFavorites.length > 0 ? "'FILL' 1" : "'FILL' 0" }}
+                >
+                  favorite
+                </span>
+                <span>Mes Favoris</span>
+                <span
+                  className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
+                    showFavoritesOnly
+                      ? 'bg-white/20 text-white'
+                      : 'bg-rose-500/20 text-rose-200'
+                  }`}
+                >
+                  {effectiveFavorites.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowFavoritesOnly(false);
+                  setSelectedThemeId('all');
+                }}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 transition-all cursor-pointer ${
-                  selectedThemeId === 'all'
+                  !showFavoritesOnly && selectedThemeId === 'all'
                     ? 'bg-[#f2ca50] text-[#3c2f00] font-bold shadow-sm'
                     : 'bg-[#151b2b] text-[#d0c5af] hover:text-[#f2ca50] border border-[#232a3a]'
                 }`}
@@ -605,12 +735,15 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
               </button>
 
               {gradeCurriculum.themes.map((themeGroup) => {
-                const isSelected = selectedThemeId === themeGroup.themeId;
+                const isSelected = !showFavoritesOnly && selectedThemeId === themeGroup.themeId;
                 return (
                   <button
                     key={themeGroup.themeId}
                     type="button"
-                    onClick={() => setSelectedThemeId(themeGroup.themeId)}
+                    onClick={() => {
+                      setShowFavoritesOnly(false);
+                      setSelectedThemeId(themeGroup.themeId);
+                    }}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shrink-0 transition-all cursor-pointer ${
                       isSelected
                         ? 'bg-[#f2ca50] text-[#3c2f00] font-bold shadow-sm'
@@ -638,11 +771,24 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
 
           {/* DYNAMIC LESSONS LIST */}
           <section className="space-y-4">
-            <div className="flex items-center justify-between text-xs text-[#99907c]">
-              <span>
-                Affichage de <strong className="text-[#f2ca50]">{filteredLessons.length}</strong>{' '}
-                leçon(s) pour la classe de <strong>{currentLevelInfo.label}</strong>
-              </span>
+            <div className="flex items-center justify-between text-xs text-[#99907c] flex-wrap gap-2">
+              {showFavoritesOnly ? (
+                <span className="flex items-center gap-1.5 text-rose-200">
+                  <span
+                    className="material-symbols-outlined text-sm text-rose-400"
+                    style={{ fontVariationSettings: "'FILL' 1" }}
+                  >
+                    favorite
+                  </span>
+                  Affichage de <strong className="text-rose-300">{filteredLessons.length}</strong>{' '}
+                  leçon(s) favorite(s) sur l&apos;ensemble du cursus (6e ➔ Terminale)
+                </span>
+              ) : (
+                <span>
+                  Affichage de <strong className="text-[#f2ca50]">{filteredLessons.length}</strong>{' '}
+                  leçon(s) pour la classe de <strong>{currentLevelInfo.label}</strong>
+                </span>
+              )}
               <span className="font-mono">
                 {stats200.totalLessons} leçons réparties de la 6e à la Terminale
               </span>
@@ -651,27 +797,59 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
             {/* Empty state */}
             {filteredLessons.length === 0 && (
               <div className="p-8 rounded-2xl bg-[#151b2b] border border-[#232a3a] text-center flex flex-col items-center justify-center gap-3">
-                <span className="material-symbols-outlined text-4xl text-[#99907c]">
-                  search_off
+                <span
+                  className="material-symbols-outlined text-4xl text-rose-400/70"
+                  style={{ fontVariationSettings: showFavoritesOnly ? "'FILL' 1" : "'FILL' 0" }}
+                >
+                  {showFavoritesOnly ? 'favorite_border' : 'search_off'}
                 </span>
                 <p className="text-sm text-[#dce2f8] font-serif">
-                  Aucune leçon ne correspond à votre recherche « {searchQuery} »
+                  {showFavoritesOnly && !searchQuery
+                    ? "Vous n'avez encore aucune leçon favorite sauvegardée."
+                    : `Aucune leçon ne correspond à votre recherche « ${searchQuery} »`}
                 </p>
+                {showFavoritesOnly && !searchQuery && (
+                  <p className="text-xs text-[#99907c] max-w-md">
+                    Cliquez sur l&apos;icône cœur ♡ sur n&apos;importe quelle carte de leçon pour la sauvegarder ici et y accéder instantanément.
+                  </p>
+                )}
                 <button
                   type="button"
                   onClick={() => {
                     setSearchQuery('');
                     setSelectedThemeId('all');
+                    setShowFavoritesOnly(false);
                   }}
                   className="px-4 py-2 rounded-xl bg-[#232a3a] text-[#f2ca50] text-xs font-bold hover:bg-[#f2ca50] hover:text-[#3c2f00] transition-colors cursor-pointer"
                 >
-                  Réinitialiser les filtres
+                  {showFavoritesOnly ? 'Parcourir toutes les leçons' : 'Réinitialiser les filtres'}
                 </button>
               </div>
             )}
 
+            {/* FAVORITES FLAT GRID OR COMPACT GRID */}
+            {(showFavoritesOnly || viewMode === 'compact_grid') && filteredLessons.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                {filteredLessons.map((lesson) => (
+                  <LessonCardItem
+                    key={lesson.id}
+                    lesson={lesson}
+                    isActiveSelected={activeSelectedLessonId === lesson.id}
+                    isFavorite={effectiveFavorites.includes(lesson.id)}
+                    isCurrentAudioLesson={audioSummaryLesson?.id === lesson.id}
+                    isAudioPlaying={isAudioPlaying && audioSummaryLesson?.id === lesson.id}
+                    onSelect={() => handleSelectLessonAndOpen(lesson)}
+                    onToggleActiveLesson={() => handleToggleSelectOnly(lesson)}
+                    onToggleFavorite={() => handleToggleFav(lesson.id)}
+                    onPlayAudioLesson={(accent) => handlePlayAudioLesson(lesson, accent)}
+                    onGenerateAudioSummary={() => handleGenerateAudioSummary(lesson)}
+                  />
+                ))}
+              </div>
+            ) : null}
+
             {/* MODE 1: ORGANIZED BY THEMES (10 TRANSVERSAL UNIVERSES) */}
-            {viewMode === 'themes_sections' && filteredLessons.length > 0 ? (
+            {!showFavoritesOnly && viewMode === 'themes_sections' && filteredLessons.length > 0 ? (
               <div className="flex flex-col gap-6">
                 {activeThemesGroups.map((themeGroup) => (
                   <div
@@ -712,30 +890,19 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
                         <LessonCardItem
                           key={lesson.id}
                           lesson={lesson}
+                          isActiveSelected={activeSelectedLessonId === lesson.id}
+                          isFavorite={effectiveFavorites.includes(lesson.id)}
                           isCurrentAudioLesson={audioSummaryLesson?.id === lesson.id}
                           isAudioPlaying={isAudioPlaying && audioSummaryLesson?.id === lesson.id}
-                          onSelect={() => setActiveLesson(lesson)}
+                          onSelect={() => handleSelectLessonAndOpen(lesson)}
+                          onToggleActiveLesson={() => handleToggleSelectOnly(lesson)}
+                          onToggleFavorite={() => handleToggleFav(lesson.id)}
+                          onPlayAudioLesson={(accent) => handlePlayAudioLesson(lesson, accent)}
                           onGenerateAudioSummary={() => handleGenerateAudioSummary(lesson)}
                         />
                       ))}
                     </div>
                   </div>
-                ))}
-              </div>
-            ) : null}
-
-            {/* MODE 2: COMPACT 2-COLUMN GRID */}
-            {viewMode === 'compact_grid' && filteredLessons.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                {filteredLessons.map((lesson) => (
-                  <LessonCardItem
-                    key={lesson.id}
-                    lesson={lesson}
-                    isCurrentAudioLesson={audioSummaryLesson?.id === lesson.id}
-                    isAudioPlaying={isAudioPlaying && audioSummaryLesson?.id === lesson.id}
-                    onSelect={() => setActiveLesson(lesson)}
-                    onGenerateAudioSummary={() => handleGenerateAudioSummary(lesson)}
-                  />
                 ))}
               </div>
             ) : null}
@@ -751,6 +918,8 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
         onCompleteLesson={(id, xp) => {
           if (onLessonCompleted) onLessonCompleted(id, xp);
         }}
+        isFavorite={activeLesson ? effectiveFavorites.includes(activeLesson.id) : false}
+        onToggleFavorite={activeLesson ? () => handleToggleFav(activeLesson.id) : undefined}
       />
 
       {/* TEXT-TO-SPEECH AUDIO SUMMARY MODAL */}
@@ -1175,25 +1344,55 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
 
 /**
  * Composant de carte individuelle affichant toutes les propriétés d'une leçon
- * avec le bouton 'Générer résumé audio'
+ * avec le bouton 'Lecture Audio' et le sélecteur de voix native britannique / américaine
  */
 interface LessonCardItemProps {
   lesson: SchoolLesson;
+  isActiveSelected?: boolean;
+  isFavorite?: boolean;
   isCurrentAudioLesson?: boolean;
   isAudioPlaying?: boolean;
   onSelect: () => void;
-  onGenerateAudioSummary: () => void;
+  onToggleActiveLesson?: () => void;
+  onToggleFavorite?: () => void;
+  onPlayAudioLesson?: (accent: 'en-GB' | 'en-US') => void;
+  onGenerateAudioSummary?: () => void;
 }
 
 const LessonCardItem: React.FC<LessonCardItemProps> = ({
   lesson,
+  isActiveSelected = false,
+  isFavorite = false,
   isCurrentAudioLesson = false,
   isAudioPlaying = false,
   onSelect,
+  onToggleActiveLesson,
+  onToggleFavorite,
+  onPlayAudioLesson,
   onGenerateAudioSummary
 }) => {
+  const [selectedAccent, setSelectedAccent] = useState<'en-GB' | 'en-US'>('en-GB');
+
+  const handlePlayAudio = (accentToUse: 'en-GB' | 'en-US') => {
+    if (onPlayAudioLesson) {
+      onPlayAudioLesson(accentToUse);
+    } else if (onGenerateAudioSummary) {
+      onGenerateAudioSummary();
+    }
+  };
+
   return (
-    <div className="p-4 rounded-xl bg-[#191f2f] border border-[#4d4635]/30 hover:border-[#f2ca50]/50 transition-all flex flex-col justify-between gap-3 shadow-lg group relative overflow-hidden">
+    <div
+      className={`p-4 rounded-xl bg-[#191f2f] border transition-all flex flex-col justify-between gap-3 shadow-lg group relative overflow-hidden ${
+        isActiveSelected
+          ? 'border-[#f2ca50] ring-2 ring-[#f2ca50]/70 shadow-[0_0_25px_rgba(242,202,80,0.22)]'
+          : isCurrentAudioLesson && isAudioPlaying
+          ? 'border-[#f2ca50] ring-1 ring-[#f2ca50]/50 shadow-[0_0_20px_rgba(242,202,80,0.18)]'
+          : isFavorite
+          ? 'border-rose-500/45 hover:border-rose-400/70'
+          : 'border-[#4d4635]/30 hover:border-[#f2ca50]/50'
+      }`}
+    >
       <div className="flex flex-col gap-2.5">
         {/* Lesson Header */}
         <div className="flex items-start justify-between gap-2">
@@ -1212,12 +1411,41 @@ const LessonCardItem: React.FC<LessonCardItemProps> = ({
           </div>
 
           <div className="flex items-center gap-1 shrink-0">
+            {isActiveSelected && (
+              <span className="text-[10px] font-mono text-[#3c2f00] bg-[#f2ca50] px-2 py-0.5 rounded-full font-extrabold flex items-center gap-0.5 shadow-sm">
+                <span>⭐</span>
+                <span>Active</span>
+              </span>
+            )}
             <span className="text-[10px] font-mono text-[#f2ca50] bg-[#f2ca50]/15 px-2 py-0.5 rounded-full font-bold">
               {lesson.cefr_level}
             </span>
             <span className="text-[9px] font-mono text-[#99907c] bg-[#232a3a] px-1.5 py-0.5 rounded-md uppercase">
               {lesson.class_level}
             </span>
+            {/* Heart Favorite Button */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleFavorite?.();
+              }}
+              className={`w-7 h-7 rounded-lg border flex items-center justify-center transition-all cursor-pointer active:scale-90 ${
+                isFavorite
+                  ? 'bg-rose-500/20 border-rose-400/70 text-rose-400 shadow-sm shadow-rose-500/20 hover:bg-rose-500/30'
+                  : 'bg-[#151b2b] border-[#232a3a] text-[#99907c] hover:text-rose-400 hover:border-rose-500/40'
+              }`}
+              title={isFavorite ? 'Retirer des leçons favorites' : 'Ajouter aux leçons favorites'}
+              aria-label={isFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+              aria-pressed={isFavorite}
+            >
+              <span
+                className="material-symbols-outlined text-base transition-transform duration-200"
+                style={{ fontVariationSettings: isFavorite ? "'FILL' 1" : "'FILL' 0" }}
+              >
+                {isFavorite ? 'favorite' : 'favorite_border'}
+              </span>
+            </button>
           </div>
         </div>
 
@@ -1275,49 +1503,132 @@ const LessonCardItem: React.FC<LessonCardItemProps> = ({
         </div>
       </div>
 
-      {/* Card Action Footer with 'Générer résumé audio' Button */}
-      <div className="border-t border-[#232a3a] pt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-1">
-        <div className="flex items-center gap-3 text-[11px] text-[#99907c] font-mono">
-          <span className="flex items-center gap-1">
-            <span className="material-symbols-outlined text-xs">timer</span>
-            ~{lesson.estimated_minutes} min
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="material-symbols-outlined text-xs">quiz</span>
-            {lesson.quiz.length} Qs
+      {/* Card Action Footer with 'Lecture Audio' Button & Native Voice Options */}
+      <div className="border-t border-[#232a3a] pt-3 flex flex-col gap-2 mt-1">
+        <div className="flex items-center justify-between text-[11px] text-[#99907c] font-mono">
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1">
+              <span className="material-symbols-outlined text-xs">timer</span>
+              ~{lesson.estimated_minutes} min
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="material-symbols-outlined text-xs">quiz</span>
+              {lesson.quiz.length} Qs
+            </span>
+          </div>
+
+          <span className="text-[10px] text-[#d4c78f] font-mono flex items-center gap-1">
+            <span>Voix :</span>
+            <strong className="text-[#f2ca50]">
+              {selectedAccent === 'en-GB' ? 'Britannique (UK)' : 'Américaine (US)'}
+            </strong>
           </span>
         </div>
 
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {/* Button: Générer résumé audio */}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onGenerateAudioSummary();
-            }}
-            className={`px-2.5 py-1.5 rounded-lg border font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm ${
-              isCurrentAudioLesson && isAudioPlaying
-                ? 'bg-[#f2ca50] text-[#3c2f00] border-[#f2ca50] shadow-md shadow-[#f2ca50]/20 animate-pulse'
-                : 'bg-[#151b2b] hover:bg-[#f2ca50]/20 text-[#f2ca50] border-[#f2ca50]/40 hover:border-[#f2ca50]'
-            }`}
-            title="Générer et écouter le résumé audio de cette leçon"
-          >
-            <span className="material-symbols-outlined text-sm">
-              {isCurrentAudioLesson && isAudioPlaying ? 'graphic_eq' : 'volume_up'}
-            </span>
-            <span>Générer résumé audio</span>
-          </button>
+        <div className="flex items-center justify-between gap-2 flex-wrap pt-0.5">
+          {/* Audio Action Cluster: Accent Switch + Lecture Audio Button */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {/* Native Voice Toggle (🇬🇧 UK vs 🇺🇸 US) */}
+            <div className="inline-flex rounded-lg bg-[#0c1322] p-0.5 border border-[#374151]/70 shadow-inner">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedAccent('en-GB');
+                  if (isCurrentAudioLesson && isAudioPlaying) {
+                    handlePlayAudio('en-GB');
+                  }
+                }}
+                className={`px-2 py-1 rounded text-[10px] font-mono font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                  selectedAccent === 'en-GB'
+                    ? 'bg-[#f2ca50] text-[#3c2f00] shadow-sm font-extrabold'
+                    : 'text-[#94a3b8] hover:text-[#e2e8f0]'
+                }`}
+                title="Voix native britannique (UK - Received Pronunciation)"
+              >
+                <span>🇬🇧</span>
+                <span>UK</span>
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedAccent('en-US');
+                  if (isCurrentAudioLesson && isAudioPlaying) {
+                    handlePlayAudio('en-US');
+                  }
+                }}
+                className={`px-2 py-1 rounded text-[10px] font-mono font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                  selectedAccent === 'en-US'
+                    ? 'bg-[#f2ca50] text-[#3c2f00] shadow-sm font-extrabold'
+                    : 'text-[#94a3b8] hover:text-[#e2e8f0]'
+                }`}
+                title="Voix native américaine (US - General American)"
+              >
+                <span>🇺🇸</span>
+                <span>US</span>
+              </button>
+            </div>
 
-          {/* Button: Étudier */}
-          <button
-            type="button"
-            onClick={onSelect}
-            className="px-3 py-1.5 rounded-lg bg-[#232a3a] hover:bg-[#f2ca50] text-[#f2ca50] hover:text-[#3c2f00] font-bold text-xs uppercase tracking-wider flex items-center gap-1 transition-all active:scale-95 shadow-sm cursor-pointer"
-          >
-            <span>Étudier</span>
-            <span className="material-symbols-outlined text-sm">arrow_forward</span>
-          </button>
+            {/* Bouton 'Lecture Audio' */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handlePlayAudio(selectedAccent);
+              }}
+              className={`px-3 py-1.5 rounded-lg border font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-md ${
+                isCurrentAudioLesson && isAudioPlaying
+                  ? 'bg-[#f2ca50] text-[#3c2f00] border-[#f2ca50] shadow-md shadow-[#f2ca50]/20 animate-pulse font-extrabold'
+                  : 'bg-gradient-to-r from-[#172133] to-[#121927] hover:from-[#f2ca50]/20 hover:to-[#f2ca50]/10 text-[#f2ca50] border-[#f2ca50]/50 hover:border-[#f2ca50]'
+              }`}
+              title={`Lancer la lecture audio synthétique avec voix native ${
+                selectedAccent === 'en-GB' ? 'britannique (UK)' : 'américaine (US)'
+              } via Web Speech API`}
+            >
+              <span className="material-symbols-outlined text-sm">
+                {isCurrentAudioLesson && isAudioPlaying ? 'graphic_eq' : 'volume_up'}
+              </span>
+              <span>
+                {isCurrentAudioLesson && isAudioPlaying ? 'En cours...' : 'Lecture Audio'}
+              </span>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-1.5 ml-auto">
+            {/* Quick Toggle Active Lesson Button */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleActiveLesson?.();
+              }}
+              className={`p-1.5 rounded-lg border transition-all cursor-pointer flex items-center justify-center ${
+                isActiveSelected
+                  ? 'bg-[#f2ca50] text-[#3c2f00] border-[#f2ca50] shadow-sm'
+                  : 'bg-[#151b2b] hover:bg-[#f2ca50]/20 text-[#d4c78f] hover:text-[#f2ca50] border-[#4d4635]/40'
+              }`}
+              title={
+                isActiveSelected
+                  ? 'Leçon actuellement active (affichée dans le raccourci Studio)'
+                  : 'Définir comme leçon active pour le Studio d\'Élocution'
+              }
+            >
+              <span className="material-symbols-outlined text-sm">
+                {isActiveSelected ? 'bookmark_added' : 'bookmark_add'}
+              </span>
+            </button>
+
+            {/* Button: Étudier */}
+            <button
+              type="button"
+              onClick={onSelect}
+              className="px-3 py-1.5 rounded-lg bg-[#232a3a] hover:bg-[#f2ca50] text-[#f2ca50] hover:text-[#3c2f00] font-bold text-xs uppercase tracking-wider flex items-center gap-1 transition-all active:scale-95 shadow-sm cursor-pointer"
+            >
+              <span>Étudier</span>
+              <span className="material-symbols-outlined text-sm">arrow_forward</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -22,6 +22,7 @@ import { StudyCalendarWidget } from './StudyCalendarWidget';
 import { MszShop } from './MszShop';
 import { MszShopModal } from './MszShopModal';
 import { STUDY_FOLIOS } from '../data/curriculum';
+import { speakText, stopSpeech } from '../services/speechService';
 
 interface CustomTooltipProps {
   active?: boolean;
@@ -249,6 +250,32 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [peakDay, setPeakDay] = useState<string>('Dim');
   const [recentAttempts, setRecentAttempts] = useState<LearningAttempt[]>([]);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [playingFolioId, setPlayingFolioId] = useState<string | null>(null);
+  const [folioAccents, setFolioAccents] = useState<Record<string, 'en-GB' | 'en-US'>>({});
+
+  const handlePlayFolioAudio = (folio: (typeof STUDY_FOLIOS)[0]) => {
+    if (playingFolioId === folio.id) {
+      stopSpeech();
+      setPlayingFolioId(null);
+      return;
+    }
+    const defaultAccent = folio.accent.toLowerCase().includes('american') ? 'en-US' : 'en-GB';
+    const accent = folioAccents[folio.id] || defaultAccent;
+    stopSpeech();
+    setPlayingFolioId(folio.id);
+
+    const textToRead = `${folio.title}. ${folio.subtitle}. Curriculum level ${folio.level}. Duration approximately ${folio.duration}.`;
+    speakText(textToRead, accent, folio.id, {
+      onEnd: () => setPlayingFolioId(null),
+      onError: () => setPlayingFolioId(null)
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      stopSpeech();
+    };
+  }, []);
 
   const loadHistory = useCallback(async () => {
     setIsRefreshing(true);
@@ -1059,14 +1086,85 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   />
                 </div>
 
-                <div className="flex items-center justify-between pt-1">
-                  <span className="text-[10px] text-[#99907c] italic truncate max-w-[170px]">
-                    {folio.accent}
-                  </span>
+                <div className="flex items-center justify-between pt-1 gap-2 flex-wrap">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {/* Native accent switch (🇬🇧 UK vs 🇺🇸 US) */}
+                    <div className="inline-flex rounded-lg bg-[#0c1322] p-0.5 border border-[#374151]/60 shadow-inner">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setFolioAccents((prev) => ({ ...prev, [folio.id]: 'en-GB' }));
+                          if (playingFolioId === folio.id) {
+                            stopSpeech();
+                            setPlayingFolioId(null);
+                          }
+                        }}
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold transition-all cursor-pointer flex items-center gap-0.5 ${
+                          (folioAccents[folio.id] ||
+                            (folio.accent.toLowerCase().includes('american')
+                              ? 'en-US'
+                              : 'en-GB')) === 'en-GB'
+                            ? 'bg-[#f2ca50] text-[#3c2f00] font-extrabold'
+                            : 'text-[#94a3b8] hover:text-white'
+                        }`}
+                        title="Voix native britannique (UK)"
+                      >
+                        <span>🇬🇧</span>
+                        <span>UK</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setFolioAccents((prev) => ({ ...prev, [folio.id]: 'en-US' }));
+                          if (playingFolioId === folio.id) {
+                            stopSpeech();
+                            setPlayingFolioId(null);
+                          }
+                        }}
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold transition-all cursor-pointer flex items-center gap-0.5 ${
+                          (folioAccents[folio.id] ||
+                            (folio.accent.toLowerCase().includes('american')
+                              ? 'en-US'
+                              : 'en-GB')) === 'en-US'
+                            ? 'bg-[#f2ca50] text-[#3c2f00] font-extrabold'
+                            : 'text-[#94a3b8] hover:text-white'
+                        }`}
+                        title="Voix native américaine (US)"
+                      >
+                        <span>🇺🇸</span>
+                        <span>US</span>
+                      </button>
+                    </div>
+
+                    {/* Bouton 'Lecture Audio' */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePlayFolioAudio(folio);
+                      }}
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold font-mono transition-all active:scale-95 cursor-pointer shadow-sm ${
+                        playingFolioId === folio.id
+                          ? 'bg-[#f2ca50] text-[#3c2f00] ring-1 ring-[#f2ca50] animate-pulse font-extrabold'
+                          : 'bg-[#151b2b] hover:bg-[#f2ca50]/20 text-[#f2ca50] border border-[#f2ca50]/40'
+                      }`}
+                      title="Lancer la lecture audio de cette leçon du cursus (Web Speech API)"
+                    >
+                      <span className="material-symbols-outlined text-xs">
+                        {playingFolioId === folio.id ? 'graphic_eq' : 'volume_up'}
+                      </span>
+                      <span>
+                        {playingFolioId === folio.id ? 'En cours...' : 'Lecture Audio'}
+                      </span>
+                    </button>
+                  </div>
+
                   <button
                     type="button"
                     onClick={onResumePractice}
-                    className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-[#232a3a] hover:bg-[#f2ca50] text-[#d4c78f] hover:text-[#3c2f00] text-xs font-bold font-mono transition-all active:scale-95 cursor-pointer shadow-sm"
+                    className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-[#232a3a] hover:bg-[#f2ca50] text-[#d4c78f] hover:text-[#3c2f00] text-xs font-bold font-mono transition-all active:scale-95 cursor-pointer shadow-sm ml-auto"
                   >
                     <span>{folio.progressPercent > 0 ? 'Continuer' : 'Débuter'}</span>
                     <span className="material-symbols-outlined text-xs">arrow_forward</span>

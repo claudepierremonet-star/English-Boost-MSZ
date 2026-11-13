@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import type { UserProfile, CEFRLevel } from '../firebase/types';
+import type { SchoolLesson } from '../data/schoolCurriculum';
 import { useSyncStatus } from '../offline/useSyncStatus';
 import { calculateLevel } from '../utils/levelUtils';
 import { getMszCoinsBalance } from '../utils/mszCoinsManager';
+import { HeaderSessionTimer } from './HeaderSessionTimer';
 import appIconImg from '../assets/images/app_icon_msz_1792789129742.jpg';
 
 interface HeaderProps {
   user: UserProfile;
   currentLevel: CEFRLevel;
   isAuthenticated?: boolean;
+  activeLesson?: SchoolLesson | null;
+  onUpdateStudyTarget?: (minutes: number) => void;
+  onAddStudyMinute?: () => void;
   onOpenProfile: () => void;
   onLevelChange: (level: CEFRLevel) => void;
   onOpenThemeSelector?: () => void;
@@ -25,6 +30,9 @@ export const Header: React.FC<HeaderProps> = ({
   user,
   currentLevel,
   isAuthenticated = false,
+  activeLesson = null,
+  onUpdateStudyTarget,
+  onAddStudyMinute,
   onOpenProfile,
   onLevelChange,
   onOpenThemeSelector,
@@ -53,11 +61,11 @@ export const Header: React.FC<HeaderProps> = ({
       className="fixed top-0 w-full z-40 bg-[#0c1322]/90 backdrop-blur-xl border-b border-[#232a3a]/80 shadow-[0_4px_20px_rgba(0,0,0,0.5)]"
       style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 10px)' }}
     >
-      <div className="max-w-5xl mx-auto h-16 px-4 sm:px-6 flex items-center justify-between gap-4">
+      <div className="max-w-6xl mx-auto h-16 px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4">
         {/* Brand Lockup with Luxury App Icon */}
         <div
           onClick={onOpenInstallModal}
-          className="flex items-center gap-2.5 cursor-pointer group"
+          className="flex items-center gap-2.5 cursor-pointer group shrink-0"
           title="Voir l'icône de l'application et l'ajouter sur votre écran d'accueil iOS/Android"
         >
           <div className="relative w-9 h-9 rounded-xl overflow-hidden p-0.5 bg-gradient-to-br from-[#d4af37] via-[#f2ca50] to-[#ccb14f] shadow-md shadow-[#f2ca50]/20 group-hover:scale-105 transition-transform shrink-0 flex items-center justify-center">
@@ -88,8 +96,16 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Level, Theme Palette, Network State & Profile Zone */}
-        <div className="flex items-center gap-2">
+        {/* Level, Session Timer, Theme Palette, Network State & Profile Zone */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Visual Session Timer & Daily Target Configurator */}
+          <HeaderSessionTimer
+            activeLesson={activeLesson}
+            studyMinutesToday={user.stats?.studyMinutesToday ?? 0}
+            studyMinutesTarget={user.stats?.studyMinutesTarget ?? 30}
+            onUpdateStudyTarget={(mins) => onUpdateStudyTarget?.(mins)}
+            onAddStudyMinute={() => onAddStudyMinute?.()}
+          />
           {/* Offline / Auto-Sync Pill */}
           {!isOnline ? (
             <button
