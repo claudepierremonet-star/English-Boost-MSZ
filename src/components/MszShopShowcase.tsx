@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MSZ_CHARACTERS, SHOP_CATEGORIES, type MszCharacter } from '../data/mszShopData';
 import {
   getMszCoinsBalance,
@@ -20,7 +20,7 @@ interface MszShopShowcaseProps {
 }
 
 export const MszShopShowcase: React.FC<MszShopShowcaseProps> = ({
-  userLevel = 14,
+  userLevel = 1,
   onOpenShop,
   onProfileUpdated
 }) => {
@@ -30,6 +30,7 @@ export const MszShopShowcase: React.FC<MszShopShowcaseProps> = ({
   const [equippedId, setEquippedId] = useState<string>(getEquippedCharacterId());
   const [selectedCatId, setSelectedCatId] = useState<number | 'all'>('all');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { dailyLimit, state: dailyState } = getDailyMszCoinsState(userLevel);
 
@@ -51,12 +52,14 @@ export const MszShopShowcase: React.FC<MszShopShowcaseProps> = ({
       window.removeEventListener('msz-coins-updated', handleUpdate);
       window.removeEventListener('msz-inventory-updated', handleUpdate);
       window.removeEventListener('msz-equipped-updated', handleUpdate);
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     };
   }, []);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToastMessage(null), 3000);
   };
 
   const handleBuy = (char: MszCharacter) => {
@@ -183,7 +186,7 @@ export const MszShopShowcase: React.FC<MszShopShowcaseProps> = ({
         >
           <span className="material-symbols-outlined text-xs text-[#f2ca50]">stars</span>
           <span>Toutes</span>
-          <span className="text-[10px] opacity-70">(8)</span>
+          <span className="text-[10px] opacity-70">({MSZ_CHARACTERS.length})</span>
         </button>
 
         {SHOP_CATEGORIES.map((cat) => {

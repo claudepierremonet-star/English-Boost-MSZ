@@ -23,6 +23,7 @@ import { MszShop } from './MszShop';
 import { MszShopModal } from './MszShopModal';
 import { STUDY_FOLIOS } from '../data/curriculum';
 import { speakText, stopSpeech } from '../services/speechService';
+import { calculateLevel } from '../utils/levelUtils';
 
 interface CustomTooltipProps {
   active?: boolean;
@@ -632,7 +633,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <span className="text-[#dce2f8] font-medium">Cadence Quotidienne</span>
               </div>
               <span className="text-[#f2ca50] font-bold font-mono">
-                {animatedTodayMinutes} / {user.stats.studyMinutesTarget} min
+                {animatedTodayMinutes} / {user.stats.studyMinutesTarget || 30} min
               </span>
             </div>
             <div className="w-full h-1.5 rounded-full bg-[#070e1d] overflow-hidden">
@@ -641,7 +642,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 animate={{
                   width: `${Math.min(
                     100,
-                    Math.round((user.stats.studyMinutesToday / user.stats.studyMinutesTarget) * 100)
+                    Math.round(((user.stats.studyMinutesToday ?? 0) / (user.stats.studyMinutesTarget || 30)) * 100)
                   )}%`
                 }}
                 transition={{ duration: 0.9, delay: 0.59, ease: [0.16, 1, 0.3, 1] }}
@@ -980,7 +981,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* Composant MSZ-Shop du Dashboard (10 Catégories, Rendu 3D Recto-Verso au Clic, Prix en MSZ Coins & Rareté) */}
       <motion.div variants={dashboardCardVariants}>
         <MszShop
-          userLevel={user.arcadeProgression?.level || 14}
+          userLevel={calculateLevel(user.stats?.totalXp ?? 0)}
           onOpenFullShop={() => setIsShopModalOpen(true)}
           onProfileUpdated={onOpenProfile}
         />
@@ -1378,7 +1379,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <span className="text-[10px] uppercase font-mono text-[#d0c5af]">Épreuves Enregistrées</span>
             <div className="flex items-baseline gap-1.5">
               <span className="text-base font-bold text-[#f2ca50] font-mono">
-                {totalOfflineRecords > 0 ? totalOfflineRecords : '14'}
+                {totalOfflineRecords}
               </span>
               <span className="text-[11px] text-[#99907c]">dans IndexedDB</span>
             </div>
@@ -1516,7 +1517,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       <MszShopModal
         isOpen={isShopModalOpen}
         onClose={() => setIsShopModalOpen(false)}
-        userLevel={user.arcadeProgression?.level || 14}
+        userLevel={calculateLevel(user.stats?.totalXp ?? 0)}
         onProfileUpdated={onOpenProfile}
       />
     </motion.div>

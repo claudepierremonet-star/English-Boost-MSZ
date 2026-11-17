@@ -16,7 +16,12 @@ export function DiscreteWeatherBar() {
   // 5-second auto-dismiss countdown timer state
   const [timeLeft, setTimeLeft] = useState<number>(5.0);
   const [isPaused, setIsPaused] = useState<boolean>(false);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const isPausedRef = useRef<boolean>(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    isPausedRef.current = isPaused;
+  }, [isPaused]);
 
   // Initialize weather on mount with Geolocation
   useEffect(() => {
@@ -76,12 +81,9 @@ export function DiscreteWeatherBar() {
 
     const intervalMs = 100;
     timerRef.current = setInterval(() => {
+      if (isPausedRef.current) return;
       setTimeLeft((prev) => {
-        if (isPaused) return prev;
-        if (prev <= 0.1) {
-          setIsExpanded(false);
-          return 5.0;
-        }
+        if (prev <= 0.1) return 0;
         return Number((prev - 0.1).toFixed(1));
       });
     }, intervalMs);
@@ -89,7 +91,13 @@ export function DiscreteWeatherBar() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isExpanded, isPaused]);
+  }, [isExpanded]);
+
+  useEffect(() => {
+    if (isExpanded && timeLeft <= 0) {
+      setIsExpanded(false);
+    }
+  }, [isExpanded, timeLeft]);
 
   const handleBarClick = () => {
     if (!isExpanded) {

@@ -44,6 +44,10 @@
           "type": "object",
           "description": "Arcade progression (level 1-99, points, unlocked games and active session)"
         },
+        "cityMapProgression": {
+          "type": "object",
+          "description": "100-level City Map quiz progression (unlockedLevel 1-100, completedChaptersByLevel 1-10, conqueredLevels, stars)"
+        },
         "favoriteLessonIds": {
           "type": "array",
           "description": "List of favorited school lesson IDs (up to 200) saved by the scholar for quick access"

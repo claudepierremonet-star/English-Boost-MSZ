@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { getLevelProgress } from '../utils/levelUtils';
@@ -47,6 +47,11 @@ function playLevelUpSymphony() {
       gain.gain.exponentialRampToValueAtTime(0.0001, now + n.time + n.dur);
       osc.connect(gain);
       gain.connect(ctx.destination);
+      if (n.time === 0.70) {
+        osc.onended = () => {
+          ctx.close().catch(() => {});
+        };
+      }
       osc.start(now + n.time);
       osc.stop(now + n.time + n.dur);
     });
@@ -124,6 +129,13 @@ export const LevelUpCelebrationModal: React.FC<LevelUpCelebrationModalProps> = (
 }) => {
   const [copied, setCopied] = useState<boolean>(false);
   const [animatedLevel, setAnimatedLevel] = useState<number>(data?.oldLevel || 1);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (isOpen && data) {
@@ -181,7 +193,8 @@ export const LevelUpCelebrationModal: React.FC<LevelUpCelebrationModalProps> = (
       if (navigator.clipboard) {
         await navigator.clipboard.writeText(text);
         setCopied(true);
-        setTimeout(() => setCopied(false), 2500);
+        if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+        copyTimerRef.current = setTimeout(() => setCopied(false), 2500);
       }
     } catch {
       // fallback

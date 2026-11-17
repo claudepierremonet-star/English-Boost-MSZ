@@ -45,12 +45,14 @@ import { GlobalSearchBar } from './components/GlobalSearchBar';
 import { FloatingSpeakingStudioShortcut } from './components/FloatingSpeakingStudioShortcut';
 import { LessonDetailModal } from './components/LessonDetailModal';
 import { FavoriteLessonsQuickAccess } from './components/FavoriteLessonsQuickAccess';
+import { CityQuizMapView } from './components/CityQuizMapView';
+import { getCityMapProgression } from './utils/cityMapManager';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabKey>('accueil');
   const [user, setUser] = useState<UserProfile>(getLocalUserProfile());
   const { isOnline, pendingCount, triggerSync } = useSyncStatus();
-  const [currentLevel, setCurrentLevel] = useState<CEFRLevel>('C1');
+  const [currentLevel, setCurrentLevel] = useState<CEFRLevel>(user.level || 'C1');
   const [heroPhotoUrl, setHeroPhotoUrl] = useState<string>(user.heroImageURL);
 
   const isAuthenticated = Boolean(
@@ -82,6 +84,15 @@ export default function App() {
   });
   const [searchLessonForDetail, setSearchLessonForDetail] = useState<SchoolLesson | null>(null);
   const [favoriteLessonIds, setFavoriteLessonIds] = useState<string[]>(() => getFavoriteLessonIds());
+  const [cityMapProgression, setCityMapProgression] = useState(() => getCityMapProgression());
+
+  useEffect(() => {
+    const handleCityEvt = () => {
+      setCityMapProgression(getCityMapProgression());
+    };
+    window.addEventListener('eb_city_map_updated', handleCityEvt);
+    return () => window.removeEventListener('eb_city_map_updated', handleCityEvt);
+  }, []);
 
   useEffect(() => {
     const handleFavEvt = (e: Event) => {
@@ -160,6 +171,9 @@ export default function App() {
         if (Array.isArray(profile.favoriteLessonIds)) {
           setFavoriteLessonIds(profile.favoriteLessonIds);
         }
+        if (profile.cityMapProgression) {
+          setCityMapProgression(getCityMapProgression());
+        }
       }
     });
     return () => unsubscribe();
@@ -234,9 +248,10 @@ export default function App() {
       }
     }
 
-    const currentTotalXp = user.stats?.totalXp || 0;
+    const latestUser = getLocalUserProfile();
+    const currentTotalXp = latestUser.stats?.totalXp ?? 0;
     const newTotalXp = Math.max(0, currentTotalXp + delta);
-    const currentWeeklyXp = user.stats?.weeklyXp || 0;
+    const currentWeeklyXp = latestUser.stats?.weeklyXp ?? 0;
     const newWeeklyXp = Math.max(0, currentWeeklyXp + (delta > 0 ? delta : 0));
 
     // Calcul du niveau via la fonction utilitaire (100 pts par niveau)
@@ -245,7 +260,7 @@ export default function App() {
 
     const updated = await updateUserProfile({
       stats: {
-        ...user.stats,
+        ...latestUser.stats,
         weeklyXp: newWeeklyXp,
         totalXp: newTotalXp
       }
@@ -398,8 +413,8 @@ export default function App() {
 
             {/* Global Rank Card sous le Header */}
             <GlobalRankCard
-              totalXp={user.stats?.totalXp || 4850}
-              weeklyXp={user.stats?.weeklyXp || 2450}
+              totalXp={user.stats?.totalXp ?? 0}
+              weeklyXp={user.stats?.weeklyXp ?? 0}
               onNavigateLeaderboard={() => setActiveTab('classement')}
             />
 
@@ -576,6 +591,42 @@ export default function App() {
               </button>
             </div>
 
+            {/* Editorial City Design Banner for 100-Level Urban Quiz Map */}
+            <div
+              onClick={() => setActiveTab('carte')}
+              className="mx-4 sm:mx-6 my-2 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#191f2f] via-[#151b2b] to-[#0c1322] border border-[#f2ca50]/50 shadow-xl flex items-center justify-between gap-4 cursor-pointer hover:border-[#f2ca50] transition-all group"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-xl bg-[#0c1322] border border-[#f2ca50]/50 flex items-center justify-center text-[#f2ca50] shadow-md group-hover:scale-105 transition-transform shrink-0">
+                  <span className="material-symbols-outlined text-2xl font-bold" style={{ fontVariationSettings: "'FILL' 1" }}>
+                    map
+                  </span>
+                </div>
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-2 flex-wrap text-[10px] font-mono font-bold uppercase tracking-widest">
+                    <span className="text-[#f2ca50]">PLAN PRINCIPAL · 600 NIVEAUX URBAINS</span>
+                    <span className="text-[#99907c]">·</span>
+                    <span className="text-emerald-400">
+                      NIVEAU {cityMapProgression.unlockedLevel}/600 DÉBLOQUÉ
+                    </span>
+                  </div>
+                  <h3 className="font-serif font-bold text-base sm:text-lg text-[#dce2f8] group-hover:text-[#f2ca50] transition-colors mt-0.5">
+                    Parcours Cité de la 6e à la Terminale (10 Chapitres / Niveau)
+                  </h3>
+                  <p className="text-xs text-[#d0c5af]/85">
+                    {cityMapProgression.conqueredLevels.length} niveau(x) conquis · {cityMapProgression.totalStars} ★ — Validez les 10 chapitres d&apos;une étape pour ouvrir la suivante.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="px-4 py-2.5 rounded-xl bg-[#f2ca50] text-[#3c2f00] font-bold text-xs uppercase tracking-wider hidden sm:flex items-center gap-1 shrink-0 group-hover:bg-[#ffe088] shadow-md cursor-pointer"
+              >
+                <span>Ouvrir le Plan</span>
+                <span className="material-symbols-outlined text-sm">explore</span>
+              </button>
+            </div>
+
             {/* Editorial Banner for Weekly Leaderboard & Healthy Competition */}
             <div
               onClick={() => setActiveTab('classement')}
@@ -626,9 +677,9 @@ export default function App() {
 
             {/* Streak 7 Jours (Icônes Calendrier Remplies & Gamification) */}
             <SevenDayStreakSection
-              streakDays={user.stats?.streakDays || 24}
-              studyMinutesToday={user.stats?.studyMinutesToday || 25}
-              studyMinutesTarget={user.stats?.studyMinutesTarget || 30}
+              streakDays={user.stats?.streakDays ?? 0}
+              studyMinutesToday={user.stats?.studyMinutesToday ?? 0}
+              studyMinutesTarget={user.stats?.studyMinutesTarget ?? 30}
               onNavigateToCurriculum={() => setActiveTab('cursus')}
             />
 
@@ -647,6 +698,23 @@ export default function App() {
               </div>
               <span className="font-mono text-[#d4c78f]">MSZ SECURE</span>
             </footer>
+          </div>
+        )}
+
+        {activeTab === 'carte' && (
+          <div className="w-full animate-fadeIn pt-2">
+            <CityQuizMapView
+              progression={cityMapProgression}
+              playerLevel={calculateLevel(user.stats?.totalXp ?? 0)}
+              onXpEarned={(xp) => {
+                handleChallengeComplete(xp);
+                setUser(getLocalUserProfile());
+              }}
+              onProgressionUpdated={(nextState) => {
+                setCityMapProgression(nextState);
+                setUser(getLocalUserProfile());
+              }}
+            />
           </div>
         )}
 
@@ -710,6 +778,7 @@ export default function App() {
               onOpenQuiz={() => setIsQuizOpen(true)}
               onOpenSpeaking={() => setIsSpeakingOpen(true)}
               onOpenGames={() => setActiveTab('jeux')}
+              onOpenCityMap={() => setActiveTab('carte')}
             />
           </div>
         )}
@@ -724,6 +793,7 @@ export default function App() {
                 setUser(updated);
               }}
               onCustomPhotoUpload={handleCustomUpload}
+              onOpenInstallModal={() => setIsInstallModalOpen(true)}
             />
           </div>
         )}
@@ -820,8 +890,8 @@ export default function App() {
       <MszShopModal
         isOpen={isShopModalOpen}
         onClose={() => setIsShopModalOpen(false)}
-        userLevel={calculateLevel(user.stats?.totalXp || 0)}
-        completedLessons={user.stats?.completedModules || 14}
+        userLevel={calculateLevel(user.stats?.totalXp ?? 0)}
+        completedLessons={user.stats?.completedModules ?? 0}
         onProfileUpdated={() => setUser(getLocalUserProfile())}
       />
 

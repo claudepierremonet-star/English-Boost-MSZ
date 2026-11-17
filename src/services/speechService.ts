@@ -615,11 +615,16 @@ let autoPlayIncludeFrench: boolean = false;
 let audioSpeedMultiplier: number = 1.0;
 let lastAutoPlayAccent: AccentType = 'en-US';
 
+let customUsVoiceURI: string | null = null;
+
 // Load stored values safely
 try {
   if (typeof localStorage !== 'undefined') {
     const savedUs = localStorage.getItem(PREF_VOICE_US_KEY);
     if (savedUs && VOICE_PERSONAS.some((p) => p.id === savedUs)) selectedVoiceUsId = savedUs;
+
+    const savedCustomUsUri = localStorage.getItem(LEGACY_PREF_US_VOICE_URI_KEY);
+    if (savedCustomUsUri) customUsVoiceURI = savedCustomUsUri;
 
     const savedUk = localStorage.getItem(PREF_VOICE_UK_KEY);
     if (savedUk && VOICE_PERSONAS.some((p) => p.id === savedUk)) selectedVoiceUkId = savedUk;
@@ -664,10 +669,15 @@ function loadVoices(): SpeechSynthesisVoice[] {
 
 if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
   loadVoices();
-  window.speechSynthesis.onvoiceschanged = () => {
+  const handleVoicesChanged = () => {
     loadVoices();
     notifyListeners();
   };
+  if (typeof window.speechSynthesis.addEventListener === 'function') {
+    window.speechSynthesis.addEventListener('voiceschanged', handleVoicesChanged);
+  } else {
+    window.speechSynthesis.onvoiceschanged = handleVoicesChanged;
+  }
 }
 
 // State Listeners for active audio playback indicator
@@ -894,6 +904,11 @@ export function normalizeForAmericanAccent(text: string): string {
 function findPhysicalVoiceForPersona(persona: VoicePersona): SpeechSynthesisVoice | null {
   const voices = loadVoices();
   if (!voices || voices.length === 0) return null;
+
+  if (persona.language === 'en-US' && customUsVoiceURI) {
+    const customMatch = voices.find((v) => v.voiceURI === customUsVoiceURI);
+    if (customMatch) return customMatch;
+  }
 
   // Filter voices that match the language prefix (en or fr)
   const langPrefix = persona.language === 'fr-FR' ? 'fr' : 'en';
@@ -1289,9 +1304,17 @@ export function setPreferredUsVoiceGender(gender: VoiceGender): void {
 }
 
 export function getCustomUsVoiceURI(): string | null {
-  return null;
+  return customUsVoiceURI;
 }
 
-export function setCustomUsVoiceURI(_uri: string | null): void {
-  // no-op legacy bridge
+export function setCustomUsVoiceURI(uri: string | null): void {
+  customUsVoiceURI = uri || null;
+  try {
+    if (customUsVoiceURI) {
+      localStorage.setItem(LEGACY_PREF_US_VOICE_URI_KEY, customUsVoiceURI);
+    } else {
+      localStorage.removeItem(LEGACY_PREF_US_VOICE_URI_KEY);
+    }
+  } catch {}
+  notifyListeners();
 }

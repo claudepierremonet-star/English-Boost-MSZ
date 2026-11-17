@@ -36,7 +36,8 @@ import type {
   FlashcardProgress,
   CEFRLevel,
   LeaderboardEntry,
-  LeagueTier
+  LeagueTier,
+  CityMapProgressionState
 } from './types';
 import firebaseAppletConfig from '../../firebase-applet-config.json';
 
@@ -153,6 +154,101 @@ const LOCAL_USER_KEY = 'eb_msz_user_profile';
 const LOCAL_ATTEMPTS_KEY = 'eb_msz_attempts';
 const LOCAL_CARDS_KEY = 'eb_msz_cards_progress';
 export const LOCAL_FAVORITES_KEY = 'eb_msz_favorite_lessons';
+export const LOCAL_CITY_MAP_KEY = 'eb_msz_city_map_progression_v1';
+
+export const DEFAULT_CITY_MAP_PROGRESSION: CityMapProgressionState = {
+  unlockedLevel: 1,
+  completedChaptersByLevel: {},
+  conqueredLevels: [],
+  chapterBestScores: {},
+  chapterStars: {},
+  totalStars: 0,
+  lastPlayedLevel: 1,
+  updatedAt: new Date().toISOString()
+};
+
+export function mergeCityMapProgression(
+  local?: CityMapProgressionState | null,
+  remote?: CityMapProgressionState | null
+): CityMapProgressionState {
+  const completedChaptersByLevel: Record<string, number[]> = {};
+
+  const mergeMap = (src?: Record<string, number[]>) => {
+    if (!src || typeof src !== 'object') return;
+    for (const [lvlKey, chapters] of Object.entries(src)) {
+      if (!Array.isArray(chapters)) continue;
+      const existing = completedChaptersByLevel[lvlKey] || [];
+      const merged = Array.from(
+        new Set([...existing, ...chapters.filter((c) => Number.isInteger(c) && c >= 1 && c <= 10)])
+      ).sort((a, b) => a - b);
+      if (merged.length > 0) {
+        completedChaptersByLevel[lvlKey] = merged;
+      }
+    }
+  };
+
+  mergeMap(remote?.completedChaptersByLevel);
+  mergeMap(local?.completedChaptersByLevel);
+
+  const conqueredSet = new Set<number>([
+    ...((remote?.conqueredLevels || []).filter((n) => Number.isInteger(n) && n >= 1 && n <= 600)),
+    ...((local?.conqueredLevels || []).filter((n) => Number.isInteger(n) && n >= 1 && n <= 600))
+  ]);
+
+  for (const [lvlKey, chapters] of Object.entries(completedChaptersByLevel)) {
+    const lvlNum = parseInt(lvlKey, 10);
+    if (!isNaN(lvlNum) && lvlNum >= 1 && lvlNum <= 600 && chapters.length >= 10) {
+      conqueredSet.add(lvlNum);
+    }
+  }
+
+  const conqueredLevels = Array.from(conqueredSet).sort((a, b) => a - b);
+  let highestSequentialConquered = 0;
+  for (let i = 1; i <= 600; i++) {
+    if (conqueredSet.has(i)) {
+      highestSequentialConquered = i;
+    } else {
+      break;
+    }
+  }
+
+  const maxExplicitUnlocked = Math.max(
+    local?.unlockedLevel || 1,
+    remote?.unlockedLevel || 1,
+    highestSequentialConquered + 1
+  );
+  const unlockedLevel = Math.min(600, Math.max(1, maxExplicitUnlocked));
+
+  const chapterBestScores: Record<string, number> = {
+    ...(remote?.chapterBestScores || {})
+  };
+  for (const [k, v] of Object.entries(local?.chapterBestScores || {})) {
+    chapterBestScores[k] = Math.max(chapterBestScores[k] || 0, Number(v) || 0);
+  }
+
+  const chapterStars: Record<string, number> = {
+    ...(remote?.chapterStars || {})
+  };
+  for (const [k, v] of Object.entries(local?.chapterStars || {})) {
+    chapterStars[k] = Math.min(3, Math.max(chapterStars[k] || 0, Number(v) || 0));
+  }
+
+  const totalStars = Object.values(chapterStars).reduce((acc, s) => acc + (Number(s) || 0), 0);
+
+  return {
+    unlockedLevel,
+    completedChaptersByLevel,
+    conqueredLevels,
+    chapterBestScores,
+    chapterStars,
+    totalStars,
+    lastPlayedLevel: Math.min(
+      unlockedLevel,
+      Math.max(1, local?.lastPlayedLevel || remote?.lastPlayedLevel || unlockedLevel)
+    ),
+    updatedAt: new Date().toISOString()
+  };
+}
 
 // Default guest profile
 export const DEFAULT_USER_PROFILE: UserProfile = {
@@ -179,7 +275,8 @@ export const DEFAULT_USER_PROFILE: UserProfile = {
     level: 1,
     unlockedMaxGameNumber: 1,
     completedGames: []
-  }
+  },
+  cityMapProgression: DEFAULT_CITY_MAP_PROGRESSION
 };
 
 /**
@@ -227,6 +324,15 @@ export function getLocalUserProfile(): UserProfile {
           }
         } catch {}
       }
+      const cityMapRaw = localStorage.getItem(LOCAL_CITY_MAP_KEY);
+      if (cityMapRaw) {
+        try {
+          const parsedCity = JSON.parse(cityMapRaw) as CityMapProgressionState;
+          parsed.cityMapProgression = mergeCityMapProgression(parsedCity, parsed.cityMapProgression);
+        } catch {}
+      } else if (!parsed.cityMapProgression) {
+        parsed.cityMapProgression = { ...DEFAULT_CITY_MAP_PROGRESSION };
+      }
       return parsed;
     }
   } catch (e) {
@@ -239,8 +345,11 @@ export function getLocalUserProfile(): UserProfile {
       defaultProf.arcadeProgression = JSON.parse(arcadeRaw);
     }
     const mszBalanceRaw = localStorage.getItem('eb_msz_coins_balance');
-    if (mszBalanceRaw) {
-      defaultProf.mszCoinsBalance = parseInt(mszBalanceRaw, 10) || 150;
+    if (mszBalanceRaw !== null) {
+      const parsedCoins = parseInt(mszBalanceRaw, 10);
+      if (!isNaN(parsedCoins)) {
+        defaultProf.mszCoinsBalance = parsedCoins;
+      }
     }
     const favLessonsRaw = localStorage.getItem(LOCAL_FAVORITES_KEY);
     if (favLessonsRaw) {
@@ -248,6 +357,11 @@ export function getLocalUserProfile(): UserProfile {
       if (Array.isArray(parsedFavs)) {
         defaultProf.favoriteLessonIds = parsedFavs.filter((id): id is string => typeof id === 'string');
       }
+    }
+    const cityMapRaw = localStorage.getItem(LOCAL_CITY_MAP_KEY);
+    if (cityMapRaw) {
+      const parsedCity = JSON.parse(cityMapRaw) as CityMapProgressionState;
+      defaultProf.cityMapProgression = mergeCityMapProgression(parsedCity, DEFAULT_CITY_MAP_PROGRESSION);
     }
   } catch (e) {}
   return defaultProf;
@@ -261,6 +375,9 @@ export function saveLocalUserProfile(profile: UserProfile): void {
     localStorage.setItem(LOCAL_USER_KEY, JSON.stringify(profile));
     if (profile.arcadeProgression) {
       localStorage.setItem('msz_arcade_progression_v1', JSON.stringify(profile.arcadeProgression));
+    }
+    if (profile.cityMapProgression) {
+      localStorage.setItem(LOCAL_CITY_MAP_KEY, JSON.stringify(profile.cityMapProgression));
     }
     if (typeof profile.mszCoinsBalance === 'number') {
       localStorage.setItem('eb_msz_coins_balance', profile.mszCoinsBalance.toString());
@@ -353,6 +470,15 @@ export async function signInWithGoogle(): Promise<UserProfile> {
         const favsChanged = mergedFavs.length !== (profile.favoriteLessonIds || []).length;
         profile.favoriteLessonIds = mergedFavs;
 
+        const mergedCityMap = mergeCityMapProgression(
+          currentLocal?.cityMapProgression,
+          profile.cityMapProgression
+        );
+        const cityMapChanged =
+          mergedCityMap.unlockedLevel > (profile.cityMapProgression?.unlockedLevel || 1) ||
+          mergedCityMap.totalStars > (profile.cityMapProgression?.totalStars || 0);
+        profile.cityMapProgression = mergedCityMap;
+
         if (currentLocal && (currentLocal.stats?.totalXp || 0) > (profile.stats?.totalXp || 0)) {
           profile.stats = {
             ...profile.stats,
@@ -361,9 +487,16 @@ export async function signInWithGoogle(): Promise<UserProfile> {
             completedModules: Math.max(profile.stats.completedModules, currentLocal.stats.completedModules),
             streakDays: Math.max(profile.stats.streakDays, currentLocal.stats.streakDays)
           };
-          await updateDoc(userRef, { stats: profile.stats, favoriteLessonIds: mergedFavs });
-        } else if (favsChanged) {
-          await updateDoc(userRef, { favoriteLessonIds: mergedFavs });
+          await updateDoc(userRef, {
+            stats: profile.stats,
+            favoriteLessonIds: mergedFavs,
+            cityMapProgression: mergedCityMap
+          });
+        } else if (favsChanged || cityMapChanged) {
+          await updateDoc(userRef, {
+            favoriteLessonIds: mergedFavs,
+            cityMapProgression: mergedCityMap
+          });
         }
       } else {
         // First-time scholar registration with Google
@@ -379,7 +512,8 @@ export async function signInWithGoogle(): Promise<UserProfile> {
             ...DEFAULT_USER_PROFILE.stats,
             ...(currentLocal.stats || {})
           },
-          favoriteLessonIds: currentLocal.favoriteLessonIds || []
+          favoriteLessonIds: currentLocal.favoriteLessonIds || [],
+          cityMapProgression: currentLocal.cityMapProgression || DEFAULT_CITY_MAP_PROGRESSION
         };
         await setDoc(userRef, profile);
 
@@ -474,10 +608,25 @@ export function subscribeToAuthState(callback: (profile: UserProfile | null) => 
               activeSession: localArcade?.activeSession || firestoreArcade?.activeSession || null
             };
 
+            const todayStr = new Date().toISOString().split('T')[0];
+            const localDate = currentLocal.stats?.lastActiveDate || '';
+            const remoteDate = data.stats?.lastActiveDate || '';
+            const mergedLastActiveDate = localDate >= remoteDate ? localDate : remoteDate;
+            const mergedStudyToday =
+              localDate === todayStr && remoteDate === todayStr
+                ? Math.max(currentLocal.stats?.studyMinutesToday ?? 0, data.stats?.studyMinutesToday ?? 0)
+                : localDate === todayStr
+                ? (currentLocal.stats?.studyMinutesToday ?? 0)
+                : (data.stats?.studyMinutesToday ?? 0);
+
             data.stats = {
               ...data.stats,
               totalXp: Math.max(data.stats?.totalXp || 0, currentLocal.stats?.totalXp || 0, maxPoints),
-              weeklyXp: Math.max(data.stats?.weeklyXp || 0, currentLocal.stats?.weeklyXp || 0)
+              weeklyXp: Math.max(data.stats?.weeklyXp || 0, currentLocal.stats?.weeklyXp || 0),
+              studyMinutesToday: mergedStudyToday,
+              studyMinutesTarget: currentLocal.stats?.studyMinutesTarget ?? data.stats?.studyMinutesTarget ?? 30,
+              totalImmersionMinutes: Math.max(data.stats?.totalImmersionMinutes ?? 0, currentLocal.stats?.totalImmersionMinutes ?? 0),
+              lastActiveDate: mergedLastActiveDate || todayStr
             };
 
             // Merge MSZ Coins balance & card instances (by serial code)
@@ -488,8 +637,11 @@ export function subscribeToAuthState(callback: (profile: UserProfile | null) => 
             localInstances.forEach((inst) => instancesMap.set(inst.serialCode, inst));
             const mergedInstances = Array.from(instancesMap.values());
 
+            const firestoreBalance = typeof data.mszCoinsBalance === 'number' ? data.mszCoinsBalance : 0;
+            const localBalance = typeof currentLocal.mszCoinsBalance === 'number' ? currentLocal.mszCoinsBalance : 150;
+
             data.ownedCardInstances = mergedInstances.length > 0 ? mergedInstances : localInstances;
-            data.mszCoinsBalance = Math.max(data.mszCoinsBalance || 0, currentLocal.mszCoinsBalance || 150);
+            data.mszCoinsBalance = Math.max(firestoreBalance, localBalance);
             data.equippedCharacterId = data.equippedCharacterId || currentLocal.equippedCharacterId || 'char_eclat';
 
             // Merge favorite lessons (union of local & Firestore)
@@ -497,6 +649,20 @@ export function subscribeToAuthState(callback: (profile: UserProfile | null) => 
             const firestoreFavs = data.favoriteLessonIds || [];
             const mergedFavs = Array.from(new Set([...localFavs, ...firestoreFavs])).slice(0, 200);
             data.favoriteLessonIds = mergedFavs;
+
+            // Merge 100-level city quiz map progression
+            const mergedCityMap = mergeCityMapProgression(
+              currentLocal.cityMapProgression,
+              data.cityMapProgression
+            );
+            const remoteCityUnlocked = data.cityMapProgression?.unlockedLevel || 1;
+            const remoteCityStars = data.cityMapProgression?.totalStars || 0;
+            const remoteCityConquered = (data.cityMapProgression?.conqueredLevels || []).length;
+            const cityNeedsSync =
+              mergedCityMap.unlockedLevel > remoteCityUnlocked ||
+              mergedCityMap.totalStars > remoteCityStars ||
+              mergedCityMap.conqueredLevels.length > remoteCityConquered;
+            data.cityMapProgression = mergedCityMap;
 
             saveLocalUserProfile(data);
             saveProfileToIndexedDB(data).catch(console.warn);
@@ -506,13 +672,15 @@ export function subscribeToAuthState(callback: (profile: UserProfile | null) => 
               (localArcade?.points || 0) > (firestoreArcade?.points || 0) ||
               mergedInstances.length > firestoreInstances.length ||
               mergedFavs.length > firestoreFavs.length ||
-              (currentLocal.mszCoinsBalance || 0) > (firestoreInstances.length ? (data.mszCoinsBalance || 0) : 0);
+              localBalance > firestoreBalance ||
+              cityNeedsSync;
 
             if (needsSync) {
               setDoc(
                 userRef,
                 {
                   arcadeProgression: data.arcadeProgression,
+                  cityMapProgression: data.cityMapProgression,
                   stats: data.stats,
                   ownedCardInstances: data.ownedCardInstances,
                   mszCoinsBalance: data.mszCoinsBalance,
@@ -551,7 +719,8 @@ export async function updateUserProfile(profile: Partial<UserProfile>): Promise<
       ...current.stats,
       ...(profile.stats || {})
     },
-    arcadeProgression: profile.arcadeProgression || current.arcadeProgression
+    arcadeProgression: profile.arcadeProgression || current.arcadeProgression,
+    cityMapProgression: profile.cityMapProgression || current.cityMapProgression
   };
   saveLocalUserProfile(updated);
   saveProfileToIndexedDB(updated).catch(console.warn);
@@ -686,9 +855,11 @@ export async function compressImageToDataUrl(file: File, maxWidth = 1600, maxHei
             ctx.imageSmoothingEnabled = true;
             ctx.imageSmoothingQuality = 'high';
             ctx.drawImage(bitmap, 0, 0, width, height);
+            bitmap.close?.();
             resolve(canvas.toDataURL('image/jpeg', quality));
             return;
           }
+          bitmap.close?.();
           fallbackFileReader(file, resolve);
         })
         .catch(() => {
@@ -1078,8 +1249,8 @@ export async function fetchWeeklyLeaderboard(
     });
   }
 
-  // Attempt to fetch real Firestore registered users if available
-  if (db && isFirebaseConfigured) {
+  // Attempt to fetch real Firestore registered users only when authenticated (security rules require sign-in)
+  if (db && isFirebaseConfigured && auth?.currentUser) {
     try {
       const q = query(
         collection(db, 'users'),

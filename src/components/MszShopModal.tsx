@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import {
   SHOP_CATEGORIES,
@@ -40,7 +40,7 @@ interface MszShopModalProps {
 export const MszShopModal: React.FC<MszShopModalProps> = ({
   isOpen,
   onClose,
-  userLevel = 14,
+  userLevel = 1,
   completedLessons,
   onProfileUpdated
 }) => {
@@ -63,6 +63,9 @@ export const MszShopModal: React.FC<MszShopModalProps> = ({
     }
   });
 
+  const sparkleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const triggerSparkle = useCallback(() => {
     setIsSparkling(true);
     try {
@@ -76,10 +79,10 @@ export const MszShopModal: React.FC<MszShopModalProps> = ({
         scalar: 0.75
       });
     } catch {}
-    const timer = setTimeout(() => {
+    if (sparkleTimerRef.current) clearTimeout(sparkleTimerRef.current);
+    sparkleTimerRef.current = setTimeout(() => {
       setIsSparkling(false);
     }, 3000);
-    return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -173,12 +176,15 @@ export const MszShopModal: React.FC<MszShopModalProps> = ({
       window.removeEventListener('msz-inventory-updated', handleCoinsUpdate);
       window.removeEventListener('msz-equipped-updated', handleCoinsUpdate);
       window.removeEventListener('msz-market-updated', handleCoinsUpdate);
+      if (sparkleTimerRef.current) clearTimeout(sparkleTimerRef.current);
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     };
   }, [refreshState]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3800);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToastMessage(null), 3800);
   };
 
   // Filter characters in shop
@@ -1396,7 +1402,10 @@ export const MszShopModal: React.FC<MszShopModalProps> = ({
                             alt={character.name}
                             className="w-full h-full object-cover"
                             onError={(e) => {
-                              e.currentTarget.src = '/assets/aistudio/VOLT.png';
+                              const target = e.currentTarget;
+                              if (target.dataset.fallbackApplied) return;
+                              target.dataset.fallbackApplied = 'true';
+                              target.src = '/assets/aistudio/VOLT.png';
                             }}
                           />
                         </div>
@@ -1742,11 +1751,9 @@ export const MszShopModal: React.FC<MszShopModalProps> = ({
                       }}
                       onError={(e) => {
                         const target = e.currentTarget;
-                        if (!target.src.includes('/public/')) {
-                          target.src = `/public${inspectedCharacter.image}`;
-                        } else {
-                          target.src = '/assets/aistudio/VOLT.png';
-                        }
+                        if (target.dataset.fallbackApplied) return;
+                        target.dataset.fallbackApplied = 'true';
+                        target.src = '/assets/aistudio/VOLT.png';
                       }}
                     />
 

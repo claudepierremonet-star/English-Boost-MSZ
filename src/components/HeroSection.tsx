@@ -88,6 +88,16 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   const heroImgRef = useRef<HTMLImageElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const blobUrlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = null;
+      }
+    };
+  }, []);
 
   // Sync active preset index with currentPhotoUrl (-1 when custom photo is active)
   useEffect(() => {
@@ -130,10 +140,16 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 
   const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || isUploading) return;
+
+    if (blobUrlRef.current) {
+      URL.revokeObjectURL(blobUrlRef.current);
+      blobUrlRef.current = null;
+    }
 
     // 1. Instant 0ms latency display with local object URL
     const instantUrl = URL.createObjectURL(file);
+    blobUrlRef.current = instantUrl;
     onPhotoChange(instantUrl);
     setActivePresetIdx(-1);
 
@@ -143,6 +159,10 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       const persistedUrl = await onCustomUpload(file);
       if (persistedUrl && persistedUrl !== instantUrl) {
         onPhotoChange(persistedUrl);
+        if (blobUrlRef.current === instantUrl) {
+          URL.revokeObjectURL(instantUrl);
+          blobUrlRef.current = null;
+        }
       }
     } catch (err) {
       console.warn('Upload persistence error, preserving instant local preview', err);
@@ -351,12 +371,9 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               {/* Custom Upload Button */}
               <label
                 htmlFor="hero-photo-upload"
-                onClick={() => {
-                  if (!isUploading) {
-                    fileInputRef.current?.click();
-                  }
-                }}
-                className={`relative w-11 h-11 rounded-xl flex items-center justify-center cursor-pointer active:scale-95 transition-all shadow-md shrink-0 ${
+                className={`relative w-11 h-11 rounded-xl flex items-center justify-center active:scale-95 transition-all shadow-md shrink-0 ${
+                  isUploading ? 'cursor-wait opacity-80' : 'cursor-pointer'
+                } ${
                   activePresetIdx === -1
                     ? 'ring-2 ring-[#f2ca50] ring-offset-2 ring-offset-[#0c1424] bg-[#1a2b52] text-[#f2ca50] shadow-[0_0_14px_rgba(242,202,80,0.45)] border border-[#f2ca50]'
                     : 'bg-[#13203c] border border-[#f2ca50]/50 text-[#ffe082] hover:text-white hover:bg-[#1a2b52]'
@@ -372,6 +389,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   ref={fileInputRef}
                   type="file"
                   accept="image/png, image/jpeg, image/webp, image/gif, image/*"
+                  disabled={isUploading}
                   onChange={handleFileInput}
                   className="hidden"
                 />

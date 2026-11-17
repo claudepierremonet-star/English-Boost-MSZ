@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 
-export type TabKey = 'accueil' | 'cursus' | 'jeux' | 'classement' | 'pratique' | 'dashboard' | 'profil';
+export type TabKey = 'accueil' | 'carte' | 'cursus' | 'jeux' | 'classement' | 'pratique' | 'dashboard' | 'profil';
 
 interface BottomNavProps {
   activeTab: TabKey;
@@ -11,6 +11,7 @@ interface BottomNavProps {
 export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) => {
   const tabs: Array<{ key: TabKey; label: string; icon: string }> = [
     { key: 'accueil', label: 'Accueil', icon: 'auto_stories' },
+    { key: 'carte', label: 'Plan 600', icon: 'map' },
     { key: 'cursus', label: 'Cursus', icon: 'school' },
     { key: 'jeux', label: 'Game', icon: 'sports_esports' },
     { key: 'classement', label: 'Top XP', icon: 'leaderboard' },
@@ -21,7 +22,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 pb-safe bg-[#0c1322]/90 backdrop-blur-xl border-t border-[#232a3a]/80 shadow-[0_-4px_24px_rgba(0,0,0,0.6)]">
-      <div className="max-w-xl mx-auto h-16 px-1.5 sm:px-4 flex items-center justify-around">
+      <div className="max-w-2xl mx-auto h-16 px-1 sm:px-3 flex items-center justify-between gap-0.5">
         {tabs.map((tab) => {
           const isActive = activeTab === tab.key;
           return (
@@ -29,7 +30,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
               key={tab.key}
               type="button"
               onClick={() => onTabChange(tab.key)}
-              className={`relative flex flex-col items-center justify-center gap-0.5 min-w-[42px] sm:min-w-[56px] min-h-[48px] py-1 px-1.5 sm:px-2 rounded-2xl transition-colors duration-200 cursor-pointer active:scale-95 ${
+              className={`relative flex-1 min-w-0 flex flex-col items-center justify-center gap-0.5 min-h-[48px] py-1 px-0.5 sm:px-1.5 rounded-2xl transition-colors duration-200 cursor-pointer active:scale-95 ${
                 isActive ? 'text-[#f2ca50]' : 'text-[#d0c5af]/70 hover:text-[#dce2f8]'
               }`}
             >
@@ -52,7 +53,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
                 <motion.span
                   animate={{ scale: isActive ? 1.12 : 1 }}
                   transition={{ type: 'spring', stiffness: 400, damping: 20 }}
-                  className="material-symbols-outlined text-[23px] transition-transform duration-200"
+                  className="material-symbols-outlined text-[20px] sm:text-[22px] transition-transform duration-200"
                   style={isActive ? { fontVariationSettings: "'FILL' 1" } : undefined}
                 >
                   {tab.icon}
@@ -60,8 +61,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
               </div>
 
               <span
-                className={`relative z-10 text-[11px] tracking-wide font-sans transition-all duration-200 ${
-                  isActive ? 'text-[#f2ca50] font-bold scale-105' : 'text-[#d0c5af]/80 font-medium'
+                className={`relative z-10 text-[10px] sm:text-[11px] tracking-tight sm:tracking-wide font-sans truncate max-w-full transition-all duration-200 ${
+                  isActive ? 'text-[#f2ca50] font-bold' : 'text-[#d0c5af]/80 font-medium'
                 }`}
               >
                 {tab.label}

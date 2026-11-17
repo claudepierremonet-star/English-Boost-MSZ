@@ -208,10 +208,10 @@ export const VocabularyMasterySummary: React.FC<VocabularyMasterySummaryProps> =
           </span>
           <div className="flex items-baseline gap-1.5">
             <span className="text-lg font-bold text-white font-mono">
-              {summaryData?.stats.totalActiveLexicon || 395}
+              {summaryData ? (summaryData.stats.totalActiveLexicon ?? 0) : (isLoading ? '—' : 0)}
             </span>
             <span className="text-[11px] text-emerald-400 font-mono font-semibold">
-              +{wordsGrowth > 0 ? wordsGrowth : 24}
+              {summaryData ? `${wordsGrowth >= 0 ? '+' : ''}${wordsGrowth}` : ''}
             </span>
           </div>
           <span className="text-[10px] text-[#99907c]">mots assimilés</span>
@@ -224,7 +224,7 @@ export const VocabularyMasterySummary: React.FC<VocabularyMasterySummaryProps> =
           </span>
           <div className="flex items-baseline gap-1.5">
             <span className="text-lg font-bold text-[#f2ca50] font-mono">
-              {summaryData?.stats.totalMastered || 310}
+              {summaryData ? (summaryData.stats.totalMastered ?? 0) : (isLoading ? '—' : 0)}
             </span>
             <span className="text-[10px] text-[#99907c]">lexèmes</span>
           </div>
@@ -238,9 +238,11 @@ export const VocabularyMasterySummary: React.FC<VocabularyMasterySummaryProps> =
           </span>
           <div className="flex items-baseline gap-1.5">
             <span className="text-lg font-bold text-emerald-400 font-mono">
-              {summaryData?.stats.overallRetentionRate.toFixed(1) || '92.4'}%
+              {summaryData ? `${(summaryData.stats.overallRetentionRate ?? 0).toFixed(1)}%` : (isLoading ? '—' : '0.0%')}
             </span>
-            <span className="text-[10px] text-emerald-300 font-mono">Élite</span>
+            <span className="text-[10px] text-emerald-300 font-mono">
+              {summaryData && summaryData.stats.overallRetentionRate >= 85 ? 'Élite' : ''}
+            </span>
           </div>
           <span className="text-[10px] text-[#99907c]">Intervalle moyen validé</span>
         </div>
@@ -252,7 +254,7 @@ export const VocabularyMasterySummary: React.FC<VocabularyMasterySummaryProps> =
           </span>
           <div className="flex items-baseline gap-1.5">
             <span className="text-lg font-bold text-[#38bdf8] font-mono">
-              {summaryData?.stats.memoryStabilityIndex || 8.6}
+              {summaryData ? (summaryData.stats.memoryStabilityIndex ?? 0) : (isLoading ? '—' : 0)}
             </span>
             <span className="text-[11px] text-[#99907c]">/ 10</span>
           </div>
@@ -357,7 +359,7 @@ export const VocabularyMasterySummary: React.FC<VocabularyMasterySummaryProps> =
                     tickLine={false}
                     axisLine={false}
                     tick={{ fill: '#99907c' }}
-                    domain={['dataMin - 20', 'dataMax + 30']}
+                    domain={[(dataMin: number) => Math.max(0, dataMin - 20), (dataMax: number) => Math.max(10, dataMax + 30)]}
                   />
 
                   <Tooltip content={<CustomVocabularyTooltip />} />
@@ -450,7 +452,7 @@ export const VocabularyMasterySummary: React.FC<VocabularyMasterySummaryProps> =
         <div className="flex items-center justify-between text-xs text-[#d0c5af]">
           <span className="font-semibold text-[#dce2f8]">Répartition par Palier CECRL</span>
           <span className="text-[11px] font-mono text-[#f2ca50]">
-            Capacité Globale : {summaryData?.stats.totalActiveLexicon || 395} lexèmes
+            Capacité Globale : {summaryData ? (summaryData.stats.totalActiveLexicon ?? 0) : 0} lexèmes
           </span>
         </div>
 

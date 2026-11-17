@@ -152,18 +152,18 @@ const SEED_ERRORS: ErrorJournalItem[] = [
 export function getErrorJournal(): ErrorJournalItem[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
+    if (raw === null) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(SEED_ERRORS));
-      return SEED_ERRORS;
+      return SEED_ERRORS.map((item) => ({ ...item }));
     }
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed) || parsed.length === 0) {
+    if (!Array.isArray(parsed)) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(SEED_ERRORS));
-      return SEED_ERRORS;
+      return SEED_ERRORS.map((item) => ({ ...item }));
     }
     return parsed;
   } catch {
-    return SEED_ERRORS;
+    return SEED_ERRORS.map((item) => ({ ...item }));
   }
 }
 

@@ -423,53 +423,66 @@ export function compareOrthographyAndPhonetics(
 
   // Calculate scores
   const totalExpected = Math.max(1, rawExpectedTokens.length);
-  const orthographicScore = Math.max(
-    0,
-    Math.min(
-      100,
-      Math.round(
-        ((exactMatches * 1.0 + nearMatches * 0.75) / totalExpected) * 100 - extraCount * 4
+  const hasSpoken = rawSpokenTokens.length > 0;
+  const orthographicScore = hasSpoken
+    ? Math.max(
+        0,
+        Math.min(
+          100,
+          Math.round(
+            ((exactMatches * 1.0 + nearMatches * 0.75) / totalExpected) * 100 - extraCount * 4
+          )
+        )
       )
-    )
-  );
+    : 0;
 
-  const phoneticScore = Math.max(
-    20,
-    Math.min(
-      100,
-      Math.round(
-        orthographicScore * 0.85 + (pitfalls.length > 0 ? 12 : 15)
+  const phoneticScore = hasSpoken
+    ? Math.max(
+        0,
+        Math.min(
+          100,
+          Math.round(
+            orthographicScore * 0.85 + (pitfalls.length > 0 ? 12 : 15)
+          )
+        )
       )
-    )
-  );
+    : 0;
 
-  const overallScore = Math.round((orthographicScore * 0.55 + phoneticScore * 0.45));
+  const overallScore = hasSpoken ? Math.round((orthographicScore * 0.55 + phoneticScore * 0.45)) : 0;
 
   // Build feedback summary & pedagogical advice
   const strengths: string[] = [];
   const pedagogicalAdvice: string[] = [];
 
-  if (exactMatches >= totalExpected * 0.8) {
-    strengths.push('Excellente articulation globale et reconnaissance immédiate des termes cibles.');
-  }
-  if (nearMatches > 0) {
+  if (!hasSpoken) {
     pedagogicalAdvice.push(
-      `${nearMatches} mot(s) ont une orthographe ou une sonorité proche : vérifiez les finales et les voyelles courtes.`
+      'Aucune parole distincte n’a été captée par la reconnaissance vocale. Rapprochez-vous du microphone et réessayez.'
     );
-  }
-  if (omittedCount > 0) {
-    pedagogicalAdvice.push(
-      `${omittedCount} mot(s) attendu(s) n'ont pas été détectés : veillez à maintenir un débit régulier sans avaler les fins de phrases.`
-    );
-  }
-  if (extraCount > 0) {
-    pedagogicalAdvice.push(
-      `${extraCount} mot(s) parasite(s) ou hésitation(s) repéré(s) : marquez des respirations nettes plutôt que des interjections vocales.`
-    );
+  } else {
+    if (exactMatches >= totalExpected * 0.8) {
+      strengths.push('Excellente articulation globale et reconnaissance immédiate des termes cibles.');
+    }
+    if (nearMatches > 0) {
+      pedagogicalAdvice.push(
+        `${nearMatches} mot(s) ont une orthographe ou une sonorité proche : vérifiez les finales et les voyelles courtes.`
+      );
+    }
+    if (omittedCount > 0) {
+      pedagogicalAdvice.push(
+        `${omittedCount} mot(s) attendu(s) n'ont pas été détectés : veillez à maintenir un débit régulier sans avaler les fins de phrases.`
+      );
+    }
+    if (extraCount > 0) {
+      pedagogicalAdvice.push(
+        `${extraCount} mot(s) parasite(s) ou hésitation(s) repéré(s) : marquez des respirations nettes plutôt que des interjections vocales.`
+      );
+    }
   }
 
   let summaryMessage = 'Bonne session de dictée et prononciation.';
-  if (overallScore >= 90) {
+  if (!hasSpoken) {
+    summaryMessage = 'Aucune parole détectée. Veuillez parler distinctement près du microphone puis relancer la dictée.';
+  } else if (overallScore >= 90) {
     summaryMessage = 'Prestation remarquable ! Élocution claire, fidèle au modèle natif et sans faute orthographique notable.';
   } else if (overallScore >= 75) {
     summaryMessage = 'Bonne maîtrise de l’élocution. Quelques ajustements phonétiques et orthographiques recommandés ci-dessous.';

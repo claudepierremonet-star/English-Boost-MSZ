@@ -25,6 +25,8 @@ import {
   peekNextAlternatingAccent,
   speakText
 } from '../services/speechService';
+import appIconImg from '../assets/images/app_icon_msz_1792789129742.jpg';
+import { calculateLevel } from '../utils/levelUtils';
 
 interface ProfileModalProps {
   user: UserProfile;
@@ -47,6 +49,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   const [isSigningIn, setIsSigningIn] = useState<boolean>(false);
   const [autoPlayAudio, setAutoPlayAudio] = useState<boolean>(getAutoPlayOnDisplay());
   const [celebrationBadge, setCelebrationBadge] = useState<AcademicBadge | null>(null);
+  const [claimedBadgeIds, setClaimedBadgeIds] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('eb_msz_claimed_badges') || '[]');
+    } catch {
+      return [];
+    }
+  });
   const [isErrorJournalOpen, setIsErrorJournalOpen] = useState<boolean>(false);
   const [isVoiceStudioOpen, setIsVoiceStudioOpen] = useState<boolean>(false);
   const [isShopOpen, setIsShopOpen] = useState<boolean>(false);
@@ -114,6 +123,15 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   }, [onClose]);
 
   const handleClaimReward = (badge: AcademicBadge) => {
+    if (!badge.isUnlocked || claimedBadgeIds.includes(badge.id)) {
+      setCelebrationBadge(null);
+      return;
+    }
+    const nextClaimed = [...claimedBadgeIds, badge.id];
+    setClaimedBadgeIds(nextClaimed);
+    try {
+      localStorage.setItem('eb_msz_claimed_badges', JSON.stringify(nextClaimed));
+    } catch {}
     onUpdateUser({
       stats: {
         ...user.stats,
@@ -354,7 +372,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                   </span>
                   {equippedInstance && (
                     <span className="text-[9px] font-mono font-black text-[#ffd700] px-1.5 py-0.2 rounded bg-amber-500/25 border border-amber-400/50">
-                      N° ${equippedInstance.editionNumber}/${equippedInstance.maxSupply || 100}
+                      N° {equippedInstance.editionNumber}/{equippedInstance.maxSupply || 100}
                     </span>
                   )}
                 </div>
@@ -849,7 +867,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             <div className="flex items-center gap-3.5">
               <div className="w-12 h-12 rounded-xl overflow-hidden p-0.5 bg-gradient-to-br from-[#f2ca50] via-[#c69214] to-[#f2ca50] shadow-md shadow-[#f2ca50]/20 shrink-0">
                 <img
-                  src="/src/assets/images/app_icon_msz_1792789129742.jpg"
+                  src={appIconImg}
                   alt="Icône English Boost MSZ"
                   className="w-full h-full object-cover rounded-[10px]"
                   referrerPolicy="no-referrer"
@@ -931,6 +949,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
         badge={celebrationBadge}
         isOpen={!!celebrationBadge}
         onClose={() => setCelebrationBadge(null)}
+        alreadyClaimed={celebrationBadge ? claimedBadgeIds.includes(celebrationBadge.id) : false}
         onClaimReward={handleClaimReward}
       />
 
@@ -966,7 +985,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           setMszBalance(getMszCoinsBalance());
           setEquippedCharId(getEquippedCharacterId());
         }}
-        userLevel={user.arcadeProgression?.level || 14}
+        userLevel={calculateLevel(user.stats?.totalXp ?? 0)}
         onProfileUpdated={() => {
           setMszBalance(getMszCoinsBalance());
           setEquippedCharId(getEquippedCharacterId());

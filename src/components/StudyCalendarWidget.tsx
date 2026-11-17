@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { UserProfile, LearningAttempt } from '../firebase/types';
 import { getUserLearningAttempts } from '../firebase/client';
@@ -128,6 +128,13 @@ export const StudyCalendarWidget: React.FC<StudyCalendarWidgetProps> = ({
     title: string;
     message: string;
   }>({ show: false, title: '', message: '' });
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
@@ -175,7 +182,15 @@ export const StudyCalendarWidget: React.FC<StudyCalendarWidgetProps> = ({
   // Request browser notification permission
   const handleRequestPushPermission = async () => {
     if (typeof window === 'undefined' || !('Notification' in window)) {
-      alert('Les notifications web ne sont pas supportées sur ce navigateur.');
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      setTestNotificationToast({
+        show: true,
+        title: 'Notifications indisponibles',
+        message: 'Les notifications web ne sont pas supportées sur ce navigateur.'
+      });
+      toastTimerRef.current = setTimeout(() => {
+        setTestNotificationToast({ show: false, title: '', message: '' });
+      }, 5000);
       return;
     }
     try {
@@ -223,7 +238,8 @@ export const StudyCalendarWidget: React.FC<StudyCalendarWidgetProps> = ({
         message: body
       });
 
-      setTimeout(() => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = setTimeout(() => {
         setTestNotificationToast({ show: false, title: '', message: '' });
       }, 5000);
     },
@@ -314,10 +330,10 @@ export const StudyCalendarWidget: React.FC<StudyCalendarWidgetProps> = ({
         modules = attemptData.modules;
       } else if (isToday) {
         // Current day active session
-        hasStudied = user.stats.studyMinutesToday > 0;
-        durationMinutes = user.stats.studyMinutesToday || 25;
+        hasStudied = (user.stats.studyMinutesToday ?? 0) > 0;
+        durationMinutes = user.stats.studyMinutesToday ?? 0;
         xpEarned = Math.round(durationMinutes * 14);
-        modules = ['Session Quotidienne Oxford', 'Leçon Thématique'];
+        modules = hasStudied ? ['Session Quotidienne Oxford', 'Leçon Thématique'] : [];
       } else if (isPast) {
         // If within the user's active streak (up to user.stats.streakDays days ago)
         const diffDays = Math.floor(
@@ -380,13 +396,21 @@ export const StudyCalendarWidget: React.FC<StudyCalendarWidgetProps> = ({
     };
   }, [daysGrid]);
 
-  // Current Week Progress based on user's weekly goals
+  // Current Week Progress based on user's weekly goals and actual attempts / streak
   const weekProgress = useMemo(() => {
-    // Current week: Monday to Sunday of the current week
     const now = new Date();
+    const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const currentDayOfWeek = (now.getDay() + 6) % 7; // 0=Mon, ..., 6=Sun
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - currentDayOfWeek);
+    const monday = new Date(todayMidnight);
+    monday.setDate(todayMidnight.getDate() - currentDayOfWeek);
+
+    const xpByDate: Record<string, number> = {};
+    attempts.forEach((att) => {
+      if (att.completedAt) {
+        const key = att.completedAt.slice(0, 10);
+        xpByDate[key] = (xpByDate[key] || 0) + (att.score ? Math.round(att.score * 3.5) : 120);
+      }
+    });
 
     const weekDays: Array<{ dayName: string; isPast: boolean; isToday: boolean; hasStudied: boolean; xp: number }> = [];
     const dayNamesShort = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
@@ -397,11 +421,30 @@ export const StudyCalendarWidget: React.FC<StudyCalendarWidgetProps> = ({
     for (let i = 0; i < 7; i++) {
       const d = new Date(monday);
       d.setDate(monday.getDate() + i);
+      const yyyy = d.getFullYear().toString();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const dateStr = `${yyyy}-${mm}-${dd}`;
+
       const isToday = i === currentDayOfWeek;
       const isPast = i < currentDayOfWeek;
-      // In streak or today
-      const hasStudied = isPast ? true : isToday ? user.stats.studyMinutesToday > 0 : false;
-      const dayXp = hasStudied ? 320 : 0;
+      const diffDays = Math.floor((todayMidnight.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
+      const realAttemptXp = xpByDate[dateStr] || 0;
+      const inStreak = isPast && diffDays > 0 && diffDays <= (user.stats.streakDays ?? 0);
+      const todayMinutes = user.stats.studyMinutesToday ?? 0;
+
+      const hasStudied =
+        realAttemptXp > 0 ||
+        inStreak ||
+        (isToday && todayMinutes > 0);
+      const dayXp =
+        realAttemptXp > 0
+          ? realAttemptXp
+          : isToday && todayMinutes > 0
+          ? Math.round(todayMinutes * 14)
+          : inStreak
+          ? 320
+          : 0;
 
       if (hasStudied) {
         daysCompletedThisWeek++;
@@ -417,8 +460,10 @@ export const StudyCalendarWidget: React.FC<StudyCalendarWidgetProps> = ({
       });
     }
 
-    const daysPercent = Math.min(100, Math.round((daysCompletedThisWeek / goals.targetDaysPerWeek) * 100));
-    const xpPercent = Math.min(100, Math.round((xpAccumulatedThisWeek / goals.targetWeeklyXp) * 100));
+    const safeTargetDays = Math.max(1, goals.targetDaysPerWeek || 1);
+    const safeTargetXp = Math.max(1, goals.targetWeeklyXp || 1);
+    const daysPercent = Math.min(100, Math.round((daysCompletedThisWeek / safeTargetDays) * 100));
+    const xpPercent = Math.min(100, Math.round((xpAccumulatedThisWeek / safeTargetXp) * 100));
 
     return {
       weekDays,
@@ -427,7 +472,7 @@ export const StudyCalendarWidget: React.FC<StudyCalendarWidgetProps> = ({
       daysPercent,
       xpPercent
     };
-  }, [goals, user.stats.studyMinutesToday]);
+  }, [goals, attempts, user.stats.streakDays, user.stats.studyMinutesToday]);
 
   const weekDayLabels = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 

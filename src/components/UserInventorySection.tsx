@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   MSZ_CHARACTERS,
   type MszCharacter,
@@ -44,6 +44,7 @@ export const UserInventorySection: React.FC<UserInventorySectionProps> = ({
   const [sellModalInstance, setSellModalInstance] = useState<OwnedCardInstance | null>(null);
   const [sellPriceInput, setSellPriceInput] = useState<number>(75);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refreshState = () => {
     setInstances(getOwnedCardInstances());
@@ -65,12 +66,14 @@ export const UserInventorySection: React.FC<UserInventorySectionProps> = ({
       window.removeEventListener('msz-coins-updated', handleUpdate);
       window.removeEventListener('msz-equipped-updated', handleUpdate);
       window.removeEventListener('msz-market-updated', handleUpdate);
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     };
   }, []);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToastMessage(null), 3500);
   };
 
   // Mapped owned cards with their metadata
@@ -205,7 +208,7 @@ export const UserInventorySection: React.FC<UserInventorySectionProps> = ({
           <div className="flex flex-col items-center sm:items-end px-3 py-1.5 rounded-xl bg-[#070e1d] border border-white/10">
             <span className="text-[9px] font-mono uppercase text-[#8391ac]">Cartes Détenues</span>
             <span className="font-mono text-base font-black text-[#ffd700]">
-              {instances.length} <span className="text-xs text-[#8391ac] font-normal">/ 8</span>
+              {instances.length} <span className="text-xs text-[#8391ac] font-normal">/ {MSZ_CHARACTERS.length}</span>
             </span>
           </div>
 
@@ -357,7 +360,10 @@ export const UserInventorySection: React.FC<UserInventorySectionProps> = ({
                           alt={character.name}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                           onError={(e) => {
-                            e.currentTarget.src = '/assets/aistudio/VOLT.png';
+                            const target = e.currentTarget;
+                            if (target.dataset.fallbackApplied) return;
+                            target.dataset.fallbackApplied = 'true';
+                            target.src = '/assets/aistudio/VOLT.png';
                           }}
                         />
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">

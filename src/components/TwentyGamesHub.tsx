@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   TWENTY_GAMES_METADATA,
   MiniGameMeta,
@@ -57,6 +57,12 @@ import {
 } from '../data/twentyGamesData';
 import { StackedGamesShowcase } from './StackedGamesShowcase';
 import { awardMszCoins } from '../utils/mszCoinsManager';
+import {
+  playSelectCue,
+  playCorrectCue,
+  playIncorrectCue,
+  playVictoryCue
+} from '../utils/soundEffects';
 
 interface TwentyGamesHubProps {
   onXpEarned?: (xp: number) => void;
@@ -64,101 +70,41 @@ interface TwentyGamesHubProps {
   onClose?: () => void;
 }
 
-// Synthétiseur audio Web Audio API pour des effets sonores immersifs 100% hors-ligne
+// Synthétiseur audio unifié (élégance sonore Oxford & respect du bouton Muet)
 class SoundEffects {
-  private ctx: AudioContext | null = null;
-
-  private init() {
-    if (!this.ctx && typeof window !== 'undefined') {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (AudioCtx) {
-        this.ctx = new AudioCtx();
-      }
-    }
-  }
-
   playPop() {
-    try {
-      this.init();
-      if (!this.ctx) return;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(600, this.ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(300, this.ctx.currentTime + 0.08);
-      gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.08);
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      osc.start();
-      osc.stop(this.ctx.currentTime + 0.08);
-    } catch {
-      // AudioContext not allowed before user gesture
-    }
+    playSelectCue();
   }
 
   playCorrect() {
-    try {
-      this.init();
-      if (!this.ctx) return;
-      const notes = [523.25, 659.25, 783.99, 1046.5]; // C5 - E5 - G5 - C6
-      notes.forEach((freq, idx) => {
-        if (!this.ctx) return;
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(freq, this.ctx.currentTime + idx * 0.07);
-        gain.gain.setValueAtTime(0.15, this.ctx.currentTime + idx * 0.07);
-        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + idx * 0.07 + 0.2);
-        osc.connect(gain);
-        gain.connect(this.ctx.destination);
-        osc.start(this.ctx.currentTime + idx * 0.07);
-        osc.stop(this.ctx.currentTime + idx * 0.07 + 0.2);
-      });
-    } catch {}
+    playCorrectCue();
   }
 
   playWrong() {
-    try {
-      this.init();
-      if (!this.ctx) return;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(220, this.ctx.currentTime);
-      osc.frequency.linearRampToValueAtTime(140, this.ctx.currentTime + 0.25);
-      gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.25);
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      osc.start();
-      osc.stop(this.ctx.currentTime + 0.25);
-    } catch {}
+    playIncorrectCue();
   }
 
   playWin() {
-    try {
-      this.init();
-      if (!this.ctx) return;
-      const notes = [440, 554, 659, 880];
-      notes.forEach((freq, idx) => {
-        if (!this.ctx) return;
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, this.ctx.currentTime + idx * 0.12);
-        gain.gain.setValueAtTime(0.2, this.ctx.currentTime + idx * 0.12);
-        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + idx * 0.12 + 0.35);
-        osc.connect(gain);
-        gain.connect(this.ctx.destination);
-        osc.start(this.ctx.currentTime + idx * 0.12);
-        osc.stop(this.ctx.currentTime + idx * 0.12 + 0.35);
-      });
-    } catch {}
+    playVictoryCue();
   }
 }
 
 const sfx = new SoundEffects();
+
+function useSafeTimeouts() {
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  useEffect(() => {
+    return () => {
+      timersRef.current.forEach(clearTimeout);
+      timersRef.current = [];
+    };
+  }, []);
+  return useCallback((fn: () => void, ms: number) => {
+    const t = setTimeout(fn, ms);
+    timersRef.current.push(t);
+    return t;
+  }, []);
+}
 
 export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({
   onXpEarned,
@@ -200,6 +146,18 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({
   const [sessionScore, setSessionScore] = useState<number>(0);
   const [showWinModal, setShowWinModal] = useState<boolean>(false);
   const [hearts, setHearts] = useState<number>(3);
+  const heartsRef = useRef<number>(3);
+  const pointsToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    heartsRef.current = hearts;
+  }, [hearts]);
+
+  useEffect(() => {
+    return () => {
+      if (pointsToastTimerRef.current) clearTimeout(pointsToastTimerRef.current);
+    };
+  }, []);
 
   // TTS Speech helper
   const speakText = (text: string) => {
@@ -243,6 +201,7 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({
     }
     sfx.playPop();
     setActiveGame(game);
+    heartsRef.current = 3;
     setHearts(3);
     setShowWinModal(false);
   };
@@ -304,7 +263,8 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({
     } else {
       setPointsToast({ text: '+10 Points de niveau gagnés ! (+10 pts)', isGain: true });
     }
-    setTimeout(() => setPointsToast(null), 3500);
+    if (pointsToastTimerRef.current) clearTimeout(pointsToastTimerRef.current);
+    pointsToastTimerRef.current = setTimeout(() => setPointsToast(null), 3500);
 
     // Célébration niveau supérieur
     if (newLevel > prevLevel) {
@@ -336,7 +296,8 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({
     setResumableSession(null);
 
     setPointsToast({ text: '-5 Points déduits (Partie perdue)', isGain: false });
-    setTimeout(() => setPointsToast(null), 3500);
+    if (pointsToastTimerRef.current) clearTimeout(pointsToastTimerRef.current);
+    pointsToastTimerRef.current = setTimeout(() => setPointsToast(null), 3500);
 
     if (onPointsDeducted) {
       onPointsDeducted(-5);
@@ -345,13 +306,12 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({
 
   const handleHeartLost = () => {
     sfx.playWrong();
-    setHearts((prev) => {
-      const next = Math.max(0, prev - 1);
-      if (next === 0) {
-        handleDefeatPenalty();
-      }
-      return next;
-    });
+    const next = Math.max(0, heartsRef.current - 1);
+    heartsRef.current = next;
+    setHearts(next);
+    if (next === 0) {
+      handleDefeatPenalty();
+    }
   };
 
   // Filtrage des 20 jeux
@@ -1439,6 +1399,9 @@ const SpeedMatchGame: React.FC<SpeedMatchGameProps> = ({ onSuccess, onError, spe
   // Chronomètre de question
   const [timeLeft, setTimeLeft] = useState(45);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
+  const safeTimeout = useSafeTimeouts();
 
   // Démarre un niveau avec une nouvelle sélection aléatoire non-répétitive
   const startLevel = (levelKey: SpeedMatchLevelKey) => {
@@ -1515,21 +1478,24 @@ const SpeedMatchGame: React.FC<SpeedMatchGameProps> = ({ onSuccess, onError, spe
     if (matched.length === currentQ.pairs.length) return; // Série terminée
 
     timerRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          sfx.playWrong();
-          onError();
-          const config = SPEED_MATCH_LEVELS[selectedLevelKey];
-          return config.timePerQuestion; // Recharge le chrono pour continuer
-        }
-        return prev - 1;
-      });
+      setTimeLeft((prev) => Math.max(0, prev - 1));
     }, 1000);
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [selectedLevelKey, currentQuestionIndex, matched.length, questions, isLevelFinished, onError]);
+  }, [selectedLevelKey, currentQuestionIndex, matched.length, questions, isLevelFinished]);
+
+  useEffect(() => {
+    if (!selectedLevelKey || isLevelFinished) return;
+    const currentQ = questions[currentQuestionIndex];
+    if (!currentQ || matched.length === currentQ.pairs.length) return;
+    if (timeLeft === 0) {
+      sfx.playWrong();
+      onErrorRef.current();
+      setTimeLeft(SPEED_MATCH_LEVELS[selectedLevelKey].timePerQuestion);
+    }
+  }, [timeLeft, selectedLevelKey, isLevelFinished, questions, currentQuestionIndex, matched.length]);
 
   const handleEnClick = (word: string) => {
     sfx.playPop();
@@ -1586,14 +1552,14 @@ const SpeedMatchGame: React.FC<SpeedMatchGameProps> = ({ onSuccess, onError, spe
             timestamp: new Date().toISOString()
           });
 
-          setTimeout(() => {
+          safeTimeout(() => {
             sfx.playWin();
             setCurrentQuestionIndex((prev) => prev + 1);
           }, 500);
         } else {
           // Toutes les questions du niveau sont réussies !
           clearStoredActiveGameSession();
-          setTimeout(() => {
+          safeTimeout(() => {
             sfx.playWin();
             setIsLevelFinished(true);
             onSuccess();
@@ -1605,7 +1571,7 @@ const SpeedMatchGame: React.FC<SpeedMatchGameProps> = ({ onSuccess, onError, spe
       onError();
       setWrongPair({ en, fr });
       setCombo(0);
-      setTimeout(() => {
+      safeTimeout(() => {
         setSelectedEn(null);
         setSelectedFr(null);
         setWrongPair(null);
@@ -2203,6 +2169,9 @@ const WordScrambleGame: React.FC<WordScrambleGameProps> = ({ onSuccess, onError,
   // Chronomètre
   const [timeLeft, setTimeLeft] = useState(60);
   const [elapsedTime, setElapsedTime] = useState(0);
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
+  const safeTimeout = useSafeTimeouts();
 
   // Démarrer un niveau
   const startLevel = (levelKey: WordScrambleLevelKey) => {
@@ -2249,14 +2218,7 @@ const WordScrambleGame: React.FC<WordScrambleGameProps> = ({ onSuccess, onError,
 
     const interval = setInterval(() => {
       if (timerMode === 'limited') {
-        setTimeLeft((prev) => {
-          if (prev <= 1) {
-            sfx.playWrong();
-            onError();
-            return WORD_SCRAMBLE_LEVELS[selectedLevelKey].timePerQuestionLimited;
-          }
-          return prev - 1;
-        });
+        setTimeLeft((prev) => Math.max(0, prev - 1));
       } else {
         setElapsedTime((prev) => prev + 1);
       }
@@ -2264,6 +2226,15 @@ const WordScrambleGame: React.FC<WordScrambleGameProps> = ({ onSuccess, onError,
 
     return () => clearInterval(interval);
   }, [selectedLevelKey, timerMode, isLevelFinished, currentQuestionIndex, currentWordIndex]);
+
+  useEffect(() => {
+    if (!selectedLevelKey || isLevelFinished || timerMode !== 'limited') return;
+    if (timeLeft === 0) {
+      sfx.playWrong();
+      onErrorRef.current();
+      setTimeLeft(WORD_SCRAMBLE_LEVELS[selectedLevelKey].timePerQuestionLimited);
+    }
+  }, [timeLeft, selectedLevelKey, isLevelFinished, timerMode]);
 
   // Choisir une lettre disponible
   const handlePickLetter = (item: { letter: string; id: number }) => {
@@ -2285,7 +2256,7 @@ const WordScrambleGame: React.FC<WordScrambleGameProps> = ({ onSuccess, onError,
         setWordSuccessAnim(true);
         if (speak) speak(currentW.word);
 
-        setTimeout(() => {
+        safeTimeout(() => {
           // Si on est au dernier mot de la question (12 mots par question)
           if (currentWordIndex >= 11) {
             onSuccess(); // Gagne 10 XP
@@ -2722,6 +2693,8 @@ const SpeedMentalMathGame: React.FC<SpeedMentalMathGameProps> = ({ onSuccess, on
 
   // Timer
   const [timeLeft, setTimeLeft] = useState(25);
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
 
   const problem = SPEED_MATH_PROBLEMS[problemIndex % SPEED_MATH_PROBLEMS.length];
 
@@ -2729,19 +2702,20 @@ const SpeedMentalMathGame: React.FC<SpeedMentalMathGameProps> = ({ onSuccess, on
   useEffect(() => {
     if (isAnswered || activeTab !== 'play') return;
     const interval = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          sfx.playWrong();
-          onError();
-          setIsAnswered(true);
-          setIsCorrect(false);
-          return 0;
-        }
-        return prev - 1;
-      });
+      setTimeLeft((prev) => Math.max(0, prev - 1));
     }, 1000);
     return () => clearInterval(interval);
   }, [isAnswered, activeTab, problemIndex]);
+
+  useEffect(() => {
+    if (isAnswered || activeTab !== 'play') return;
+    if (timeLeft === 0) {
+      sfx.playWrong();
+      onErrorRef.current();
+      setIsAnswered(true);
+      setIsCorrect(false);
+    }
+  }, [timeLeft, isAnswered, activeTab]);
 
   // Prononcer la question en anglais à l'apparition
   useEffect(() => {
@@ -3012,13 +2986,15 @@ const SpeedMentalMathGame: React.FC<SpeedMentalMathGameProps> = ({ onSuccess, on
 const WordSearchGame: React.FC<{ onSuccess: () => void; onError?: () => void }> = ({ onSuccess }) => {
   const puzzle = WORD_SEARCH_PUZZLE;
   const [foundWords, setFoundWords] = useState<string[]>([]);
+  const safeTimeout = useSafeTimeouts();
 
   const handleWordFound = (word: string) => {
+    if (foundWords.includes(word) || foundWords.length >= 3) return;
     sfx.playCorrect();
     const next = [...foundWords, word];
     setFoundWords(next);
     if (next.length >= 3) {
-      setTimeout(onSuccess, 500);
+      safeTimeout(onSuccess, 500);
     }
   };
 
@@ -3108,6 +3084,9 @@ const VerbMasterGame: React.FC<VerbMasterGameProps> = ({ onSuccess, onError, spe
   const [timeLeft, setTimeLeft] = useState(60);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [pairSuccessAnim, setPairSuccessAnim] = useState<string | null>(null);
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
+  const safeTimeout = useSafeTimeouts();
 
   // Démarrer un niveau (tirage aléatoire non-répétitif)
   const startLevel = (levelKey: VerbMasterLevelKey) => {
@@ -3192,22 +3171,26 @@ const VerbMasterGame: React.FC<VerbMasterGameProps> = ({ onSuccess, onError, spe
 
     const interval = setInterval(() => {
       if (timerMode === 'limited') {
-        setTimeLeft((prev) => {
-          if (prev <= 1) {
-            sfx.playWrong();
-            onError();
-            const config = selectedLevelKey ? VERB_MASTER_LEVELS[selectedLevelKey] : VERB_MASTER_LEVELS.debutant;
-            return config.timePerQuestionLimited;
-          }
-          return prev - 1;
-        });
+        setTimeLeft((prev) => Math.max(0, prev - 1));
       } else {
         setElapsedTime((prev) => prev + 1);
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [selectedLevelKey, currentQuestionIndex, matched.length, questions, isLevelFinished, timerMode, onError]);
+  }, [selectedLevelKey, currentQuestionIndex, matched.length, questions, isLevelFinished, timerMode]);
+
+  useEffect(() => {
+    if (!selectedLevelKey || isLevelFinished || timerMode !== 'limited') return;
+    const currentQ = questions[currentQuestionIndex];
+    if (!currentQ || matched.length === currentQ.pairs.length) return;
+    if (timeLeft === 0) {
+      sfx.playWrong();
+      onErrorRef.current();
+      const config = VERB_MASTER_LEVELS[selectedLevelKey];
+      setTimeLeft(config.timePerQuestionLimited);
+    }
+  }, [timeLeft, selectedLevelKey, isLevelFinished, timerMode, questions, currentQuestionIndex, matched.length]);
 
   // Clic sur un verbe anglais (gauche)
   const handleEnClick = (verb: VerbMasterVerb) => {
@@ -3240,7 +3223,7 @@ const VerbMasterGame: React.FC<VerbMasterGameProps> = ({ onSuccess, onError, spe
     if (isCorrect) {
       sfx.playCorrect();
       setPairSuccessAnim(enInf);
-      setTimeout(() => setPairSuccessAnim(null), 800);
+      safeTimeout(() => setPairSuccessAnim(null), 800);
 
       const newMatched = [...matched, enInf];
       setMatched(newMatched);
@@ -3269,14 +3252,14 @@ const VerbMasterGame: React.FC<VerbMasterGameProps> = ({ onSuccess, onError, spe
             timestamp: new Date().toISOString()
           });
 
-          setTimeout(() => {
+          safeTimeout(() => {
             sfx.playWin();
             setCurrentQuestionIndex((prev) => prev + 1);
           }, 600);
         } else {
           // Niveau complété dans son intégralité !
           clearStoredActiveGameSession();
-          setTimeout(() => {
+          safeTimeout(() => {
             sfx.playWin();
             setIsLevelFinished(true);
             onSuccess(); // +10 XP
@@ -3288,7 +3271,7 @@ const VerbMasterGame: React.FC<VerbMasterGameProps> = ({ onSuccess, onError, spe
       onError(); // -5 XP
       setWrongPair({ en: enInf, fr });
       setCombo(0);
-      setTimeout(() => {
+      safeTimeout(() => {
         setSelectedEn(null);
         setSelectedFr(null);
         setWrongPair(null);
@@ -3749,6 +3732,9 @@ const AstroHangmanGame: React.FC<AstroHangmanGameProps> = ({ onSuccess, onError,
   const [isLevelFinished, setIsLevelFinished] = useState(false);
   const [timeLeft, setTimeLeft] = useState(55);
   const [elapsedTime, setElapsedTime] = useState(0);
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
+  const safeTimeout = useSafeTimeouts();
 
   // Clavier virtuel (A-Z)
   const keyboard = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
@@ -3830,14 +3816,7 @@ const AstroHangmanGame: React.FC<AstroHangmanGameProps> = ({ onSuccess, onError,
 
     const interval = setInterval(() => {
       if (timerMode === 'limited') {
-        setTimeLeft((prev) => {
-          if (prev <= 1) {
-            handleTimeExpired();
-            const config = ASTRO_HANGMAN_LEVELS[selectedLevelKey];
-            return config.timePerWordLimited;
-          }
-          return prev - 1;
-        });
+        setTimeLeft((prev) => Math.max(0, prev - 1));
       } else {
         setElapsedTime((prev) => prev + 1);
       }
@@ -3846,12 +3825,15 @@ const AstroHangmanGame: React.FC<AstroHangmanGameProps> = ({ onSuccess, onError,
     return () => clearInterval(interval);
   }, [selectedLevelKey, timerMode, isLevelFinished, wordSuccessAnim, wordFailedAnim, currentQuestionIndex, currentWordIndex]);
 
-  // Expiration du temps limite
-  const handleTimeExpired = () => {
-    sfx.playWrong();
-    onError();
-    handleWordFailed();
-  };
+  useEffect(() => {
+    if (!selectedLevelKey || isLevelFinished || wordSuccessAnim || wordFailedAnim || timerMode !== 'limited') return;
+    if (timeLeft === 0) {
+      sfx.playWrong();
+      onErrorRef.current();
+      handleWordFailed();
+      setTimeLeft(ASTRO_HANGMAN_LEVELS[selectedLevelKey].timePerWordLimited);
+    }
+  }, [timeLeft, selectedLevelKey, isLevelFinished, wordSuccessAnim, wordFailedAnim, timerMode]);
 
   // Échec d'un mot (oxygène épuisé ou temps écoulé)
   const handleWordFailed = () => {
@@ -3863,7 +3845,7 @@ const AstroHangmanGame: React.FC<AstroHangmanGameProps> = ({ onSuccess, onError,
     setCombo(0);
     if (speak) speak(currentW.word);
 
-    setTimeout(() => {
+    safeTimeout(() => {
       moveToNextWord();
     }, 1200);
   };
@@ -3926,7 +3908,7 @@ const AstroHangmanGame: React.FC<AstroHangmanGameProps> = ({ onSuccess, onError,
 
         if (speak) speak(currentW.word);
 
-        setTimeout(() => {
+        safeTimeout(() => {
           moveToNextWord();
         }, 800);
       }
@@ -4378,7 +4360,7 @@ const AstroHangmanGame: React.FC<AstroHangmanGameProps> = ({ onSuccess, onError,
                 disabled={isGuessed || wordSuccessAnim || wordFailedAnim}
                 type="button"
                 onClick={() => handleGuess(letter)}
-                className={`h-10 sm:h-11 rounded-xl text-sm font-mono font-black transition-all cursor-pointer flex items-center justify-center border-2 ${
+                className={`h-11 sm:h-12 rounded-xl text-base sm:text-lg font-mono font-black transition-all cursor-pointer flex items-center justify-center border-2 ${
                   isGuessed
                     ? isTarget
                       ? 'bg-emerald-950 border-2 border-emerald-400 text-emerald-300 font-black cursor-default shadow-sm'
@@ -4395,14 +4377,14 @@ const AstroHangmanGame: React.FC<AstroHangmanGameProps> = ({ onSuccess, onError,
 
       {/* Flash d'information mot validé */}
       {wordSuccessAnim && (
-        <div className="p-2.5 rounded-xl bg-black border-2 border-emerald-500 text-emerald-400 font-bold text-xs font-mono animate-fadeIn flex items-center justify-center gap-2 shadow-lg">
+        <div className="p-3 rounded-xl bg-black border-2 border-emerald-500 text-emerald-400 font-bold text-sm font-mono animate-fadeIn flex items-center justify-center gap-2 shadow-lg">
           <span>✨</span>
           <span>Mot validé : {currentW.word} ({currentW.translation}) ! Mot suivant...</span>
         </div>
       )}
 
       {wordFailedAnim && (
-        <div className="p-2.5 rounded-xl bg-black border-2 border-rose-500 text-rose-400 font-bold text-xs font-mono animate-fadeIn flex items-center justify-center gap-2 shadow-lg">
+        <div className="p-3 rounded-xl bg-black border-2 border-rose-500 text-rose-400 font-bold text-sm font-mono animate-fadeIn flex items-center justify-center gap-2 shadow-lg">
           <span>⚠️</span>
           <span>Le mot était : {currentW.word} ({currentW.translation}). Sas sécurisé !</span>
         </div>
@@ -4422,8 +4404,11 @@ const SentenceBuilderGame: React.FC<{ onSuccess: () => void; onError: () => void
   const [poolTokens, setPoolTokens] = useState<string[]>([
     'music', 'She', 'every', 'day.', 'listens', 'to'
   ]);
+  const [isDone, setIsDone] = useState(false);
+  const safeTimeout = useSafeTimeouts();
 
   const handleAddToken = (token: string, idx: number) => {
+    if (isDone) return;
     sfx.playPop();
     setSelectedTokens([...selectedTokens, token]);
     const nextPool = [...poolTokens];
@@ -4432,6 +4417,7 @@ const SentenceBuilderGame: React.FC<{ onSuccess: () => void; onError: () => void
   };
 
   const handleRemoveToken = (token: string, idx: number) => {
+    if (isDone) return;
     sfx.playPop();
     const nextSelected = [...selectedTokens];
     nextSelected.splice(idx, 1);
@@ -4440,12 +4426,14 @@ const SentenceBuilderGame: React.FC<{ onSuccess: () => void; onError: () => void
   };
 
   const handleValidate = () => {
+    if (isDone) return;
     const constructed = selectedTokens.join(' ');
     const target = item.targetTokens.join(' ');
     if (constructed === target) {
+      setIsDone(true);
       sfx.playCorrect();
       speak(constructed);
-      setTimeout(onSuccess, 500);
+      safeTimeout(onSuccess, 500);
     } else {
       onError();
     }
@@ -4459,16 +4447,16 @@ const SentenceBuilderGame: React.FC<{ onSuccess: () => void; onError: () => void
       </div>
 
       {/* Assembly Area */}
-      <div className="min-h-[56px] p-3 rounded-2xl bg-[#191f2f]/80 border-2 border-dashed border-[#232a3a] flex flex-wrap gap-2 items-center">
+      <div className="min-h-[64px] p-3.5 rounded-2xl bg-[#191f2f]/80 border-2 border-dashed border-[#232a3a] flex flex-wrap gap-2.5 items-center">
         {selectedTokens.length === 0 ? (
-          <span className="text-xs text-[#99907c] italic">Clique sur les blocs ci-dessous pour assembler la phrase...</span>
+          <span className="text-sm text-[#99907c] italic">Clique sur les blocs ci-dessous pour assembler la phrase...</span>
         ) : (
           selectedTokens.map((tok, idx) => (
             <button
               key={idx}
               type="button"
               onClick={() => handleRemoveToken(tok, idx)}
-              className="px-3 py-1.5 rounded-xl bg-[#f2ca50] text-[#3c2f00] font-bold text-xs shadow-md transition-all active:scale-95"
+              className="px-4 py-2 rounded-xl bg-[#f2ca50] text-[#3c2f00] font-bold text-base sm:text-lg shadow-md transition-all active:scale-95"
             >
               {tok}
             </button>
@@ -4477,13 +4465,13 @@ const SentenceBuilderGame: React.FC<{ onSuccess: () => void; onError: () => void
       </div>
 
       {/* Word Pool */}
-      <div className="flex flex-wrap gap-2 justify-center">
+      <div className="flex flex-wrap gap-2.5 justify-center">
         {poolTokens.map((tok, idx) => (
           <button
             key={idx}
             type="button"
             onClick={() => handleAddToken(tok, idx)}
-            className="px-3.5 py-2 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] border border-[#232a3a] text-white font-bold text-xs transition-all active:scale-95 shadow cursor-pointer"
+            className="px-4 py-2 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] border border-[#232a3a] text-white font-bold text-sm sm:text-base transition-all active:scale-95 shadow cursor-pointer"
           >
             {tok}
           </button>
@@ -4494,7 +4482,7 @@ const SentenceBuilderGame: React.FC<{ onSuccess: () => void; onError: () => void
         type="button"
         disabled={selectedTokens.length === 0}
         onClick={handleValidate}
-        className="w-full py-3 rounded-2xl bg-[#f2ca50] hover:bg-[#ffe088] text-[#3c2f00] font-black text-xs uppercase tracking-wider shadow-md cursor-pointer transition-all disabled:opacity-50"
+        className="w-full py-3.5 rounded-2xl bg-[#f2ca50] hover:bg-[#ffe088] text-[#3c2f00] font-black text-sm uppercase tracking-wider shadow-md cursor-pointer transition-all disabled:opacity-50"
       >
         Valider la phrase
       </button>
@@ -4509,16 +4497,20 @@ const AudioBlitzGame: React.FC<{ onSuccess: () => void; onError: () => void; spe
   speak
 }) => {
   const item = AUDIO_BLITZ_ITEMS[0];
+  const safeTimeout = useSafeTimeouts();
+  const [isDone, setIsDone] = useState(false);
 
   useEffect(() => {
     speak(item.audioText);
   }, []);
 
   const handleChoice = (idx: number) => {
+    if (isDone) return;
     sfx.playPop();
     if (idx === item.correctIndex) {
+      setIsDone(true);
       sfx.playCorrect();
-      setTimeout(onSuccess, 400);
+      safeTimeout(onSuccess, 400);
     } else {
       onError();
     }
@@ -4539,13 +4531,13 @@ const AudioBlitzGame: React.FC<{ onSuccess: () => void; onError: () => void; spe
         </span>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         {item.options.map((opt, idx) => (
           <button
             key={idx}
             type="button"
             onClick={() => handleChoice(idx)}
-            className="w-full p-3 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] border border-[#232a3a] text-xs font-semibold text-white text-left transition-all active:scale-98"
+            className="w-full p-4 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] border border-[#232a3a] text-base font-semibold text-white text-left transition-all active:scale-98"
           >
             {opt}
           </button>
@@ -4558,12 +4550,16 @@ const AudioBlitzGame: React.FC<{ onSuccess: () => void; onError: () => void; spe
 // 8. SYNONYM & ANTONYM CLASH
 const AntonymSynonymGame: React.FC<{ onSuccess: () => void; onError: () => void }> = ({ onSuccess, onError }) => {
   const item = ANTONYM_SYNONYM_ITEMS[0];
+  const safeTimeout = useSafeTimeouts();
+  const [isDone, setIsDone] = useState(false);
 
   const handlePick = (choice: string) => {
+    if (isDone) return;
     sfx.playPop();
     if (choice === item.correct) {
+      setIsDone(true);
       sfx.playCorrect();
-      setTimeout(onSuccess, 400);
+      safeTimeout(onSuccess, 400);
     } else {
       onError();
     }
@@ -4580,13 +4576,13 @@ const AntonymSynonymGame: React.FC<{ onSuccess: () => void; onError: () => void 
         </h4>
       </div>
 
-      <div className="grid grid-cols-2 gap-2.5">
+      <div className="grid grid-cols-2 gap-3">
         {item.options.map((opt) => (
           <button
             key={opt}
             type="button"
             onClick={() => handlePick(opt)}
-            className="py-3.5 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] border border-[#232a3a] text-sm font-bold text-white transition-all active:scale-95"
+            className="py-4 px-3 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] border border-[#232a3a] text-base sm:text-lg font-bold text-white transition-all active:scale-95"
           >
             {opt}
           </button>
@@ -4599,12 +4595,16 @@ const AntonymSynonymGame: React.FC<{ onSuccess: () => void; onError: () => void 
 // 9. ODD ONE OUT (Trouve l'Intrus)
 const OddOneOutGame: React.FC<{ onSuccess: () => void; onError: () => void }> = ({ onSuccess, onError }) => {
   const item = ODD_ONE_OUT_ITEMS[0];
+  const safeTimeout = useSafeTimeouts();
+  const [isDone, setIsDone] = useState(false);
 
   const handleChoice = (word: string) => {
+    if (isDone) return;
     sfx.playPop();
     if (word === item.odd) {
+      setIsDone(true);
       sfx.playCorrect();
-      setTimeout(onSuccess, 500);
+      safeTimeout(onSuccess, 500);
     } else {
       onError();
     }
@@ -4613,7 +4613,7 @@ const OddOneOutGame: React.FC<{ onSuccess: () => void; onError: () => void }> = 
   return (
     <div className="space-y-4 text-center">
       <div className="p-3 bg-[#0c1322] rounded-xl border border-teal-500/20">
-        <p className="text-xs text-[#dce2f8]">
+        <p className="text-sm text-[#dce2f8]">
           Trouve le mot qui n'appartient pas à la même catégorie sémantique :
         </p>
       </div>
@@ -4624,7 +4624,7 @@ const OddOneOutGame: React.FC<{ onSuccess: () => void; onError: () => void }> = 
             key={w}
             type="button"
             onClick={() => handleChoice(w)}
-            className="py-4 rounded-2xl bg-[#191f2f] hover:bg-[#232a3a] border border-[#232a3a] text-sm font-bold text-white shadow transition-all active:scale-95"
+            className="py-4 px-3 rounded-2xl bg-[#191f2f] hover:bg-[#232a3a] border border-[#232a3a] text-base sm:text-lg font-bold text-white shadow transition-all active:scale-95"
           >
             {w}
           </button>
@@ -4637,12 +4637,16 @@ const OddOneOutGame: React.FC<{ onSuccess: () => void; onError: () => void }> = 
 // 10. FILL THE BLANK
 const FillTheBlankGame: React.FC<{ onSuccess: () => void; onError: () => void }> = ({ onSuccess, onError }) => {
   const item = FILL_THE_BLANK_ITEMS[0];
+  const safeTimeout = useSafeTimeouts();
+  const [isDone, setIsDone] = useState(false);
 
   const handleChoice = (opt: string) => {
+    if (isDone) return;
     sfx.playPop();
     if (opt === item.correct) {
+      setIsDone(true);
       sfx.playCorrect();
-      setTimeout(onSuccess, 400);
+      safeTimeout(onSuccess, 400);
     } else {
       onError();
     }
@@ -4652,18 +4656,18 @@ const FillTheBlankGame: React.FC<{ onSuccess: () => void; onError: () => void }>
     <div className="space-y-4 text-center">
       <div className="p-4 bg-[#0c1322] rounded-2xl border border-orange-500/30">
         <span className="text-[10px] text-orange-400 font-mono block">COMPLÈTE LA PHRASE</span>
-        <p className="font-serif font-bold text-lg text-white mt-2">
+        <p className="font-serif font-bold text-xl text-white mt-2">
           {item.sentence}
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-2.5">
+      <div className="grid grid-cols-2 gap-3">
         {item.options.map((opt) => (
           <button
             key={opt}
             type="button"
             onClick={() => handleChoice(opt)}
-            className="py-3 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] border border-[#232a3a] font-bold text-sm text-white transition-all active:scale-95"
+            className="py-3.5 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] border border-[#232a3a] font-bold text-base sm:text-lg text-white transition-all active:scale-95"
           >
             {opt}
           </button>
@@ -4676,12 +4680,16 @@ const FillTheBlankGame: React.FC<{ onSuccess: () => void; onError: () => void }>
 // 11. TRUE OR FALSE
 const TrueOrFalseGame: React.FC<{ onSuccess: () => void; onError: () => void }> = ({ onSuccess, onError }) => {
   const item = TRUE_OR_FALSE_ITEMS[0];
+  const safeTimeout = useSafeTimeouts();
+  const [isDone, setIsDone] = useState(false);
 
   const handleAnswer = (choice: boolean) => {
+    if (isDone) return;
     sfx.playPop();
     if (choice === item.isTrue) {
+      setIsDone(true);
       sfx.playCorrect();
-      setTimeout(onSuccess, 400);
+      safeTimeout(onSuccess, 400);
     } else {
       onError();
     }
@@ -4718,20 +4726,28 @@ const TrueOrFalseGame: React.FC<{ onSuccess: () => void; onError: () => void }> 
 
 // 12. MEMORY PAIRS
 const MemoryPairsGame: React.FC<{ onSuccess: () => void; onError: () => void }> = ({ onSuccess, onError }) => {
-  const cards = [
-    { id: '1-en', text: 'Sun', matchId: '1' },
-    { id: '2-en', text: 'Moon', matchId: '2' },
-    { id: '1-fr', text: 'Soleil', matchId: '1' },
-    { id: '2-fr', text: 'Lune', matchId: '2' },
-    { id: '3-en', text: 'Star', matchId: '3' },
-    { id: '3-fr', text: 'Étoile', matchId: '3' }
-  ];
+  const safeTimeout = useSafeTimeouts();
+  const [cards] = useState(() => {
+    const base = [
+      { id: '1-en', text: 'Sun', matchId: '1' },
+      { id: '2-en', text: 'Moon', matchId: '2' },
+      { id: '1-fr', text: 'Soleil', matchId: '1' },
+      { id: '2-fr', text: 'Lune', matchId: '2' },
+      { id: '3-en', text: 'Star', matchId: '3' },
+      { id: '3-fr', text: 'Étoile', matchId: '3' }
+    ];
+    for (let i = base.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [base[i], base[j]] = [base[j], base[i]];
+    }
+    return base;
+  });
 
   const [flipped, setFlipped] = useState<number[]>([]);
   const [matchedPairs, setMatchedPairs] = useState<string[]>([]);
 
   const handleCardClick = (idx: number) => {
-    if (flipped.includes(idx) || flipped.length === 2) return;
+    if (matchedPairs.includes(cards[idx].matchId) || flipped.includes(idx) || flipped.length === 2) return;
     sfx.playPop();
     const nextFlipped = [...flipped, idx];
     setFlipped(nextFlipped);
@@ -4745,11 +4761,11 @@ const MemoryPairsGame: React.FC<{ onSuccess: () => void; onError: () => void }> 
         setMatchedPairs(nextMatched);
         setFlipped([]);
         if (nextMatched.length === 3) {
-          setTimeout(onSuccess, 500);
+          safeTimeout(onSuccess, 500);
         }
       } else {
         onError();
-        setTimeout(() => setFlipped([]), 800);
+        safeTimeout(() => setFlipped([]), 800);
       }
     }
   };
@@ -4767,7 +4783,7 @@ const MemoryPairsGame: React.FC<{ onSuccess: () => void; onError: () => void }> 
               key={card.id}
               type="button"
               onClick={() => handleCardClick(idx)}
-              className={`h-20 rounded-2xl font-bold text-xs flex items-center justify-center p-2 transition-all duration-300 ${
+              className={`h-22 rounded-2xl font-bold text-sm sm:text-base flex items-center justify-center p-2 transition-all duration-300 ${
                 isFlipped
                   ? 'bg-[#f2ca50] text-[#3c2f00] shadow-md scale-102'
                   : 'bg-[#191f2f] border border-[#232a3a] text-amber-500/40 hover:bg-[#232a3a]'
@@ -4787,31 +4803,40 @@ const BeatTheClockGame: React.FC<{ onSuccess: () => void; onError: () => void }>
   const [currentIndex, setCurrentIndex] = useState(0);
   const [score, setScore] = useState(0);
   const [timeLeft, setTimeLeft] = useState(30);
+  const [isFinished, setIsFinished] = useState(false);
+  const safeTimeout = useSafeTimeouts();
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
 
   useEffect(() => {
+    if (isFinished) return;
     const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          onSuccess();
-          return 0;
-        }
-        return prev - 1;
-      });
+      setTimeLeft((prev) => Math.max(0, prev - 1));
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [isFinished]);
+
+  useEffect(() => {
+    if (!isFinished && timeLeft === 0) {
+      setIsFinished(true);
+      sfx.playWrong();
+      onErrorRef.current();
+    }
+  }, [timeLeft, isFinished]);
 
   const current = BEAT_THE_CLOCK_WORDS[currentIndex % BEAT_THE_CLOCK_WORDS.length];
 
   const handleChoice = (opt: string) => {
+    if (isFinished) return;
     sfx.playPop();
     if (opt === current.correct) {
       sfx.playCorrect();
-      setScore((s) => s + 1);
+      const nextScore = score + 1;
+      setScore(nextScore);
       setCurrentIndex((i) => i + 1);
-      if (score >= 4) {
-        setTimeout(onSuccess, 300);
+      if (nextScore >= 5) {
+        setIsFinished(true);
+        safeTimeout(onSuccess, 300);
       }
     } else {
       onError();
@@ -4830,13 +4855,13 @@ const BeatTheClockGame: React.FC<{ onSuccess: () => void; onError: () => void }>
         <h4 className="font-serif font-black text-3xl text-white mt-1">{current.en}</h4>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-3 gap-2.5">
         {current.options.map((opt) => (
           <button
             key={opt}
             type="button"
             onClick={() => handleChoice(opt)}
-            className="py-3 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] border border-[#232a3a] text-xs font-bold text-white transition-all active:scale-95"
+            className="py-3.5 px-2 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] border border-[#232a3a] text-sm sm:text-base font-bold text-white transition-all active:scale-95"
           >
             {opt}
           </button>
@@ -4849,12 +4874,16 @@ const BeatTheClockGame: React.FC<{ onSuccess: () => void; onError: () => void }>
 // 14. WORD SNAKE
 const WordSnakeGame: React.FC<{ onSuccess: () => void; onError: () => void }> = ({ onSuccess, onError }) => {
   const item = WORD_SNAKE_CHAINS[0];
+  const safeTimeout = useSafeTimeouts();
+  const [isDone, setIsDone] = useState(false);
 
   const handleChoice = (word: string) => {
+    if (isDone) return;
     sfx.playPop();
     if (word === item.correct) {
+      setIsDone(true);
       sfx.playCorrect();
-      setTimeout(onSuccess, 400);
+      safeTimeout(onSuccess, 400);
     } else {
       onError();
     }
@@ -4873,13 +4902,13 @@ const WordSnakeGame: React.FC<{ onSuccess: () => void; onError: () => void }> = 
         </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-3 gap-2.5">
         {item.options.map((opt) => (
           <button
             key={opt}
             type="button"
             onClick={() => handleChoice(opt)}
-            className="py-3.5 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] border border-[#232a3a] text-xs font-mono font-bold text-white transition-all active:scale-95"
+            className="py-3.5 px-2 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] border border-[#232a3a] text-sm sm:text-base font-mono font-bold text-white transition-all active:scale-95"
           >
             {opt}
           </button>
@@ -4892,12 +4921,16 @@ const WordSnakeGame: React.FC<{ onSuccess: () => void; onError: () => void }> = 
 // 15. RIDDLE SOLVER
 const RiddleSolverGame: React.FC<{ onSuccess: () => void; onError: () => void }> = ({ onSuccess, onError }) => {
   const item = RIDDLE_ITEMS[0];
+  const safeTimeout = useSafeTimeouts();
+  const [isDone, setIsDone] = useState(false);
 
   const handleChoice = (opt: string) => {
+    if (isDone) return;
     sfx.playPop();
     if (opt === item.correct) {
+      setIsDone(true);
       sfx.playCorrect();
-      setTimeout(onSuccess, 400);
+      safeTimeout(onSuccess, 400);
     } else {
       onError();
     }
@@ -4907,18 +4940,18 @@ const RiddleSolverGame: React.FC<{ onSuccess: () => void; onError: () => void }>
     <div className="space-y-4 text-center">
       <div className="p-4 bg-[#0c1322] rounded-2xl border border-yellow-500/30">
         <span className="text-[10px] text-yellow-400 font-mono block mb-1">ÉNIGME MYSTÈRE</span>
-        <p className="font-serif text-sm sm:text-base text-white leading-relaxed italic">
+        <p className="font-serif text-base sm:text-lg text-white leading-relaxed italic">
           "{item.riddle}"
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-2.5">
+      <div className="grid grid-cols-2 gap-3">
         {item.options.map((opt) => (
           <button
             key={opt}
             type="button"
             onClick={() => handleChoice(opt)}
-            className="py-3 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] border border-[#232a3a] text-xs font-bold text-white transition-all active:scale-95"
+            className="py-3.5 px-3 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] border border-[#232a3a] text-sm sm:text-base font-bold text-white transition-all active:scale-95"
           >
             {opt}
           </button>
@@ -4931,12 +4964,16 @@ const RiddleSolverGame: React.FC<{ onSuccess: () => void; onError: () => void }>
 // 16. TONE DETECTOR
 const ToneDetectorGame: React.FC<{ onSuccess: () => void; onError: () => void }> = ({ onSuccess, onError }) => {
   const item = TONE_DETECTOR_ITEMS[0];
+  const safeTimeout = useSafeTimeouts();
+  const [isDone, setIsDone] = useState(false);
 
   const handleChoice = (choice: string) => {
+    if (isDone) return;
     sfx.playPop();
     if (choice === item.correct) {
+      setIsDone(true);
       sfx.playCorrect();
-      setTimeout(onSuccess, 400);
+      safeTimeout(onSuccess, 400);
     } else {
       onError();
     }
@@ -4946,18 +4983,18 @@ const ToneDetectorGame: React.FC<{ onSuccess: () => void; onError: () => void }>
     <div className="space-y-4 text-center">
       <div className="p-4 bg-[#0c1322] rounded-2xl border border-pink-500/30">
         <span className="text-[10px] text-pink-400 font-mono block mb-1">ANALYSE DU TON</span>
-        <p className="font-serif text-sm text-white italic leading-relaxed">
+        <p className="font-serif text-base text-white italic leading-relaxed">
           {item.quote}
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-2.5">
+      <div className="grid grid-cols-2 gap-3">
         {item.options.map((opt) => (
           <button
             key={opt}
             type="button"
             onClick={() => handleChoice(opt)}
-            className="py-3 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] border border-[#232a3a] text-xs font-bold text-white transition-all active:scale-95"
+            className="py-3.5 px-3 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] border border-[#232a3a] text-sm sm:text-base font-bold text-white transition-all active:scale-95"
           >
             {opt}
           </button>
@@ -4970,12 +5007,16 @@ const ToneDetectorGame: React.FC<{ onSuccess: () => void; onError: () => void }>
 // 17. UK VS US MATCH
 const UkVsUsGame: React.FC<{ onSuccess: () => void; onError: () => void }> = ({ onSuccess, onError }) => {
   const item = UK_VS_US_ITEMS[0];
+  const safeTimeout = useSafeTimeouts();
+  const [isDone, setIsDone] = useState(false);
 
   const handleChoice = (opt: string) => {
+    if (isDone) return;
     sfx.playPop();
     if (opt === item.correct) {
+      setIsDone(true);
       sfx.playCorrect();
-      setTimeout(onSuccess, 400);
+      safeTimeout(onSuccess, 400);
     } else {
       onError();
     }
@@ -4989,13 +5030,13 @@ const UkVsUsGame: React.FC<{ onSuccess: () => void; onError: () => void }> = ({ 
         <span className="text-xs text-[#99907c] mt-1 block">Quel est l'équivalent américain ?</span>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-3 gap-2.5">
         {item.options.map((opt) => (
           <button
             key={opt}
             type="button"
             onClick={() => handleChoice(opt)}
-            className="py-3 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] border border-[#232a3a] text-xs font-bold text-white transition-all active:scale-95"
+            className="py-3.5 px-2 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] border border-[#232a3a] text-sm sm:text-base font-bold text-white transition-all active:scale-95"
           >
             {opt}
           </button>
@@ -5008,12 +5049,16 @@ const UkVsUsGame: React.FC<{ onSuccess: () => void; onError: () => void }> = ({ 
 // 18. IDIOM HUNTER
 const IdiomHunterGame: React.FC<{ onSuccess: () => void; onError: () => void }> = ({ onSuccess, onError }) => {
   const item = IDIOM_HUNTER_ITEMS[0];
+  const safeTimeout = useSafeTimeouts();
+  const [isDone, setIsDone] = useState(false);
 
   const handleChoice = (opt: string) => {
+    if (isDone) return;
     sfx.playPop();
     if (opt === item.correct) {
+      setIsDone(true);
       sfx.playCorrect();
-      setTimeout(onSuccess, 400);
+      safeTimeout(onSuccess, 400);
     } else {
       onError();
     }
@@ -5027,13 +5072,13 @@ const IdiomHunterGame: React.FC<{ onSuccess: () => void; onError: () => void }> 
         <p className="text-xs text-[#99907c] mt-1 italic">Exemple : {item.example}</p>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         {item.options.map((opt) => (
           <button
             key={opt}
             type="button"
             onClick={() => handleChoice(opt)}
-            className="w-full p-3 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] border border-[#232a3a] text-xs font-bold text-white text-left transition-all active:scale-98"
+            className="w-full p-4 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] border border-[#232a3a] text-sm sm:text-base font-bold text-white text-left transition-all active:scale-98"
           >
             {opt}
           </button>
@@ -5051,6 +5096,8 @@ const SpellingBeeGame: React.FC<{ onSuccess: () => void; onError: () => void; sp
 }) => {
   const item = SPELLING_BEE_ITEMS[0]; // BEAUTIFUL
   const [typed, setTyped] = useState('');
+  const [isDone, setIsDone] = useState(false);
+  const safeTimeout = useSafeTimeouts();
 
   useEffect(() => {
     speak(item.word);
@@ -5058,9 +5105,11 @@ const SpellingBeeGame: React.FC<{ onSuccess: () => void; onError: () => void; sp
 
   const handleValidate = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isDone) return;
     if (typed.trim().toUpperCase() === item.word) {
+      setIsDone(true);
       sfx.playCorrect();
-      setTimeout(onSuccess, 400);
+      safeTimeout(onSuccess, 400);
     } else {
       onError();
     }
@@ -5088,12 +5137,12 @@ const SpellingBeeGame: React.FC<{ onSuccess: () => void; onError: () => void; sp
           value={typed}
           onChange={(e) => setTyped(e.target.value.toUpperCase())}
           placeholder="Tape l'orthographe exacte..."
-          className="w-full px-4 py-3 rounded-xl bg-[#191f2f] border border-[#232a3a] text-center font-mono font-bold text-base text-white tracking-widest focus:outline-none focus:border-[#f2ca50]"
+          className="w-full px-4 py-3.5 rounded-xl bg-[#191f2f] border border-[#232a3a] text-center font-mono font-black text-xl sm:text-2xl text-white tracking-widest focus:outline-none focus:border-[#f2ca50]"
           autoFocus
         />
         <button
           type="submit"
-          className="w-full py-3 rounded-xl bg-[#f2ca50] hover:bg-[#ffe088] text-[#3c2f00] font-black text-xs uppercase tracking-wider shadow-md"
+          className="w-full py-3.5 rounded-xl bg-[#f2ca50] hover:bg-[#ffe088] text-[#3c2f00] font-black text-sm uppercase tracking-wider shadow-md"
         >
           Vérifier l'orthographe
         </button>
@@ -5106,10 +5155,13 @@ const SpellingBeeGame: React.FC<{ onSuccess: () => void; onError: () => void; sp
 const BossBattleGame: React.FC<{ onSuccess: () => void; onError: () => void }> = ({ onSuccess, onError }) => {
   const [currentRound, setCurrentRound] = useState(0);
   const [bossHp, setBossHp] = useState(100);
+  const [isDone, setIsDone] = useState(false);
+  const safeTimeout = useSafeTimeouts();
 
   const round = BOSS_BATTLE_ROUNDS[currentRound];
 
   const handleChoice = (opt: string) => {
+    if (isDone) return;
     sfx.playPop();
     if (opt === round.correct) {
       sfx.playCorrect();
@@ -5117,7 +5169,8 @@ const BossBattleGame: React.FC<{ onSuccess: () => void; onError: () => void }> =
       setBossHp(newHp);
 
       if (currentRound + 1 >= BOSS_BATTLE_ROUNDS.length || newHp <= 0) {
-        setTimeout(onSuccess, 500);
+        setIsDone(true);
+        safeTimeout(onSuccess, 500);
       } else {
         setCurrentRound((r) => r + 1);
       }
@@ -5146,18 +5199,18 @@ const BossBattleGame: React.FC<{ onSuccess: () => void; onError: () => void }> =
         <span className="text-[10px] text-[#f2ca50] font-mono block">
           ROUND {currentRound + 1} / {BOSS_BATTLE_ROUNDS.length}
         </span>
-        <h4 className="font-serif font-bold text-sm sm:text-base text-white mt-1">
+        <h4 className="font-serif font-bold text-base sm:text-lg text-white mt-1">
           {round.prompt}
         </h4>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         {round.options.map((opt) => (
           <button
             key={opt}
             type="button"
             onClick={() => handleChoice(opt)}
-            className="w-full p-3 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] border border-[#232a3a] text-xs font-bold text-white text-left transition-all active:scale-98"
+            className="w-full p-4 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] border border-[#232a3a] text-sm sm:text-base font-bold text-white text-left transition-all active:scale-98"
           >
             {opt}
           </button>

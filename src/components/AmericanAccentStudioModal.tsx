@@ -42,8 +42,11 @@ export const AmericanAccentStudioModal: React.FC<AmericanAccentStudioModalProps>
 
     refresh();
 
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.onvoiceschanged = refresh;
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window && typeof window.speechSynthesis.addEventListener === 'function') {
+      window.speechSynthesis.addEventListener('voiceschanged', refresh);
+      return () => {
+        window.speechSynthesis.removeEventListener('voiceschanged', refresh);
+      };
     }
   }, [isOpen]);
 
@@ -55,17 +58,13 @@ export const AmericanAccentStudioModal: React.FC<AmericanAccentStudioModalProps>
     // Reset custom URI when changing gender mode to pick best of that gender
     setSelectedURI('');
     setCustomUsVoiceURI(null);
-    setTimeout(() => {
-      setCurrentVoice(getBestUsVoice());
-    }, 50);
+    setCurrentVoice(getBestUsVoice());
   };
 
   const handleVoiceSelect = (uri: string) => {
     setSelectedURI(uri);
     setCustomUsVoiceURI(uri || null);
-    setTimeout(() => {
-      setCurrentVoice(getBestUsVoice());
-    }, 50);
+    setCurrentVoice(getBestUsVoice());
   };
 
   const testPhrase = (text: string, key: string, accent: 'en-US' | 'en-GB' = 'en-US') => {

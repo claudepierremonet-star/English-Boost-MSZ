@@ -230,7 +230,7 @@ function saveDailyMszCoinsState(state: DailyMszCoinsState): void {
  * 2. Anti-spam check: prevents earning multiple times on the exact same game on the same day.
  */
 export function awardMszCoins(
-  source: 'game' | 'cursus' | 'speaking' | 'quiz' | 'daily_challenge',
+  source: 'game' | 'cursus' | 'speaking' | 'quiz' | 'daily_challenge' | 'city_map',
   sourceId: string,
   baseCoins: number,
   userLevel: number = 1,
@@ -266,6 +266,7 @@ export function awardMszCoins(
     const currentBalance = getMszCoinsBalance();
     const newBalance = currentBalance + actualAward;
     saveMszCoinsBalance(newBalance);
+    syncMszStateToCloud(newBalance);
 
     state.coinsEarnedToday += actualAward;
     state.completedModuleIdsToday.push(sourceId);
@@ -495,14 +496,18 @@ export function buyCharacterFromShop(characterId: string): {
 export function getMarketplaceListings(): MarketListing[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.MARKET_LISTINGS);
-    if (!raw) {
-      localStorage.setItem(STORAGE_KEYS.MARKET_LISTINGS, JSON.stringify(INITIAL_MARKET_LISTINGS));
-      return INITIAL_MARKET_LISTINGS;
+    if (raw === null) {
+      const cloned = INITIAL_MARKET_LISTINGS.map((l) => ({ ...l }));
+      localStorage.setItem(STORAGE_KEYS.MARKET_LISTINGS, JSON.stringify(cloned));
+      return cloned;
     }
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_MARKET_LISTINGS;
+    if (Array.isArray(parsed)) {
+      return parsed;
+    }
+    return INITIAL_MARKET_LISTINGS.map((l) => ({ ...l }));
   } catch {
-    return INITIAL_MARKET_LISTINGS;
+    return INITIAL_MARKET_LISTINGS.map((l) => ({ ...l }));
   }
 }
 

@@ -3,6 +3,7 @@ import { QUIZ_QUESTIONS, type QuizQuestion } from '../data/curriculum';
 import { recordAttempt } from '../firebase/client';
 import type { CEFRLevel } from '../firebase/types';
 import confetti from 'canvas-confetti';
+import { playCorrectCue, playIncorrectCue, playVictoryCue } from '../utils/soundEffects';
 
 interface QuizModalProps {
   currentLevel: CEFRLevel;
@@ -33,6 +34,9 @@ export const QuizModal: React.FC<QuizModalProps> = ({
     const isCorrect = currentQ.options[idx].isCorrect;
     if (isCorrect) {
       setScore((prev) => prev + 1);
+      playCorrectCue();
+    } else {
+      playIncorrectCue();
     }
   };
 
@@ -43,6 +47,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
       setHasAnswered(false);
     } else {
       setIsCompleted(true);
+      playVictoryCue();
       const finalScore = Math.round(((score + (currentQ.options[selectedOptionIdx || 0]?.isCorrect ? 0 : 0)) / questions.length) * 100);
 
       try {
@@ -141,16 +146,19 @@ export const QuizModal: React.FC<QuizModalProps> = ({
             </div>
 
             {/* Multiple Choice Options */}
-            <div className="flex flex-col gap-2.5">
+            <div className="flex flex-col gap-3">
               {currentQ.options.map((opt, idx) => {
                 const isSelected = selectedOptionIdx === idx;
                 let btnStyle = 'bg-[#191f2f] border-[#4d4635]/30 text-[#dce2f8] hover:bg-[#232a3a]';
+                let textSizeClass = 'text-base sm:text-lg font-semibold';
 
                 if (hasAnswered) {
                   if (opt.isCorrect) {
                     btnStyle = 'bg-[#f2ca50]/15 border-[#f2ca50] text-[#f2ca50] shadow-md';
+                    textSizeClass = 'text-lg sm:text-xl font-bold';
                   } else if (isSelected && !opt.isCorrect) {
                     btnStyle = 'bg-[#93000a]/30 border-[#ffb4ab] text-[#ffb4ab]';
+                    textSizeClass = 'text-lg sm:text-xl font-bold';
                   } else {
                     btnStyle = 'bg-[#151b2b]/50 border-[#232a3a] text-[#99907c] opacity-60';
                   }
@@ -162,16 +170,18 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                     type="button"
                     onClick={() => handleSelectOption(idx)}
                     disabled={hasAnswered}
-                    className={`w-full p-4 rounded-xl text-left border transition-all flex items-center justify-between active:scale-[0.99] ${btnStyle}`}
+                    className={`w-full p-4 sm:p-5 rounded-xl text-left border transition-all flex items-center justify-between gap-3 active:scale-[0.99] ${btnStyle}`}
                   >
-                    <div className="flex items-center gap-3">
-                      <span className="w-7 h-7 rounded-full bg-[#232a3a] flex items-center justify-center text-xs font-bold font-mono text-[#d4c78f]">
+                    <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                      <span className="w-9 h-9 rounded-full bg-[#232a3a] flex items-center justify-center text-sm sm:text-base font-bold font-mono text-[#d4c78f] shrink-0">
                         {opt.label}
                       </span>
-                      <span className="font-serif text-base font-semibold">{opt.text}</span>
+                      <span className={`font-serif break-words whitespace-normal leading-snug transition-all ${textSizeClass}`}>
+                        {opt.text}
+                      </span>
                     </div>
 
-                    <span className="material-symbols-outlined text-lg">
+                    <span className="material-symbols-outlined text-xl shrink-0">
                       {hasAnswered && opt.isCorrect
                         ? 'check_circle'
                         : isSelected && !opt.isCorrect
@@ -185,19 +195,19 @@ export const QuizModal: React.FC<QuizModalProps> = ({
 
             {/* Instant Explanation Card */}
             {hasAnswered && (
-              <div className="p-4 rounded-xl bg-[#232a3a] border border-[#f2ca50]/40 flex flex-col gap-2 animate-fadeIn text-xs">
+              <div className="p-4 sm:p-5 rounded-xl bg-[#232a3a] border border-[#f2ca50]/40 flex flex-col gap-2.5 animate-fadeIn">
                 <div className="flex items-center justify-between">
-                  <span className="font-serif font-bold text-sm text-[#dce2f8] flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-base text-[#f2ca50]">
+                  <span className="font-serif font-bold text-base text-[#dce2f8] flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-lg text-[#f2ca50]">
                       school
                     </span>
                     Décryptage de la Règle
                   </span>
-                  <span className="text-[10px] text-[#f2ca50] font-mono font-bold uppercase">
+                  <span className="text-xs text-[#f2ca50] font-mono font-bold uppercase">
                     {currentQ.level}
                   </span>
                 </div>
-                <p className="text-xs text-[#d0c5af] leading-relaxed">
+                <p className="text-sm sm:text-base text-[#dce2f8]/90 leading-relaxed">
                   {currentQ.options[selectedOptionIdx || 0]?.explanation ||
                     currentQ.options.find((o) => o.isCorrect)?.explanation}
                 </p>

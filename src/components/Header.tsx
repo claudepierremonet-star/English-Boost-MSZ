@@ -5,6 +5,7 @@ import { useSyncStatus } from '../offline/useSyncStatus';
 import { calculateLevel } from '../utils/levelUtils';
 import { getMszCoinsBalance } from '../utils/mszCoinsManager';
 import { HeaderSessionTimer } from './HeaderSessionTimer';
+import { isSoundEffectsEnabled, toggleSoundEffects, SOUND_EFFECTS_EVENT } from '../utils/soundEffects';
 import appIconImg from '../assets/images/app_icon_msz_1792789129742.jpg';
 
 interface HeaderProps {
@@ -47,6 +48,7 @@ export const Header: React.FC<HeaderProps> = ({
   const { isOnline, isSyncing, pendingCount, triggerSync } = useSyncStatus();
   const [imageError, setImageError] = useState(false);
   const [mszCoins, setMszCoins] = useState<number>(() => getMszCoinsBalance());
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => isSoundEffectsEnabled());
   const academicLevel = calculateLevel(user.stats?.totalXp || 0);
   const xpInLevel = (user.stats?.totalXp || 0) % 100;
 
@@ -54,6 +56,15 @@ export const Header: React.FC<HeaderProps> = ({
     const handleCoinsUpdate = () => setMszCoins(getMszCoinsBalance());
     window.addEventListener('msz-coins-updated', handleCoinsUpdate);
     return () => window.removeEventListener('msz-coins-updated', handleCoinsUpdate);
+  }, []);
+
+  useEffect(() => {
+    const handleSoundUpdate = (e: Event) => {
+      const ce = e as CustomEvent<boolean>;
+      setSoundEnabled(typeof ce.detail === 'boolean' ? ce.detail : isSoundEffectsEnabled());
+    };
+    window.addEventListener(SOUND_EFFECTS_EVENT, handleSoundUpdate);
+    return () => window.removeEventListener(SOUND_EFFECTS_EVENT, handleSoundUpdate);
   }, []);
 
   return (
@@ -142,7 +153,7 @@ export const Header: React.FC<HeaderProps> = ({
               type="button"
               onClick={onNavigateCursus}
               className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#232a3a]/80 hover:bg-[#2e3545] border border-[#f2ca50]/30 text-xs font-bold text-[#f2ca50] hover:text-[#ffe088] transition-all active:scale-95"
-              title="Accéder au cursus 6e à Terminale (70 leçons)"
+              title="Accéder au cursus 6e à Terminale (200 leçons)"
             >
               <span className="material-symbols-outlined text-[15px]">school</span>
               <span className="font-mono text-[11px] uppercase tracking-wider">Cursus 6e-Tle</span>
@@ -194,6 +205,23 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="hidden xl:inline text-[9px] text-[#f2ca50] font-mono">MSZ</span>
             </button>
           )}
+
+          {/* Subtle Sound Effects Toggle Button */}
+          <button
+            type="button"
+            onClick={() => setSoundEnabled(toggleSoundEffects())}
+            className={`p-1.5 rounded-full border transition-all active:scale-95 flex items-center justify-center cursor-pointer ${
+              soundEnabled
+                ? 'bg-[#232a3a]/80 hover:bg-[#2e3545] border-[#f2ca50]/30 text-[#f2ca50] hover:text-[#ffe088]'
+                : 'bg-[#151b2b]/80 hover:bg-[#232a3a] border-[#232a3a] text-[#99907c] hover:text-[#dce2f8]'
+            }`}
+            title={soundEnabled ? 'Indices sonores activés (cliquer pour couper)' : 'Indices sonores coupés (cliquer pour activer)'}
+            aria-label={soundEnabled ? 'Couper les indices sonores' : 'Activer les indices sonores'}
+          >
+            <span className="material-symbols-outlined text-[19px]">
+              {soundEnabled ? 'volume_up' : 'volume_off'}
+            </span>
+          </button>
 
           {/* Quick Skin / Theme Switcher Button */}
           {onOpenThemeSelector && (

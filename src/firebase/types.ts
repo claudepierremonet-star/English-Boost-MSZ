@@ -47,6 +47,17 @@ export interface ArcadeProgressionState {
   } | null;
 }
 
+export interface CityMapProgressionState {
+  unlockedLevel: number; // 1..600 — unlocks N+1 only when all 10 chapters of N are completed
+  completedChaptersByLevel: Record<string, number[]>; // key: String(levelNumber), value: completed chapter indices [1..10]
+  conqueredLevels: number[]; // list of conquered level numbers [1..600]
+  chapterBestScores?: Record<string, number>; // key: "${level}-${chapter}", value: best percentage 0..100
+  chapterStars?: Record<string, number>; // key: "${level}-${chapter}", value: 1..3 stars
+  totalStars: number;
+  lastPlayedLevel?: number;
+  updatedAt: string;
+}
+
 export interface UserProfile {
   uid: string;
   displayName: string;
@@ -58,6 +69,7 @@ export interface UserProfile {
   isAnonymous?: boolean;
   unlockedBadgeIds?: string[];
   arcadeProgression?: ArcadeProgressionState;
+  cityMapProgression?: CityMapProgressionState;
   mszCoinsBalance?: number;
   ownedCardInstances?: Array<{
     characterId: string;

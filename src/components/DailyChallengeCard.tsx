@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import confetti from 'canvas-confetti';
 import { DualSpeakerButton } from './DualSpeakerButton';
+import { playCorrectCue, playIncorrectCue } from '../utils/soundEffects';
 
 interface DailyChallengeCardProps {
   onChallengeComplete?: (isSuccessOrXp: number | boolean) => void;
@@ -42,6 +43,7 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({ onChalle
     setIsCorrect(answer);
 
     if (answer) {
+      playCorrectCue();
       try {
         confetti({
           particleCount: 50,
@@ -54,6 +56,7 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({ onChalle
       }
       onChallengeComplete?.(true); // +10 points de niveau
     } else {
+      playIncorrectCue();
       onChallengeComplete?.(false); // -5 points de niveau
     }
   };
@@ -120,14 +123,15 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({ onChalle
         </div>
 
         {/* Option Selectors */}
-        <div className="grid grid-cols-1 gap-2 mb-4">
+        <div className="grid grid-cols-1 gap-2.5 mb-4">
           {options.map((opt) => {
             const isChosen = selectedOption === opt.id;
+            const isHighlighted = (hasSubmitted && opt.isAnswer) || isChosen;
             return (
               <div
                 key={opt.id}
                 onClick={() => handleSelect(opt.id, opt.isAnswer)}
-                className={`w-full p-3 rounded-xl text-left transition-all flex items-center justify-between border cursor-pointer active:scale-[0.99] ${
+                className={`w-full p-3.5 sm:p-4 rounded-xl text-left transition-all flex items-center justify-between border cursor-pointer active:scale-[0.99] ${
                   hasSubmitted && opt.isAnswer
                     ? 'bg-[#f2ca50]/15 border-[#f2ca50] text-[#f2ca50]'
                     : isChosen && !opt.isAnswer
@@ -135,13 +139,21 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({ onChalle
                     : 'bg-[#151b2b]/80 hover:bg-[#232a3a] border-[#4d4635]/30 text-[#dce2f8]'
                 }`}
               >
-                <div className="flex items-center gap-3">
-                  <span className="w-6 h-6 rounded-full bg-[#232a3a] flex items-center justify-center text-xs text-[#d4c78f] font-mono font-bold shrink-0">
+                <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                  <span className="w-8 h-8 rounded-full bg-[#232a3a] flex items-center justify-center text-sm text-[#d4c78f] font-mono font-bold shrink-0">
                     {opt.label}
                   </span>
-                  <div className="flex flex-col">
+                  <div className="flex flex-col min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold text-sm">{opt.term}</span>
+                      <span
+                        className={`font-serif transition-all ${
+                          isHighlighted
+                            ? 'text-lg sm:text-xl font-bold'
+                            : 'text-base sm:text-lg font-semibold'
+                        }`}
+                      >
+                        {opt.term}
+                      </span>
                       <DualSpeakerButton
                         text={opt.term}
                         id={`opt-speaker-${opt.id}`}
@@ -149,11 +161,13 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({ onChalle
                         variant="minimal"
                       />
                     </div>
-                    <span className="text-xs text-[#d0c5af]/80">{opt.definition}</span>
+                    <span className="text-xs sm:text-sm text-[#d0c5af]/85 leading-snug">
+                      {opt.definition}
+                    </span>
                   </div>
                 </div>
 
-                <span className="material-symbols-outlined text-lg">
+                <span className="material-symbols-outlined text-xl shrink-0">
                   {hasSubmitted && opt.isAnswer
                     ? 'check_circle'
                     : isChosen && !opt.isAnswer
@@ -168,14 +182,14 @@ export const DailyChallengeCard: React.FC<DailyChallengeCardProps> = ({ onChalle
         {/* Feedback message */}
         {hasSubmitted && (
           <div
-            className={`p-3.5 rounded-xl mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fadeIn border ${
+            className={`p-4 rounded-xl mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fadeIn border ${
               isCorrect
                 ? 'bg-[#191f2f] border-[#f2ca50]/50 text-[#f2ca50]'
                 : 'bg-[#151b2b] border-[#ffb4ab]/40 text-[#ffb4ab]'
             }`}
           >
-            <div className="flex items-center gap-2 text-xs">
-              <span className="material-symbols-outlined text-lg">
+            <div className="flex items-center gap-2.5 text-sm leading-relaxed">
+              <span className="material-symbols-outlined text-xl shrink-0">
                 {isCorrect ? 'verified' : 'info'}
               </span>
               <span>

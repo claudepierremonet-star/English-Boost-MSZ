@@ -176,16 +176,25 @@ class SyncManager {
    * Execute a single queued operation against Cloud Firestore
    */
   private async executeSyncItem(item: SyncQueueItem): Promise<boolean> {
-    const targetUid = item.userId || auth?.currentUser?.uid;
-
-    if (!isFirebaseConfigured || !db || !targetUid) {
-      // If Firestore is not configured or no user session, item remains safely stored locally
+    const authUid = auth?.currentUser?.uid;
+    if (!isFirebaseConfigured || !db || !authUid) {
+      // Wait cleanly until signed in with Firebase Auth
       return false;
+    }
+
+    // Remap offline guest operations to the authenticated user's UID
+    const isGuestItem = !item.userId || item.userId === 'lord_chesterfield_scholar' || item.userId.startsWith('guest_');
+    const targetUid = isGuestItem ? authUid : item.userId!;
+
+    // If queue item belongs to another real user account, don't retry forever under current user's auth
+    if (targetUid !== authUid) {
+      return true;
     }
 
     switch (item.action) {
       case 'ADD_ATTEMPT': {
         const attempt = item.payload;
+        if (!attempt?.attemptId) return true;
         const attemptsCol = collection(db, 'users', targetUid, 'attempts');
         await addDoc(attemptsCol, attempt);
         return true;
@@ -193,6 +202,7 @@ class SyncManager {
 
       case 'UPDATE_PROFILE': {
         const profile = item.payload;
+        if (!profile || typeof profile !== 'object') return true;
         const userRef = doc(db, 'users', targetUid);
         await setDoc(userRef, profile, { merge: true });
         return true;
@@ -200,14 +210,14 @@ class SyncManager {
 
       case 'FLASHCARD_PROGRESS': {
         const card = item.payload;
-        if (!card?.cardId) return false;
+        if (!card?.cardId) return true;
         const cardRef = doc(db, 'users', targetUid, 'flashcardProgress', card.cardId);
         await setDoc(cardRef, card);
         return true;
       }
 
       default:
-        return false;
+        return true;
     }
   }
 }

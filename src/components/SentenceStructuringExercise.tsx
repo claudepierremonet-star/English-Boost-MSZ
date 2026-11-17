@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import type { Grammar6eItem } from '../data/grammar6eData';
 import confetti from 'canvas-confetti';
 import { DualSpeakerButton } from './DualSpeakerButton';
+import { speakText, stopSpeech } from '../services/speechService';
+import { playSelectCue, playDeselectCue, playCorrectCue, playIncorrectCue } from '../utils/soundEffects';
 
 interface SentenceStructuringExerciseProps {
   item: Grammar6eItem;
@@ -49,10 +51,14 @@ export const SentenceStructuringExercise: React.FC<SentenceStructuringExercisePr
     setIsCorrect(null);
     setShowHint(false);
     setAttempts(0);
+    return () => {
+      stopSpeech();
+    };
   }, [item.id]);
 
   const handleSelectWord = (token: WordToken) => {
     if (isSubmitted && isCorrect) return;
+    playSelectCue();
     setAvailableWords((prev) => prev.filter((w) => w.id !== token.id));
     setSelectedWords((prev) => [...prev, token]);
     setIsSubmitted(false);
@@ -61,6 +67,7 @@ export const SentenceStructuringExercise: React.FC<SentenceStructuringExercisePr
 
   const handleRemoveWord = (token: WordToken) => {
     if (isSubmitted && isCorrect) return;
+    playDeselectCue();
     setSelectedWords((prev) => prev.filter((w) => w.id !== token.id));
     setAvailableWords((prev) => [...prev, token]);
     setIsSubmitted(false);
@@ -68,6 +75,7 @@ export const SentenceStructuringExercise: React.FC<SentenceStructuringExercisePr
   };
 
   const handleReset = () => {
+    playDeselectCue();
     const tokens: WordToken[] = item.exercise.scrambled_words.map((word, idx) => ({
       id: `${item.id}-word-${idx}-${word}`,
       text: word
@@ -98,24 +106,23 @@ export const SentenceStructuringExercise: React.FC<SentenceStructuringExercisePr
     setIsCorrect(passed);
 
     if (passed) {
+      playCorrectCue();
       confetti({
         particleCount: 50,
         spread: 60,
         origin: { y: 0.6 }
       });
 
-      // Play audio of the correct sentence
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(targetSentence.replace(/\s+([?.!,])/g, '$1'));
-        utterance.lang = 'en-GB';
-        utterance.rate = 0.85;
-        window.speechSynthesis.speak(utterance);
-      }
+      // Play audio of the correct sentence via unified speechService
+      speakText(targetSentence.replace(/\s+([?.!,])/g, '$1'), 'en-GB', `struct-pass-${item.id}`, {
+        rate: 0.88
+      });
 
       if (onComplete) {
         onComplete(item.id, 100);
       }
+    } else {
+      playIncorrectCue();
     }
   };
 
@@ -237,8 +244,8 @@ export const SentenceStructuringExercise: React.FC<SentenceStructuringExercisePr
           <p className="text-xs text-[#99907c]">
             {item.exercise.instruction}
           </p>
-          <div className="p-2.5 rounded-lg bg-[#182133] border border-[#2a364d] text-xs sm:text-sm font-semibold text-[#dce2f8] flex items-center gap-2">
-            <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-[#232a3a] text-[#f2ca50] uppercase">
+          <div className="p-3 rounded-lg bg-[#182133] border border-[#2a364d] text-sm sm:text-base font-semibold text-[#dce2f8] flex items-center gap-2.5">
+            <span className="text-xs font-mono px-2 py-0.5 rounded bg-[#232a3a] text-[#f2ca50] uppercase">
               FR
             </span>
             <span>« {item.exercise.french_prompt} »</span>
@@ -247,8 +254,8 @@ export const SentenceStructuringExercise: React.FC<SentenceStructuringExercisePr
 
         {/* Hint banner if requested */}
         {showHint && (
-          <div className="p-2.5 rounded-lg bg-[#2a2310] border border-[#f2ca50]/40 text-xs text-[#f2ca50] flex items-center gap-2 animate-fadeIn">
-            <span className="material-symbols-outlined text-sm shrink-0">tips_and_updates</span>
+          <div className="p-3 rounded-lg bg-[#2a2310] border border-[#f2ca50]/40 text-sm text-[#f2ca50] flex items-center gap-2 animate-fadeIn">
+            <span className="material-symbols-outlined text-base shrink-0">tips_and_updates</span>
             <span>
               <strong>Indice d'ordre :</strong> La phrase commence par «{' '}
               <strong>{item.exercise.correct_tokens[0]}</strong> » et respecte la structure :{' '}
@@ -259,11 +266,11 @@ export const SentenceStructuringExercise: React.FC<SentenceStructuringExercisePr
 
         {/* TARGET SENTENCE DROP ZONE (CONSTRUCTED SENTENCE) */}
         <div className="flex flex-col gap-1.5">
-          <span className="text-[10px] font-mono uppercase text-[#99907c]">
+          <span className="text-[11px] font-mono uppercase text-[#99907c]">
             Votre phrase construite (cliquez pour retirer un mot) :
           </span>
           <div
-            className={`min-h-[64px] p-3 rounded-xl border-2 border-dashed flex flex-wrap items-center gap-2 transition-all ${
+            className={`min-h-[72px] p-3.5 rounded-xl border-2 border-dashed flex flex-wrap items-center gap-2.5 transition-all ${
               isSubmitted && isCorrect
                 ? 'border-emerald-500/80 bg-emerald-950/20'
                 : isSubmitted && isCorrect === false
@@ -274,7 +281,7 @@ export const SentenceStructuringExercise: React.FC<SentenceStructuringExercisePr
             }`}
           >
             {selectedWords.length === 0 ? (
-              <span className="text-xs text-[#99907c] italic">
+              <span className="text-sm text-[#99907c] italic">
                 Cliquez sur les mots ci-dessous dans l'ordre pour assembler la phrase...
               </span>
             ) : (
@@ -283,7 +290,7 @@ export const SentenceStructuringExercise: React.FC<SentenceStructuringExercisePr
                   key={token.id}
                   type="button"
                   onClick={() => handleRemoveWord(token)}
-                  className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-serif font-bold transition-all shadow-md flex items-center gap-1.5 active:scale-95 ${
+                  className={`px-3.5 py-2 rounded-lg text-base sm:text-lg font-serif font-bold transition-all shadow-md flex items-center gap-1.5 active:scale-95 ${
                     isSubmitted && isCorrect
                       ? 'bg-emerald-600 text-white cursor-default'
                       : 'bg-[#f2ca50] text-[#3c2f00] hover:bg-amber-300'
@@ -292,7 +299,7 @@ export const SentenceStructuringExercise: React.FC<SentenceStructuringExercisePr
                 >
                   <span>{token.text}</span>
                   {!isCorrect && (
-                    <span className="text-[10px] text-[#3c2f00]/70 font-mono">✕</span>
+                    <span className="text-xs text-[#3c2f00]/70 font-mono">✕</span>
                   )}
                 </button>
               ))
@@ -302,12 +309,12 @@ export const SentenceStructuringExercise: React.FC<SentenceStructuringExercisePr
 
         {/* AVAILABLE SCRAMBLED WORDS BANK */}
         <div className="flex flex-col gap-1.5">
-          <span className="text-[10px] font-mono uppercase text-[#99907c]">
+          <span className="text-[11px] font-mono uppercase text-[#99907c]">
             Mots disponibles à placer :
           </span>
-          <div className="min-h-[48px] p-2.5 rounded-xl bg-[#0c111c] border border-[#232a3a] flex flex-wrap items-center gap-2">
+          <div className="min-h-[56px] p-3 rounded-xl bg-[#0c111c] border border-[#232a3a] flex flex-wrap items-center gap-2.5">
             {availableWords.length === 0 ? (
-              <span className="text-[11px] text-[#99907c] italic">
+              <span className="text-xs sm:text-sm text-[#99907c] italic">
                 Tous les mots ont été placés dans la phrase. Cliquez sur « Vérifier » ci-dessous !
               </span>
             ) : (
@@ -316,7 +323,7 @@ export const SentenceStructuringExercise: React.FC<SentenceStructuringExercisePr
                   key={token.id}
                   type="button"
                   onClick={() => handleSelectWord(token)}
-                  className="px-3 py-1.5 rounded-lg bg-[#1c2436] hover:bg-[#28344e] border border-[#3b4866] text-[#dce2f8] hover:text-[#f2ca50] text-xs sm:text-sm font-serif font-semibold transition-all active:scale-95 shadow-sm"
+                  className="px-3.5 py-2 rounded-lg bg-[#1c2436] hover:bg-[#28344e] border border-[#3b4866] text-[#dce2f8] hover:text-[#f2ca50] text-sm sm:text-base font-serif font-semibold transition-all active:scale-95 shadow-sm"
                   title="Cliquer pour ajouter ce mot"
                 >
                   {token.text}
@@ -329,7 +336,7 @@ export const SentenceStructuringExercise: React.FC<SentenceStructuringExercisePr
         {/* FEEDBACK & EXPLANATION BANNER */}
         {isSubmitted && (
           <div
-            className={`p-3.5 rounded-xl border flex flex-col gap-2 animate-fadeIn ${
+            className={`p-4 rounded-xl border flex flex-col gap-2.5 animate-fadeIn ${
               isCorrect
                 ? 'bg-emerald-950/40 border-emerald-500/60 text-emerald-200'
                 : 'bg-red-950/40 border-red-500/60 text-red-200'
@@ -340,7 +347,7 @@ export const SentenceStructuringExercise: React.FC<SentenceStructuringExercisePr
                 <span className="material-symbols-outlined text-xl">
                   {isCorrect ? 'check_circle' : 'cancel'}
                 </span>
-                <span className="font-bold text-sm">
+                <span className="font-bold text-base">
                   {isCorrect
                     ? 'Bravo ! Phrase parfaitement structurée !'
                     : 'Pas tout à fait correct... Vérifiez l\'ordre des mots !'}
@@ -357,19 +364,19 @@ export const SentenceStructuringExercise: React.FC<SentenceStructuringExercisePr
               )}
             </div>
 
-            <p className="text-xs leading-relaxed text-[#dce2f8]">
+            <p className="text-sm leading-relaxed text-[#dce2f8]">
               {item.exercise.explanation}
             </p>
 
             {!isCorrect && (
-              <div className="pt-1 flex items-center justify-between">
-                <span className="text-[11px] text-[#d4c78f]">
-                  Solution attendue : <strong>« {targetSentenceClean} »</strong>
+              <div className="pt-1 flex items-center justify-between gap-2">
+                <span className="text-xs sm:text-sm text-[#d4c78f]">
+                  Solution attendue : <strong className="text-sm sm:text-base">« {targetSentenceClean} »</strong>
                 </span>
                 <button
                   type="button"
                   onClick={handleReset}
-                  className="text-xs font-mono underline hover:text-white"
+                  className="text-xs sm:text-sm font-mono underline hover:text-white shrink-0"
                 >
                   Réessayer
                 </button>

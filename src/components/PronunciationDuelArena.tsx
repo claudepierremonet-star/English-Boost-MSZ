@@ -74,10 +74,11 @@ export const PronunciationDuelArena: React.FC<PronunciationDuelArenaProps> = ({
   const recordedChunksRef = useRef<Blob[]>([]);
   const animFrameRef = useRef<number | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const duelTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const countdownTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const duelTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const historyScoresRef = useRef<number[]>([]);
   const nativeSimAnimRef = useRef<number | null>(null);
+  const userAudioUrlRef = useRef<string | null>(null);
 
   // Native Reference Spectral Template (128 frequency bins)
   const nativeTemplate: NativeSpectralTemplate = useMemo(() => {
@@ -89,6 +90,10 @@ export const PronunciationDuelArena: React.FC<PronunciationDuelArenaProps> = ({
     return () => {
       stopSpeech();
       cleanupAudioSession();
+      if (userAudioUrlRef.current) {
+        URL.revokeObjectURL(userAudioUrlRef.current);
+        userAudioUrlRef.current = null;
+      }
     };
   }, []);
 
@@ -127,21 +132,28 @@ export const PronunciationDuelArena: React.FC<PronunciationDuelArenaProps> = ({
   // Start guided duel with 3-second countdown
   const handleStartDuelCountdown = () => {
     if (isDuelActive || isCountingDown) return;
+    if (userAudioUrlRef.current) {
+      URL.revokeObjectURL(userAudioUrlRef.current);
+      userAudioUrlRef.current = null;
+    }
     setDuelResult(null);
     setMicErrorMessage(null);
     setIsCountingDown(true);
     setCountdownValue(3);
 
+    let remaining = 3;
+    if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
     countdownTimerRef.current = setInterval(() => {
-      setCountdownValue((prev) => {
-        if (prev <= 1) {
-          if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
-          setIsCountingDown(false);
-          startActiveDuelSession();
-          return 0;
-        }
-        return prev - 1;
-      });
+      remaining -= 1;
+      if (remaining <= 0) {
+        if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+        countdownTimerRef.current = null;
+        setCountdownValue(0);
+        setIsCountingDown(false);
+        startActiveDuelSession();
+      } else {
+        setCountdownValue(remaining);
+      }
     }, 1000);
   };
 
@@ -239,30 +251,36 @@ export const PronunciationDuelArena: React.FC<PronunciationDuelArenaProps> = ({
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.onstop = () => {
         const audioBlob = new Blob(recordedChunksRef.current, { type: 'audio/webm' });
+        if (userAudioUrlRef.current) {
+          URL.revokeObjectURL(userAudioUrlRef.current);
+        }
         const audioUrl = URL.createObjectURL(audioBlob);
+        userAudioUrlRef.current = audioUrl;
 
-        // Compute aggregate final score
+        // Compute aggregate final score without fabricating scores for silent recordings
         const scores = historyScoresRef.current;
-        let finalScore = 88;
-        let highestMatch = 94;
+        let finalScore = 0;
+        let highestMatch = 0;
 
         if (scores.length > 0) {
-          // Top 60% percentile average
           const sorted = [...scores].sort((a, b) => b - a);
           highestMatch = sorted[0];
-          const topSamples = sorted.slice(0, Math.max(3, Math.floor(sorted.length * 0.7)));
+          const topSamples = sorted.slice(0, Math.max(1, Math.floor(sorted.length * 0.7)));
           const sum = topSamples.reduce((acc, v) => acc + v, 0);
-          finalScore = Math.min(99, Math.max(55, Math.round(sum / topSamples.length)));
+          finalScore = Math.min(99, Math.max(0, Math.round(sum / topSamples.length)));
         }
 
-        // Award Coins via MSZ Economy
-        const coinAward = awardMszCoins(
-          'speaking',
-          `duel-${targetAccent}-${targetText.slice(0, 16)}`,
-          15,
-          1,
-          `Duel de Prononciation (${targetAccent})`
-        );
+        // Award Coins via MSZ Economy only when vocal signal was detected
+        const coinAward =
+          scores.length > 0 && finalScore >= 40
+            ? awardMszCoins(
+                'speaking',
+                `duel-${targetAccent}-${targetText.slice(0, 16)}`,
+                15,
+                1,
+                `Duel de Prononciation (${targetAccent})`
+              )
+            : { awarded: 0, newBalance: 0, message: '' };
 
         // Trigger celebratory confetti if victorious
         if (finalScore >= 75) {
@@ -281,9 +299,9 @@ export const PronunciationDuelArena: React.FC<PronunciationDuelArenaProps> = ({
         setDuelResult({
           finalScore,
           highestMatch,
-          avgFormant: liveScore.formantMatch || 86,
-          avgPitch: liveScore.pitchMatch || 88,
-          coinsAwarded: coinAward.awarded || 15,
+          avgFormant: scores.length > 0 ? liveScore.formantMatch : 0,
+          avgPitch: scores.length > 0 ? liveScore.pitchMatch : 0,
+          coinsAwarded: coinAward.awarded,
           userAudioUrl: audioUrl
         });
 

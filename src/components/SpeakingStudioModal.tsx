@@ -82,12 +82,13 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
   // Refs for audio hardware and speech recognizer
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const liveAnimFrameRef = useRef<number | null>(null);
   const speechRecognizerRef = useRef<SpeechRecognitionController | null>(null);
+  const blobUrlRef = useRef<string | null>(null);
 
   // Effective practice target text based on mode
   const effectiveTargetText = useMemo(() => {
@@ -122,6 +123,10 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
       if (speechRecognizerRef.current) {
         speechRecognizerRef.current.abort();
       }
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = null;
+      }
     };
   }, []);
 
@@ -139,6 +144,10 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
   const resetRecordingState = () => {
     stopSpeech();
     setIsRecording(false);
+    if (blobUrlRef.current) {
+      URL.revokeObjectURL(blobUrlRef.current);
+      blobUrlRef.current = null;
+    }
     setAudioUrl(null);
     setAudioBlob(null);
     setUserWaveform(null);
@@ -168,29 +177,7 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
     setMicError(null);
     audioChunksRef.current = [];
 
-    // 1. Initialize & Start Web Speech API Recognizer
-    if (isSpeechRecognitionAvailable()) {
-      try {
-        const recognizer = new SpeechRecognitionController(selectedAccent);
-        speechRecognizerRef.current = recognizer;
-        recognizer.onTranscriptChange = (finalText, interimText) => {
-          setLiveTranscript(interimText);
-          setFinalTranscript(finalText);
-        };
-        recognizer.onStatusChange = (status, errMsg) => {
-          if (status === 'error' && errMsg) {
-            console.warn('Speech recognition warning:', errMsg);
-          }
-        };
-        recognizer.start();
-      } catch (recErr) {
-        console.warn('Speech recognition start failed:', recErr);
-      }
-    } else {
-      setSpeechSupported(false);
-    }
-
-    // 2. Initialize Microphone Stream for Waveform & Audio Recording
+    // 1. Initialize Microphone Stream FIRST so permission failures do not leak SpeechRecognition
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -200,6 +187,28 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
         }
       });
       micStreamRef.current = stream;
+
+      // 2. Initialize & Start Web Speech API Recognizer once microphone is granted
+      if (isSpeechRecognitionAvailable()) {
+        try {
+          const recognizer = new SpeechRecognitionController(selectedAccent);
+          speechRecognizerRef.current = recognizer;
+          recognizer.onTranscriptChange = (finalText, interimText) => {
+            setLiveTranscript(interimText);
+            setFinalTranscript(finalText);
+          };
+          recognizer.onStatusChange = (status, errMsg) => {
+            if (status === 'error' && errMsg) {
+              console.warn('Speech recognition warning:', errMsg);
+            }
+          };
+          recognizer.start();
+        } catch (recErr) {
+          console.warn('Speech recognition start failed:', recErr);
+        }
+      } else {
+        setSpeechSupported(false);
+      }
 
       // Setup Web Audio Analyser for live visualizer
       try {
@@ -258,7 +267,11 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
       recorder.onstop = async () => {
         const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         setAudioBlob(blob);
+        if (blobUrlRef.current) {
+          URL.revokeObjectURL(blobUrlRef.current);
+        }
         const url = URL.createObjectURL(blob);
+        blobUrlRef.current = url;
         setAudioUrl(url);
 
         // Run acoustic analysis automatically upon recording completion
@@ -288,23 +301,23 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
       recognizedText = speechRecognizerRef.current.stop();
     }
 
-    const fullSpoken = (recognizedText || finalTranscript + ' ' + liveTranscript).trim();
+    const fullSpoken = (recognizedText || `${finalTranscript} ${liveTranscript}`).trim();
 
     // 2. Stop MediaRecorder & Web Audio
-    if (mediaRecorderRef.current && isRecording) {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      if (timerRef.current) clearInterval(timerRef.current);
-      if (liveAnimFrameRef.current) cancelAnimationFrame(liveAnimFrameRef.current);
-      if (micStreamRef.current) {
-        micStreamRef.current.getTracks().forEach((track) => track.stop());
-      }
+    }
+    setIsRecording(false);
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (liveAnimFrameRef.current) cancelAnimationFrame(liveAnimFrameRef.current);
+    if (micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach((track) => track.stop());
+      micStreamRef.current = null;
     }
 
-    // 3. Run Immediate Orthographic & Phonetic Correction
+    // 3. Run Immediate Orthographic & Phonetic Correction without faking 100% on silence
     const targetText = effectiveTargetText;
-    const spokenToCompare = fullSpoken || targetText; // Fallback so diagnostic always displays beautifully
-    const report = compareOrthographyAndPhonetics(targetText, spokenToCompare, selectedAccent);
+    const report = compareOrthographyAndPhonetics(targetText, fullSpoken, selectedAccent);
     setPhoneticReport(report);
   };
 
@@ -581,6 +594,7 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
                 score,
                 durationSeconds: 15
               });
+              onSpeakingComplete?.();
             }}
             onExitDuel={() => {
               setPracticeMode('cursus');
@@ -859,7 +873,7 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
               <SpeechRecognitionDiagnosticCard
                 report={phoneticReport}
                 targetText={effectiveTargetText}
-                spokenTranscript={finalTranscript || liveTranscript || effectiveTargetText}
+                spokenTranscript={`${finalTranscript} ${liveTranscript}`.trim()}
                 targetAccent={selectedAccent}
                 onReRecord={handleStartRecording}
                 onValidate={handleValidateSession}
@@ -902,6 +916,7 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
                     score,
                     durationSeconds: 15
                   });
+                  onSpeakingComplete?.();
                 }}
                 onExitDuel={() => {
                   setActiveTab('diagnostic');

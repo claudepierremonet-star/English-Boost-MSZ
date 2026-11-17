@@ -108,6 +108,7 @@ const MszShopCard3D: React.FC<{
   const isInteractingRef = useRef<boolean>(false);
   const animFrameRef = useRef<number | null>(null);
   const isFlippingRef = useRef<boolean>(false);
+  const flipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /**
    * Physical Inertia simulation loop:
@@ -288,6 +289,9 @@ const MszShopCard3D: React.FC<{
       if (animFrameRef.current) {
         cancelAnimationFrame(animFrameRef.current);
       }
+      if (flipTimerRef.current) {
+        clearTimeout(flipTimerRef.current);
+      }
     };
   }, []);
 
@@ -359,7 +363,8 @@ const MszShopCard3D: React.FC<{
     setIsFlipped((prev) => !prev);
     velXRef.current *= 0.2;
     velYRef.current *= 0.2;
-    setTimeout(() => {
+    if (flipTimerRef.current) clearTimeout(flipTimerRef.current);
+    flipTimerRef.current = setTimeout(() => {
       setIsFlipping(false);
       isFlippingRef.current = false;
     }, 650);
@@ -525,7 +530,10 @@ const MszShopCard3D: React.FC<{
                 alt={character.name}
                 className="w-full h-full object-cover object-center"
                 onError={(e) => {
-                  e.currentTarget.src = '/assets/aistudio/VOLT.png';
+                  const target = e.currentTarget;
+                  if (target.dataset.fallbackApplied) return;
+                  target.dataset.fallbackApplied = 'true';
+                  target.src = '/assets/aistudio/VOLT.png';
                 }}
               />
               {/* Dynamic Subtle Golden Luster Sheen on Artwork */}
@@ -790,7 +798,7 @@ const MszShopCard3D: React.FC<{
 };
 
 export const MszShop: React.FC<MszShopProps> = ({
-  userLevel = 14,
+  userLevel = 1,
   onOpenFullShop,
   onProfileUpdated
 }) => {
@@ -800,6 +808,7 @@ export const MszShop: React.FC<MszShopProps> = ({
   const [ownedInstances, setOwnedInstances] = useState<OwnedCardInstance[]>(getOwnedCardInstances());
   const [equippedId, setEquippedId] = useState<string>(getEquippedCharacterId());
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { dailyLimit, state: dailyState } = useMemo(() => {
     return getDailyMszCoinsState(userLevel);
@@ -823,12 +832,14 @@ export const MszShop: React.FC<MszShopProps> = ({
       window.removeEventListener('msz-coins-updated', handleUpdate);
       window.removeEventListener('msz-inventory-updated', handleUpdate);
       window.removeEventListener('msz-equipped-updated', handleUpdate);
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     };
   }, [refreshState]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToastMessage(null), 3500);
   };
 
   const handleBuy = (char: MszCharacter) => {

@@ -12,6 +12,7 @@ import {
 } from '../services/rhetoricalAnalyzer';
 import { getLessonsByGrade, type SchoolLesson } from '../data/schoolCurriculum';
 import { recordAttempt } from '../firebase/client';
+import { playSelectCue, playCorrectCue, playIncorrectCue } from '../utils/soundEffects';
 
 interface RhetoricalAnalyzerViewProps {
   initialLessonId?: string;
@@ -133,12 +134,15 @@ export const RhetoricalAnalyzerView: React.FC<RhetoricalAnalyzerViewProps> = ({
     const isCorrect = selectedOption === currentQ.correctFigureType;
 
     if (isCorrect) {
+      playCorrectCue();
       setQuizScore((prev) => prev + 1);
       confetti({
         particleCount: 35,
         spread: 45,
         origin: { y: 0.6 }
       });
+    } else {
+      playIncorrectCue();
     }
   };
 
@@ -155,7 +159,7 @@ export const RhetoricalAnalyzerView: React.FC<RhetoricalAnalyzerViewProps> = ({
         moduleType: 'quiz',
         title: 'Atelier Rhétorique 6e • Figures de Style',
         level: 'A1',
-        score: Math.round(((quizScore + (selectedOption === currentQ.correctFigureType ? 1 : 0)) / RHETORICAL_QUIZ_QUESTIONS_6E.length) * 100),
+        score: Math.round((quizScore / RHETORICAL_QUIZ_QUESTIONS_6E.length) * 100),
         durationSeconds: 150
       }).catch(console.warn);
     }
@@ -839,26 +843,30 @@ export const RhetoricalAnalyzerView: React.FC<RhetoricalAnalyzerViewProps> = ({
               </div>
 
               {/* Question Label */}
-              <h4 className="text-sm font-bold text-[#dce2f8]">
+              <h4 className="text-base sm:text-lg font-serif font-bold text-[#dce2f8]">
                 {currentQ.questionFr}
               </h4>
 
               {/* 4 Choices */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {currentQ.options.map((opt) => {
                   const isSelected = selectedOption === opt.figureType;
                   let btnStyle = 'bg-[#191f2f]/80 border-[#232a3a] text-[#dce2f8] hover:border-[#f2ca50]/50';
+                  let sizeStyle = 'text-sm sm:text-base font-bold';
 
                   if (isAnswerSubmitted) {
                     if (opt.figureType === currentQ.correctFigureType) {
                       btnStyle = 'bg-emerald-950/70 border-emerald-500 text-emerald-300 ring-1 ring-emerald-500';
+                      sizeStyle = 'text-base sm:text-lg font-bold';
                     } else if (isSelected) {
                       btnStyle = 'bg-rose-950/70 border-rose-500 text-rose-300 ring-1 ring-rose-500';
+                      sizeStyle = 'text-base sm:text-lg font-bold';
                     } else {
                       btnStyle = 'bg-[#191f2f]/40 border-[#232a3a] text-[#99907c] opacity-60';
                     }
                   } else if (isSelected) {
                     btnStyle = 'bg-[#232a3a] border-[#f2ca50] text-[#f2ca50] ring-1 ring-[#f2ca50]';
+                    sizeStyle = 'text-base sm:text-lg font-bold';
                   }
 
                   return (
@@ -866,15 +874,18 @@ export const RhetoricalAnalyzerView: React.FC<RhetoricalAnalyzerViewProps> = ({
                       key={opt.figureType}
                       type="button"
                       disabled={isAnswerSubmitted}
-                      onClick={() => setSelectedOption(opt.figureType)}
-                      className={`p-3 rounded-xl border text-left text-xs font-bold transition-all flex items-center justify-between ${btnStyle}`}
+                      onClick={() => {
+                        playSelectCue();
+                        setSelectedOption(opt.figureType);
+                      }}
+                      className={`p-3.5 sm:p-4 rounded-xl border text-left transition-all flex items-center justify-between gap-2 ${sizeStyle} ${btnStyle}`}
                     >
                       <span>{opt.labelFr}</span>
                       {isAnswerSubmitted && opt.figureType === currentQ.correctFigureType && (
-                        <span className="material-symbols-outlined text-emerald-400 text-sm">check_circle</span>
+                        <span className="material-symbols-outlined text-emerald-400 text-lg shrink-0">check_circle</span>
                       )}
                       {isAnswerSubmitted && isSelected && opt.figureType !== currentQ.correctFigureType && (
-                        <span className="material-symbols-outlined text-rose-400 text-sm">cancel</span>
+                        <span className="material-symbols-outlined text-rose-400 text-lg shrink-0">cancel</span>
                       )}
                     </button>
                   );
@@ -887,13 +898,13 @@ export const RhetoricalAnalyzerView: React.FC<RhetoricalAnalyzerViewProps> = ({
                   <button
                     type="button"
                     onClick={() => setShowHint(!showHint)}
-                    className="text-[11px] text-[#f2ca50] font-mono hover:underline flex items-center gap-1 self-start"
+                    className="text-xs text-[#f2ca50] font-mono hover:underline flex items-center gap-1 self-start"
                   >
                     <span className="material-symbols-outlined text-xs">help</span>
                     <span>{showHint ? 'Masquer l’indice 6e' : 'Besoin d’un indice 6e ?'}</span>
                   </button>
                   {showHint && (
-                    <div className="p-2.5 rounded-lg bg-[#232a3a]/80 border border-[#f2ca50]/20 text-xs text-[#d0c5af] animate-fadeIn">
+                    <div className="p-3 rounded-lg bg-[#232a3a]/80 border border-[#f2ca50]/20 text-sm text-[#d0c5af] animate-fadeIn">
                       💡 <strong>Indice :</strong> {currentQ.clue6e}
                     </div>
                   )}
@@ -907,8 +918,8 @@ export const RhetoricalAnalyzerView: React.FC<RhetoricalAnalyzerViewProps> = ({
                     ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
                     : 'bg-amber-950/40 border-amber-500/40 text-amber-200'
                 }`}>
-                  <div className="flex items-center gap-2 font-bold text-xs">
-                    <span className="material-symbols-outlined text-sm">
+                  <div className="flex items-center gap-2 font-bold text-sm sm:text-base">
+                    <span className="material-symbols-outlined text-base">
                       {selectedOption === currentQ.correctFigureType ? 'celebration' : 'info'}
                     </span>
                     <span>
@@ -917,7 +928,7 @@ export const RhetoricalAnalyzerView: React.FC<RhetoricalAnalyzerViewProps> = ({
                         : `Pas tout à fait ! C'était ${RHETORICAL_DEFINITIONS[currentQ.correctFigureType].nameFr}.`}
                     </span>
                   </div>
-                  <p className="text-xs text-[#dce2f8] leading-relaxed">
+                  <p className="text-sm text-[#dce2f8] leading-relaxed">
                     {currentQ.explanationFr}
                   </p>
                 </div>

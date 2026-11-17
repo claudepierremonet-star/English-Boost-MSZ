@@ -167,6 +167,7 @@ export const MszCard3D: React.FC<MszCard3DProps> = ({
   const isInteractingRef = useRef<boolean>(false);
   const animFrameRef = useRef<number | null>(null);
   const isFlippingRef = useRef<boolean>(false);
+  const flipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Mint & Supply Stats
   const currentMint = getCharacterMintCount(character.id);
@@ -462,6 +463,9 @@ export const MszCard3D: React.FC<MszCard3DProps> = ({
       if (holdTimerRef.current) {
         clearTimeout(holdTimerRef.current);
       }
+      if (flipTimerRef.current) {
+        clearTimeout(flipTimerRef.current);
+      }
     };
   }, []);
 
@@ -480,7 +484,8 @@ export const MszCard3D: React.FC<MszCard3DProps> = ({
     setIsFlipped((prev) => !prev);
     velXRef.current *= 0.2;
     velYRef.current *= 0.2;
-    setTimeout(() => {
+    if (flipTimerRef.current) clearTimeout(flipTimerRef.current);
+    flipTimerRef.current = setTimeout(() => {
       setIsFlipping(false);
       isFlippingRef.current = false;
     }, 650);
@@ -822,11 +827,9 @@ export const MszCard3D: React.FC<MszCard3DProps> = ({
                 className="w-full h-full object-contain object-center drop-shadow-[0_18px_35px_rgba(0,0,0,0.92)] group-hover/art:scale-106 transition-transform duration-700 ease-out"
                 onError={(e) => {
                   const target = e.currentTarget;
-                  if (!target.src.includes('/public/')) {
-                    target.src = `/public${character.image}`;
-                  } else {
-                    target.src = '/assets/aistudio/VOLT.png';
-                  }
+                  if (target.dataset.fallbackApplied) return;
+                  target.dataset.fallbackApplied = 'true';
+                  target.src = '/assets/aistudio/VOLT.png';
                 }}
               />
 

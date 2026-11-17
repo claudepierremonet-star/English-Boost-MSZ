@@ -61,6 +61,19 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
   const isScrollingOrDraggingRef = useRef<boolean>(false);
   const versoScrollRef = useRef<HTMLDivElement>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setShuffledOrder(null);
+  }, [selectedGrade, selectedTheme, searchQuery]);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
+    };
+  }, []);
 
   // Filter 500 cards dynamically
   const filteredCards = useMemo(() => {
@@ -106,7 +119,13 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
     );
   }, [card]);
 
-  const handleShuffle = () => {
+  const showToast = useCallback((msg: string) => {
+    setToastMessage(msg);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToastMessage(null), 2500);
+  }, []);
+
+  const handleShuffle = useCallback(() => {
     if (filteredCards.length <= 1) return;
     const indices = Array.from({ length: filteredCards.length }, (_, i) => i);
     for (let i = indices.length - 1; i > 0; i--) {
@@ -117,7 +136,7 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
     setCardIndex(0);
     setIsFlipped(false);
     showToast('Deck mélangé aléatoirement 🔀');
-  };
+  }, [filteredCards.length, showToast]);
 
   const resetFilters = () => {
     setSelectedGrade('all');
@@ -157,11 +176,6 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
     }
     setCardIndex((prev) => (filteredCards.length > 0 ? (prev > 0 ? prev - 1 : filteredCards.length - 1) : 0));
   }, [filteredCards.length]);
-
-  const showToast = useCallback((msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 2500);
-  }, []);
 
   const toggleBookmark = (cardId: string) => {
     setBookmarkedIds((prev) => {
@@ -279,7 +293,7 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleFlip, handleNextCard, handlePrevCard, toggleFocusMode, isFocusMode, onClose, showToast]);
+  }, [handleFlip, handleNextCard, handlePrevCard, handleShuffle, toggleFocusMode, isFocusMode, onClose, showToast]);
 
   // Auto-play audio when card changes
   useEffect(() => {
@@ -365,7 +379,8 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
     onCardReviewed?.();
 
     // Advance smoothly
-    setTimeout(() => {
+    if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
+    advanceTimerRef.current = setTimeout(() => {
       setIsFlipped(false);
       if (versoScrollRef.current) {
         versoScrollRef.current.scrollTop = 0;

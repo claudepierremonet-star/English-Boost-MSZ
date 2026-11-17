@@ -77,6 +77,7 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
   const [audioRate, setAudioRate] = useState<number>(0.95);
   const [audioCurrentSentence, setAudioCurrentSentence] = useState<string>('');
   const [copiedTranscript, setCopiedTranscript] = useState<boolean>(false);
+  const [audioNotice, setAudioNotice] = useState<string | null>(null);
 
   const speechCancelRef = useRef<(() => void) | null>(null);
 
@@ -180,9 +181,10 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
     rate: number = audioRate
   ) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-      alert('La synthèse vocale n\'est pas supportée sur ce navigateur.');
+      setAudioNotice("La synthèse vocale n'est pas supportée sur ce navigateur.");
       return;
     }
+    setAudioNotice(null);
 
     // Cancel any ongoing speech
     window.speechSynthesis.cancel();
@@ -654,21 +656,31 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
 
               {/* Lesson Picker & Trigger Button */}
               <div className="flex items-center gap-2 flex-wrap">
-                <select
-                  aria-label="Sélectionner une leçon pour le résumé audio"
-                  value={audioSummaryLesson?.id || filteredLessons[0]?.id || ''}
-                  onChange={(e) => {
-                    const found = allGradeLessons.find((l) => l.id === e.target.value);
-                    if (found) setAudioSummaryLesson(found);
-                  }}
-                  className="px-2.5 py-1.5 rounded-lg bg-[#0c1322] border border-[#232a3a] text-xs text-[#dce2f8] focus:border-[#f2ca50] focus:outline-none max-w-[220px] truncate"
-                >
-                  {allGradeLessons.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.theme_label} : {l.title}
-                    </option>
-                  ))}
-                </select>
+                {(() => {
+                  const audioPickerLessons =
+                    audioSummaryLesson && !allGradeLessons.some((l) => l.id === audioSummaryLesson.id)
+                      ? [audioSummaryLesson, ...allGradeLessons]
+                      : allGradeLessons;
+                  const resolvedAudioId =
+                    audioSummaryLesson?.id || filteredLessons[0]?.id || allGradeLessons[0]?.id || '';
+                  return (
+                    <select
+                      aria-label="Sélectionner une leçon pour le résumé audio"
+                      value={resolvedAudioId}
+                      onChange={(e) => {
+                        const found = ALL_200_LESSONS.find((l) => l.id === e.target.value);
+                        if (found) setAudioSummaryLesson(found);
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg bg-[#0c1322] border border-[#232a3a] text-xs text-[#dce2f8] focus:border-[#f2ca50] focus:outline-none max-w-[220px] truncate"
+                    >
+                      {audioPickerLessons.map((l) => (
+                        <option key={l.id} value={l.id}>
+                          {l.class_label} • {l.theme_label} : {l.title}
+                        </option>
+                      ))}
+                    </select>
+                  );
+                })()}
 
                 <button
                   type="button"
@@ -683,6 +695,22 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
                 </button>
               </div>
             </div>
+
+            {audioNotice && (
+              <div className="px-3 py-2 rounded-xl bg-amber-950/50 border border-amber-500/40 text-amber-200 text-xs flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-sm">volume_off</span>
+                  <span>{audioNotice}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAudioNotice(null)}
+                  className="text-amber-300 hover:text-white cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
 
             {/* 10 Themes + Favorites horizontal pill scroller with dynamic lesson counts */}
             <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">

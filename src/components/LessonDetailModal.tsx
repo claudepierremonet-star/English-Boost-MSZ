@@ -7,6 +7,11 @@ import { recordAttempt, getFavoriteLessonIds, toggleFavoriteLesson } from '../fi
 import { DualSpeakerButton } from './DualSpeakerButton';
 import { RhetoricalAnalyzerView } from './RhetoricalAnalyzerView';
 import { awardMszCoins } from '../utils/mszCoinsManager';
+import { playSelectCue, playCorrectCue, playIncorrectCue, playVictoryCue } from '../utils/soundEffects';
+import { ChapterMasteryProgressBar } from './ChapterMasteryProgressBar';
+import { LessonDictionaryProvider, useLessonDictionary } from './LessonDictionaryContext';
+import { InteractiveHighlightText } from './InteractiveHighlightText';
+import { normalizeSelectionQuery } from '../services/dictionaryService';
 
 interface LessonDetailModalProps {
   lesson: SchoolLesson | null;
@@ -18,6 +23,90 @@ interface LessonDetailModalProps {
 }
 
 type LessonTab = 'overview' | 'vocab' | 'grammar' | 'dialogue' | 'quiz' | 'dictation' | 'rhetoric';
+
+const INTERACTIVE_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'OPTION']);
+
+function isInsideInteractiveElement(node: Node | null): boolean {
+  let curr: Node | null = node;
+  while (curr) {
+    if (curr instanceof HTMLElement) {
+      if (INTERACTIVE_TAGS.has(curr.tagName) || curr.isContentEditable) {
+        return true;
+      }
+    }
+    curr = curr.parentNode;
+  }
+  return false;
+}
+
+const LessonSelectionBody: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const dict = useLessonDictionary();
+  const containerRef = React.useRef<HTMLDivElement | null>(null);
+
+  const inspectCurrentSelection = React.useCallback(() => {
+    if (!dict || !containerRef.current || typeof window === 'undefined') return;
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+
+    const anchorNode = sel.anchorNode;
+    const focusNode = sel.focusNode;
+    if (
+      !anchorNode ||
+      !focusNode ||
+      !containerRef.current.contains(anchorNode) ||
+      !containerRef.current.contains(focusNode)
+    ) {
+      return;
+    }
+
+    if (isInsideInteractiveElement(anchorNode) || isInsideInteractiveElement(focusNode)) {
+      return;
+    }
+
+    const cleaned = normalizeSelectionQuery(sel.toString());
+    if (!cleaned || cleaned.length < 2 || cleaned.length > 90) return;
+    if (!/[a-zA-Z]{2,}/.test(cleaned)) return;
+    if (cleaned.split(/\s+/).length > 8) return;
+
+    const range = sel.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    if (rect.width <= 0 && rect.height <= 0) return;
+
+    dict.triggerWordLookup(cleaned, rect);
+  }, [dict]);
+
+  useEffect(() => {
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const onSelectionChange = () => {
+      // Wait for touch selection handles to settle before opening floating modal
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        const sel = window.getSelection();
+        if (sel && !sel.isCollapsed && containerRef.current && sel.anchorNode && containerRef.current.contains(sel.anchorNode)) {
+          inspectCurrentSelection();
+        }
+      }, 520);
+    };
+
+    document.addEventListener('selectionchange', onSelectionChange);
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      document.removeEventListener('selectionchange', onSelectionChange);
+    };
+  }, [inspectCurrentSelection]);
+
+  return (
+    <div
+      ref={containerRef}
+      onMouseUp={() => {
+        setTimeout(inspectCurrentSelection, 20);
+      }}
+      className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5"
+    >
+      {children}
+    </div>
+  );
+};
 
 export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
   lesson,
@@ -180,6 +269,7 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
 
   const handleSelectQuizOption = (qId: string, optIdx: number) => {
     if (quizSubmitted) return;
+    playSelectCue();
     setQuizAnswers((prev) => ({ ...prev, [qId]: optIdx }));
   };
 
@@ -203,6 +293,7 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
     }).catch(console.warn);
 
     if (correct >= 3) {
+      playVictoryCue();
       confetti({
         particleCount: 50,
         spread: 60,
@@ -213,6 +304,10 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
       if (onCompleteLesson) {
         onCompleteLesson(lesson.id, 100);
       }
+    } else if (correct > 0) {
+      playCorrectCue();
+    } else {
+      playIncorrectCue();
     }
   };
 
@@ -294,14 +389,21 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
   ];
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-fadeIn select-none"
-      onClick={onClose}
+    <LessonDictionaryProvider
+      lessonId={lesson.id}
+      lessonContext={`${lesson.title} — ${lesson.theme_label} (${lesson.grammar.title})`}
+      gradeLevel={`${lesson.class_label} (CECRL ${lesson.cefr_level})`}
+      vocabulary={lesson.vocabulary}
+      voiceAccent={voiceAccent}
     >
       <div
-        className="w-full max-w-4xl max-h-[92vh] rounded-2xl bg-[#0c1322] border border-[#f2ca50]/40 text-[#dce2f8] shadow-2xl flex flex-col overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
+        className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-fadeIn"
+        onClick={onClose}
       >
+        <div
+          className="w-full max-w-4xl max-h-[92vh] rounded-2xl bg-[#0c1322] border border-[#f2ca50]/40 text-[#dce2f8] shadow-2xl flex flex-col overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
         {/* MODAL HEADER */}
         <header className="p-4 sm:p-5 border-b border-[#232a3a] bg-[#151b2b] flex flex-col gap-3">
           <div className="flex items-start justify-between gap-3">
@@ -397,6 +499,9 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
             </div>
           </div>
 
+          {/* ANIMATED 10-CHAPTER MASTERY PROGRESS BAR FOR CURRENT LEVEL */}
+          <ChapterMasteryProgressBar />
+
           {/* NAVIGATION TABS */}
           <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pt-1">
             {tabsList.map((tab) => {
@@ -418,10 +523,17 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
               );
             })}
           </div>
+          {/* SUBTLE IN-CONTEXT DICTIONARY HINT */}
+          <div className="flex items-center gap-2 text-[11px] text-[#d4c78f]/90 pt-0.5">
+            <span className="material-symbols-outlined text-sm text-[#f2ca50] shrink-0">auto_awesome</span>
+            <span>
+              Sélectionnez n&apos;importe quel mot ou phrase (ou pression longue / double-clic) pour afficher instantanément définition, étymologie et exemple bilingue via l&apos;API Google.
+            </span>
+          </div>
         </header>
 
         {/* MODAL BODY */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
+        <LessonSelectionBody>
           {/* TAB 1: OVERVIEW & MODEL PHRASES */}
           {activeTab === 'overview' && (
             <div className="space-y-4 animate-fadeIn">
@@ -477,7 +589,7 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                           </span>
                         </div>
                         <p className="text-sm sm:text-base font-serif font-bold text-[#dce2f8] tracking-wide">
-                          {phrase.en}
+                          <InteractiveHighlightText text={phrase.en} />
                         </p>
                         {showTranslations && (
                           <p className="text-xs text-[#d0c5af]/80 italic">
@@ -559,8 +671,11 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                         <h4 className="font-serif text-xl font-bold text-[#dce2f8]">
                           {lesson.vocabulary[flashcardIndex].translation_fr}
                         </h4>
-                        <p className="text-xs text-[#d0c5af]/80 italic mt-1 max-w-md">
-                          « {lesson.vocabulary[flashcardIndex].example_en} »
+                        <p
+                          className="text-xs text-[#d0c5af]/80 italic mt-1 max-w-md"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          « <InteractiveHighlightText text={lesson.vocabulary[flashcardIndex].example_en} /> »
                         </p>
                       </div>
                     )}
@@ -740,7 +855,7 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="font-serif text-base font-bold text-[#f2ca50]">
-                              {w.term}
+                              <InteractiveHighlightText text={w.term} />
                             </span>
                             <span className="text-[10px] font-mono text-[#99907c] px-1 rounded bg-[#232a3a]">
                               {w.part_of_speech}
@@ -763,7 +878,7 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                           {w.translation_fr}
                         </p>
                         <div className="flex items-center justify-between gap-2 text-[11px] text-[#d0c5af]/80 mt-1 italic">
-                          <span>Ex : {w.example_en}</span>
+                          <span>Ex : <InteractiveHighlightText text={w.example_en} /></span>
                           <DualSpeakerButton
                             text={w.example_en}
                             id={`vocab-ex-${idx}`}
@@ -825,7 +940,7 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                     Exemple en Contexte Réel
                   </span>
                   <p className="text-sm font-serif font-bold text-[#dce2f8]">
-                    {lesson.grammar.example_en}
+                    <InteractiveHighlightText text={lesson.grammar.example_en} />
                   </p>
                   <p className="text-xs text-[#d0c5af]/80 italic">
                     « {lesson.grammar.example_fr} »
@@ -948,7 +1063,7 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                       </div>
 
                       <p className="text-sm sm:text-base font-serif font-semibold text-[#dce2f8]">
-                        {line.en}
+                        <InteractiveHighlightText text={line.en} />
                       </p>
 
                       {showTranslations && (
@@ -998,28 +1113,32 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                       key={q.id || qIdx}
                       className="p-4 rounded-xl bg-[#151b2b] border border-[#232a3a] flex flex-col gap-3"
                     >
-                      <div className="flex items-start gap-2">
-                        <span className="w-5 h-5 rounded-full bg-[#232a3a] text-[#f2ca50] text-xs font-mono font-bold flex items-center justify-center shrink-0 mt-0.5">
+                      <div className="flex items-start gap-2.5">
+                        <span className="w-7 h-7 rounded-full bg-[#232a3a] text-[#f2ca50] text-sm font-mono font-bold flex items-center justify-center shrink-0 mt-0.5">
                           {qIdx + 1}
                         </span>
-                        <h5 className="font-sans font-semibold text-sm sm:text-base text-[#dce2f8]">
+                        <h5 className="font-serif font-bold text-base sm:text-lg text-[#dce2f8] leading-snug">
                           {q.question}
                         </h5>
                       </div>
 
-                      <div className="grid grid-cols-1 gap-2 pt-1">
+                      <div className="grid grid-cols-1 gap-2.5 pt-1">
                         {q.options.map((opt, optIdx) => {
                           const isSelected = userAnswer === optIdx;
                           let btnStyle = 'bg-[#0c1322] border-[#232a3a] text-[#dce2f8] hover:bg-[#232a3a]';
+                          let optTextSize = 'text-sm sm:text-base font-medium';
 
                           if (quizSubmitted) {
                             if (optIdx === q.correct_index) {
                               btnStyle = 'bg-emerald-950/80 border-emerald-500 text-emerald-300 font-bold';
+                              optTextSize = 'text-base sm:text-lg font-bold';
                             } else if (isSelected) {
                               btnStyle = 'bg-red-950/80 border-red-500 text-red-300 line-through';
+                              optTextSize = 'text-base sm:text-lg font-bold';
                             }
                           } else if (isSelected) {
                             btnStyle = 'bg-[#232a3a] border-[#f2ca50] text-[#f2ca50] font-bold';
+                            optTextSize = 'text-base sm:text-lg font-bold';
                           }
 
                           return (
@@ -1027,11 +1146,11 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                               key={optIdx}
                               type="button"
                               onClick={() => handleSelectQuizOption(q.id, optIdx)}
-                              className={`p-3 rounded-lg border text-left text-xs sm:text-sm transition-all flex items-center justify-between ${btnStyle}`}
+                              className={`p-3.5 sm:p-4 rounded-xl border text-left transition-all flex items-center justify-between gap-2 ${optTextSize} ${btnStyle}`}
                             >
-                              <span>{opt}</span>
+                              <span className="break-words whitespace-normal">{opt}</span>
                               {quizSubmitted && optIdx === q.correct_index && (
-                                <span className="material-symbols-outlined text-emerald-400 text-sm">
+                                <span className="material-symbols-outlined text-emerald-400 text-lg shrink-0">
                                   check_circle
                                 </span>
                               )}
@@ -1042,7 +1161,7 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
 
                       {quizSubmitted && (
                         <div
-                          className={`p-3 rounded-lg text-xs leading-relaxed ${
+                          className={`p-3.5 rounded-xl text-sm leading-relaxed ${
                             isCorrect
                               ? 'bg-emerald-950/40 text-emerald-300 border border-emerald-800/40'
                               : 'bg-[#0c1322] text-[#d0c5af] border border-[#232a3a]'
@@ -1138,7 +1257,7 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                       </div>
                       <div>
                         <p className="text-sm font-serif font-bold text-[#dce2f8]">
-                          {lesson.dictation.canonical}
+                          <InteractiveHighlightText text={lesson.dictation.canonical} />
                         </p>
                         <p className="text-xs text-[#d0c5af]/80 italic mt-0.5">
                           « {lesson.dictation.translation_fr} »
@@ -1169,7 +1288,7 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
               <RhetoricalAnalyzerView initialLessonId={lesson.id} />
             </div>
           )}
-        </div>
+        </LessonSelectionBody>
 
         {/* MODAL FOOTER */}
         <footer className="p-3 sm:p-4 border-t border-[#232a3a] bg-[#151b2b] flex items-center justify-between text-xs text-[#99907c]">
@@ -1186,7 +1305,8 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
             Fermer la Leçon
           </button>
         </footer>
+        </div>
       </div>
-    </div>
+    </LessonDictionaryProvider>
   );
 };

@@ -11,6 +11,7 @@ interface PracticeViewProps {
   onOpenQuiz: () => void;
   onOpenSpeaking: () => void;
   onOpenGames?: () => void;
+  onOpenCityMap?: () => void;
 }
 
 export const PracticeView: React.FC<PracticeViewProps> = ({
@@ -21,7 +22,8 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
   onOpenFlashcardsFocus,
   onOpenQuiz,
   onOpenSpeaking,
-  onOpenGames
+  onOpenGames,
+  onOpenCityMap
 }) => {
   const levelDescriptions: Record<CEFRLevel, string> = {
     A1: 'A1 : Découverte et acquisition des structures élémentaires (6e / Cycle 3).',
@@ -152,6 +154,42 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
           >
             <span>Jouer</span>
             <span className="material-symbols-outlined text-sm">play_arrow</span>
+          </button>
+        </section>
+      )}
+
+      {/* Plan Principal 100 Niveaux City Map Banner */}
+      {onOpenCityMap && (
+        <section
+          onClick={onOpenCityMap}
+          className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#191f2f] via-[#151b2b] to-[#0c1322] border border-[#f2ca50]/45 shadow-xl flex items-center justify-between gap-4 cursor-pointer hover:border-[#f2ca50] transition-all group"
+        >
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-xl bg-[#0c1322] border border-[#f2ca50]/50 flex items-center justify-center text-[#f2ca50] shadow-md group-hover:scale-105 transition-transform shrink-0">
+              <span className="material-symbols-outlined text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>
+                map
+              </span>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 text-[10px] font-mono text-[#f2ca50] font-bold uppercase tracking-wider">
+                <span>PLAN PRINCIPAL · 600 NIVEAUX</span>
+                <span className="text-[#99907c]">·</span>
+                <span className="text-[#d4c78f]">10 CHAPITRES PAR NIVEAU</span>
+              </div>
+              <h3 className="font-serif font-bold text-base sm:text-lg text-[#dce2f8] group-hover:text-[#f2ca50] transition-colors mt-0.5">
+                Cité Interactive de la 6e à la Terminale
+              </h3>
+              <p className="text-xs text-[#d0c5af]/80">
+                Conquérez chaque quartier pas à pas : validez les 10 chapitres d&apos;un niveau pour débloquer le suivant !
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="px-4 py-2.5 rounded-xl bg-[#f2ca50] text-[#3c2f00] font-bold text-xs uppercase tracking-wider hidden sm:flex items-center gap-1 shrink-0 group-hover:bg-[#ffe088] shadow-md"
+          >
+            <span>Explorer le Plan</span>
+            <span className="material-symbols-outlined text-sm">explore</span>
           </button>
         </section>
       )}

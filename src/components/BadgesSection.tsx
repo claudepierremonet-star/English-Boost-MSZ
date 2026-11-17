@@ -21,6 +21,13 @@ export const BadgesSection: React.FC<BadgesSectionProps> = ({
   const [filter, setFilter] = useState<FilterType>('all');
   const [selectedBadge, setSelectedBadge] = useState<AcademicBadge | null>(null);
   const [celebrationBadge, setCelebrationBadge] = useState<AcademicBadge | null>(null);
+  const [claimedBadgeIds, setClaimedBadgeIds] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('eb_msz_claimed_badges') || '[]');
+    } catch {
+      return [];
+    }
+  });
 
   const badges = computeUserBadges(user, attempts);
   const unlockedCount = badges.filter((b) => b.isUnlocked).length;
@@ -370,7 +377,14 @@ export const BadgesSection: React.FC<BadgesSectionProps> = ({
         badge={celebrationBadge}
         isOpen={celebrationBadge !== null}
         onClose={() => setCelebrationBadge(null)}
+        alreadyClaimed={celebrationBadge ? claimedBadgeIds.includes(celebrationBadge.id) : false}
         onClaimReward={(b) => {
+          if (!b.isUnlocked || claimedBadgeIds.includes(b.id)) return;
+          const next = [...claimedBadgeIds, b.id];
+          setClaimedBadgeIds(next);
+          try {
+            localStorage.setItem('eb_msz_claimed_badges', JSON.stringify(next));
+          } catch {}
           if (onBadgeClaimed) onBadgeClaimed(b);
         }}
       />

@@ -9,6 +9,7 @@ interface BadgeUnlockModalProps {
   isOpen: boolean;
   onClose: () => void;
   onClaimReward?: (badge: AcademicBadge) => void;
+  alreadyClaimed?: boolean;
 }
 
 // Triumph harmonic fanfare via Web Audio API
@@ -28,7 +29,7 @@ function playTriumphFanfare() {
       { freq: 1046.5, time: 0.44, dur: 0.65 } // C6
     ];
 
-    notes.forEach((n) => {
+    notes.forEach((n, idx) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'triangle';
@@ -37,6 +38,11 @@ function playTriumphFanfare() {
       gain.gain.exponentialRampToValueAtTime(0.001, now + n.time + n.dur);
       osc.connect(gain);
       gain.connect(ctx.destination);
+      if (idx === notes.length - 1) {
+        osc.onended = () => {
+          ctx.close().catch(() => {});
+        };
+      }
       osc.start(now + n.time);
       osc.stop(now + n.time + n.dur);
     });
@@ -49,7 +55,8 @@ export const BadgeUnlockModal: React.FC<BadgeUnlockModalProps> = ({
   badge,
   isOpen,
   onClose,
-  onClaimReward
+  onClaimReward,
+  alreadyClaimed = false
 }) => {
   useEffect(() => {
     if (isOpen && badge) {
@@ -207,17 +214,25 @@ export const BadgeUnlockModal: React.FC<BadgeUnlockModalProps> = ({
             transition={{ delay: 0.4 }}
             className="w-full mt-5 flex flex-col gap-2"
           >
-            <button
-              type="button"
-              onClick={() => {
-                if (onClaimReward) onClaimReward(badge);
-                onClose();
-              }}
-              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#d4af37] via-[#f2ca50] to-[#cca639] text-[#3c2f00] font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-xl shadow-[#f2ca50]/25 hover:brightness-110 active:scale-95 transition-all cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-base">verified</span>
-              <span>Revendiquer la Distinction (+{badge.xpReward} XP)</span>
-            </button>
+            {badge.isUnlocked && !alreadyClaimed && onClaimReward ? (
+              <button
+                type="button"
+                onClick={() => {
+                  onClaimReward(badge);
+                  onClose();
+                }}
+                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#d4af37] via-[#f2ca50] to-[#cca639] text-[#3c2f00] font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-xl shadow-[#f2ca50]/25 hover:brightness-110 active:scale-95 transition-all cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-base">verified</span>
+                <span>Revendiquer la Distinction (+{badge.xpReward} XP)</span>
+              </button>
+            ) : (
+              <div className="w-full py-2.5 px-3 rounded-xl bg-[#151b2b] border border-[#232a3a] text-[11px] font-mono text-[#d4c78f]">
+                {badge.isUnlocked
+                  ? 'Distinction déjà revendiquée et créditée à votre profil'
+                  : `Aperçu — Atteignez l’objectif pour débloquer +${badge.xpReward} XP`}
+              </div>
+            )}
 
             <button
               type="button"

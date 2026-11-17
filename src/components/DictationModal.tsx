@@ -53,6 +53,11 @@ export const DictationModal: React.FC<DictationModalProps> = ({
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
   const isScrollingOrDraggingRef = useRef<boolean>(false);
   const versoScrollRef = useRef<HTMLDivElement>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setShuffledOrder(null);
+  }, [selectedGrade, selectedTheme, searchQuery]);
 
   // Filter 500+ dictation items based on grade, theme, and search query
   const filteredItems = useMemo(() => {
@@ -104,7 +109,8 @@ export const DictationModal: React.FC<DictationModalProps> = ({
   // Toast feedback helper
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 2500);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToastMessage(null), 2500);
   }, []);
 
   // Audio Playback with speechService
@@ -133,6 +139,7 @@ export const DictationModal: React.FC<DictationModalProps> = ({
   useEffect(() => {
     return () => {
       stopSpeech();
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     };
   }, []);
 
@@ -243,33 +250,69 @@ export const DictationModal: React.FC<DictationModalProps> = ({
       .replace(/\s+/g, ' ')
       .trim();
 
-  // Evaluate transcription
+  // Evaluate transcription with LCS word alignment so one omitted/extra word doesn't break the rest
   const handleEvaluate = async () => {
     const targetText = dictationTargetMode === 'word' && item.targetWord ? item.targetWord : item.canonicalText;
-    const canonicalTokens = targetText.split(/\s+/);
-    const userTokens = userText.trim().split(/\s+/);
+    const canonicalTokens = targetText.split(/\s+/).filter(Boolean);
+    const trimmedUser = userText.trim();
+    const userTokens = trimmedUser ? trimmedUser.split(/\s+/).filter(Boolean) : [];
+
+    const normC = canonicalTokens.map(normalize);
+    const normU = userTokens.map(normalize);
+    const m = normC.length;
+    const n = normU.length;
+
+    const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+    for (let i = m - 1; i >= 0; i--) {
+      for (let j = n - 1; j >= 0; j--) {
+        if (normC[i] === normU[j] && normC[i].length > 0) {
+          dp[i][j] = 1 + dp[i + 1][j + 1];
+        } else {
+          dp[i][j] = Math.max(dp[i + 1][j], dp[i][j + 1]);
+        }
+      }
+    }
+
+    const matchedCanonicalIndices = new Map<number, number>();
+    let i = 0;
+    let j = 0;
+    while (i < m && j < n) {
+      if (normC[i] === normU[j] && normC[i].length > 0) {
+        matchedCanonicalIndices.set(i, j);
+        i++;
+        j++;
+      } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+        i++;
+      } else {
+        j++;
+      }
+    }
 
     const diffs: Array<{ text: string; isCorrect: boolean; original?: string }> = [];
     let matches = 0;
+    let lastMatchedU = -1;
 
     canonicalTokens.forEach((cToken, idx) => {
-      const uToken = userTokens[idx] || '';
-      const normC = normalize(cToken);
-      const normU = normalize(uToken);
-
-      if (normU === normC && normU.length > 0) {
+      if (matchedCanonicalIndices.has(idx)) {
+        lastMatchedU = matchedCanonicalIndices.get(idx)!;
         diffs.push({ text: cToken, isCorrect: true });
         matches++;
       } else {
+        const candidateU = lastMatchedU + 1 < n && !Array.from(matchedCanonicalIndices.values()).includes(lastMatchedU + 1)
+          ? userTokens[lastMatchedU + 1]
+          : undefined;
+        if (candidateU) {
+          lastMatchedU += 1;
+        }
         diffs.push({
           text: cToken,
           isCorrect: false,
-          original: uToken || '(manquant)'
+          original: candidateU || '(manquant)'
         });
       }
     });
 
-    const score = Math.max(10, Math.round((matches / canonicalTokens.length) * 100));
+    const score = m === 0 || userTokens.length === 0 ? 0 : Math.round((matches / m) * 100);
     setAccuracyScore(score);
     setDiffTokens(diffs);
     setHasEvaluated(true);
@@ -563,6 +606,7 @@ export const DictationModal: React.FC<DictationModalProps> = ({
             <div className="p-3 rounded-xl bg-[#151b2b] border border-[#f2ca50]/40 flex items-center gap-2 animate-fadeIn text-xs">
               <span className="text-[#d0c5af]">Aller à la session :</span>
               <input
+                key={safeIndex}
                 type="number"
                 min={1}
                 max={filteredItems.length}

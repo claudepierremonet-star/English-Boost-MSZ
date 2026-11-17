@@ -34,7 +34,7 @@ export const Grammar6eStudio: React.FC<Grammar6eStudioProps> = () => {
   }, [selectedCategory, searchQuery]);
 
   // Ensure selectedIndex stays valid when filter changes
-  const activeItem: Grammar6eItem = filteredItems[selectedIndex] || filteredItems[0] || GRAMMAR_6E_ITEMS[0];
+  const activeItem: Grammar6eItem | undefined = filteredItems[selectedIndex] || filteredItems[0];
 
   const handleCompleteItem = (itemId: string) => {
     setCompletedItemIds((prev) => {
@@ -158,57 +158,80 @@ export const Grammar6eStudio: React.FC<Grammar6eStudioProps> = () => {
         </div>
       </div>
 
-      {/* HORIZONTAL SCRUBBER / QUICK JUMP OF 50 CARDS */}
-      <div className="p-3 rounded-xl bg-[#111726] border border-[#232a3a] flex flex-col gap-2">
-        <div className="flex items-center justify-between text-xs text-[#99907c]">
-          <span className="font-mono">
-            {filteredItems.length} fiche(s) disponible(s) • Fiche #{activeItem.number} :{' '}
-            <strong className="text-[#f2ca50]">{activeItem.title}</strong>
-          </span>
-          <span className="text-[11px] font-mono text-[#d4c78f]">
-            Sélection rapide (1 à 50)
-          </span>
+      {/* EMPTY SEARCH STATE OR GRAMMAR MODULE */}
+      {!activeItem ? (
+        <div className="p-8 rounded-2xl bg-[#111726] border border-[#232a3a] text-center flex flex-col items-center justify-center gap-3">
+          <span className="material-symbols-outlined text-4xl text-[#f2ca50]/70">search_off</span>
+          <p className="text-sm font-serif text-[#dce2f8]">
+            Aucune fiche grammaticale ne correspond à votre filtre « {searchQuery} ».
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedCategory('Toutes les catégories');
+              setSearchQuery('');
+              setSelectedIndex(0);
+            }}
+            className="px-4 py-2 rounded-xl bg-[#232a3a] text-[#f2ca50] text-xs font-bold hover:bg-[#f2ca50] hover:text-[#3c2f00] transition-colors cursor-pointer"
+          >
+            Réinitialiser les filtres
+          </button>
         </div>
+      ) : (
+        <>
+          {/* HORIZONTAL SCRUBBER / QUICK JUMP OF 50 CARDS */}
+          <div className="p-3 rounded-xl bg-[#111726] border border-[#232a3a] flex flex-col gap-2">
+            <div className="flex items-center justify-between text-xs text-[#99907c]">
+              <span className="font-mono">
+                {filteredItems.length} fiche(s) disponible(s) • Fiche #{activeItem.number} :{' '}
+                <strong className="text-[#f2ca50]">{activeItem.title}</strong>
+              </span>
+              <span className="text-[11px] font-mono text-[#d4c78f]">
+                Sélection rapide (1 à 50)
+              </span>
+            </div>
 
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 pt-0.5 no-scrollbar">
-          {filteredItems.map((item, idx) => {
-            const isSelected = idx === selectedIndex;
-            const isDone = completedItemIds.has(item.id);
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setSelectedIndex(idx)}
-                className={`w-9 h-9 rounded-lg font-mono text-xs font-bold shrink-0 transition-all flex flex-col items-center justify-center relative ${
-                  isSelected
-                    ? 'bg-[#f2ca50] text-[#3c2f00] scale-105 shadow-md shadow-[#f2ca50]/30 ring-2 ring-[#f2ca50]'
-                    : isDone
-                    ? 'bg-emerald-950/80 border border-emerald-500/50 text-emerald-300'
-                    : 'bg-[#182133] border border-[#28344e] text-[#dce2f8] hover:bg-[#232f48]'
-                }`}
-                title={`#${item.number} - ${item.title}`}
-              >
-                <span>{item.number}</span>
-                {isDone && !isSelected && (
-                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 border border-black" />
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 pt-0.5 no-scrollbar">
+              {filteredItems.map((item, idx) => {
+                const isSelected = idx === selectedIndex;
+                const isDone = completedItemIds.has(item.id);
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setSelectedIndex(idx)}
+                    className={`w-9 h-9 rounded-lg font-mono text-xs font-bold shrink-0 transition-all flex flex-col items-center justify-center relative ${
+                      isSelected
+                        ? 'bg-[#f2ca50] text-[#3c2f00] scale-105 shadow-md shadow-[#f2ca50]/30 ring-2 ring-[#f2ca50]'
+                        : isDone
+                        ? 'bg-emerald-950/80 border border-emerald-500/50 text-emerald-300'
+                        : 'bg-[#182133] border border-[#28344e] text-[#dce2f8] hover:bg-[#232f48]'
+                    }`}
+                    title={`#${item.number} - ${item.title}`}
+                  >
+                    <span>{item.number}</span>
+                    {isDone && !isSelected && (
+                      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 border border-black" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
-      {/* ACTIVE GRAMMAR MODULE & INTERACTIVE EXERCISE */}
-      <SentenceStructuringExercise
-        item={activeItem}
-        onComplete={handleCompleteItem}
-        onNext={handleNext}
-        onPrev={handlePrev}
-        hasPrev={selectedIndex > 0}
-        hasNext={selectedIndex < filteredItems.length - 1}
-        currentIndex={selectedIndex + 1}
-        totalCount={filteredItems.length}
-      />
+          {/* ACTIVE GRAMMAR MODULE & INTERACTIVE EXERCISE */}
+          <SentenceStructuringExercise
+            item={activeItem}
+            onComplete={handleCompleteItem}
+            onNext={handleNext}
+            onPrev={handlePrev}
+            hasPrev={selectedIndex > 0}
+            hasNext={selectedIndex < filteredItems.length - 1}
+            currentIndex={selectedIndex + 1}
+            totalCount={filteredItems.length}
+          />
+        </>
+      )}
     </div>
   );
 };
