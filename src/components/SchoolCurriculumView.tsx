@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   ALL_200_LESSONS,
   CURRICULUM_200_STRUCTURE,
@@ -15,6 +16,19 @@ import {
   downloadCurriculumCsv,
   downloadCurriculumMarkdown
 } from '../data/schoolCurriculum';
+import {
+  MAX_CITY_LEVEL,
+  getBlock50ForLevel,
+  getLevelBlocksOf50,
+  type CityLevelNode
+} from '../data/cityMapData';
+import { LevelGroupNavigator } from './LevelGroupNavigator';
+import type { CityMapProgressionState } from '../firebase/types';
+import {
+  getCityMapProgression,
+  type CityChapterCompletionResult
+} from '../utils/cityMapManager';
+import { CityLevelChaptersModal } from './CityLevelChaptersModal';
 import { LessonDetailModal } from './LessonDetailModal';
 import { Grammar6eStudio } from './Grammar6eStudio';
 import { RhetoricalAnalyzerView } from './RhetoricalAnalyzerView';
@@ -27,6 +41,10 @@ interface SchoolCurriculumViewProps {
   onSelectLesson?: (lesson: SchoolLesson | null) => void;
   favoriteLessonIds?: string[];
   onToggleFavorite?: (lessonId: string) => void;
+  cityProgression?: CityMapProgressionState;
+  playerLevel?: number;
+  onCityXpEarned?: (xp: number) => void;
+  onCityProgressionUpdated?: (nextState: CityMapProgressionState) => void;
 }
 
 export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
@@ -34,7 +52,11 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
   activeSelectedLessonId,
   onSelectLesson,
   favoriteLessonIds,
-  onToggleFavorite
+  onToggleFavorite,
+  cityProgression,
+  playerLevel = 1,
+  onCityXpEarned,
+  onCityProgressionUpdated
 }) => {
   const [selectedGrade, setSelectedGrade] = useState<SchoolGrade>('6e');
   const [subTab6e, setSubTab6e] = useState<'themes' | 'grammar' | 'rhetoric'>('themes');
@@ -44,6 +66,85 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
   const [viewMode, setViewMode] = useState<'themes_sections' | 'compact_grid'>('themes_sections');
   const [activeLesson, setActiveLesson] = useState<SchoolLesson | null>(null);
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
+
+  // 600-level progression & 50-level CollapsibleLevelGroup state
+  const [internalCityProgression, setInternalCityProgression] = useState<CityMapProgressionState>(() =>
+    getCityMapProgression()
+  );
+  useEffect(() => {
+    const handleCityUpdate = (e: Event) => {
+      const customEvt = e as CustomEvent<CityMapProgressionState>;
+      if (customEvt.detail && typeof customEvt.detail.unlockedLevel === 'number') {
+        setInternalCityProgression(customEvt.detail);
+      } else {
+        setInternalCityProgression(getCityMapProgression());
+      }
+    };
+    window.addEventListener('eb_city_map_updated', handleCityUpdate);
+    return () => window.removeEventListener('eb_city_map_updated', handleCityUpdate);
+  }, []);
+
+  const effectiveCityProgression = cityProgression ?? internalCityProgression;
+  const unlockedCityLevel = Math.max(
+    1,
+    Math.min(MAX_CITY_LEVEL, effectiveCityProgression.unlockedLevel || 1)
+  );
+  const conqueredLevelsSet = useMemo(
+    () => new Set(effectiveCityProgression.conqueredLevels || []),
+    [effectiveCityProgression.conqueredLevels]
+  );
+  const levelBlocks50 = useMemo(() => getLevelBlocksOf50(50), []);
+  const activeBlock50 = useMemo(
+    () => getBlock50ForLevel(unlockedCityLevel, 50),
+    [unlockedCityLevel]
+  );
+  const [expandedLevelBlocks, setExpandedLevelBlocks] = useState<Record<string, boolean>>(() => ({
+    [activeBlock50.id]: true
+  }));
+  const [activeCityLevelModal, setActiveCityLevelModal] = useState<number | null>(null);
+  const [lockedLevelNotice, setLockedLevelNotice] = useState<number | null>(null);
+
+  const handleToggleLevelBlock = useCallback((blockId: string) => {
+    setExpandedLevelBlocks((prev) => ({ ...prev, [blockId]: !prev[blockId] }));
+  }, []);
+
+  const handleExpandSingleLevelBlock = useCallback((blockId: string) => {
+    setExpandedLevelBlocks({ [blockId]: true });
+  }, []);
+
+  const handleSetAllLevelBlocks = useCallback(
+    (expandAll: boolean) => {
+      const next: Record<string, boolean> = {};
+      for (const blk of levelBlocks50) {
+        next[blk.id] = expandAll;
+      }
+      setExpandedLevelBlocks(next);
+    },
+    [levelBlocks50]
+  );
+
+  const handleSelectCityLevelNode = useCallback(
+    (lvl: CityLevelNode) => {
+      if (lvl.levelNumber > unlockedCityLevel) {
+        setLockedLevelNotice(lvl.levelNumber);
+        return;
+      }
+      setLockedLevelNotice(null);
+      setActiveCityLevelModal(lvl.levelNumber);
+    },
+    [unlockedCityLevel]
+  );
+
+  const handleCityChapterComplete = useCallback(
+    (res: CityChapterCompletionResult) => {
+      setInternalCityProgression(res.state);
+      onCityProgressionUpdated?.(res.state);
+      if (res.xpAwarded > 0) {
+        onCityXpEarned?.(res.xpAwarded);
+      }
+    },
+    [onCityProgressionUpdated, onCityXpEarned]
+  );
 
   const [internalFavorites, setInternalFavorites] = useState<string[]>(() => getFavoriteLessonIds());
   useEffect(() => {
@@ -445,6 +546,72 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
             </span>
           </div>
         </div>
+      </section>
+
+      {/* 600 LEVELS GROUPED BY 50 USING LEVEL GROUP NAVIGATOR */}
+      <section
+        aria-label="Parcours des 600 niveaux regroupés par blocs de 50"
+        className="p-4 sm:p-5 rounded-2xl bg-[#151b2b]/95 border border-[#232a3a] shadow-lg flex flex-col gap-3.5"
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#232a3a] pb-3">
+          <div className="flex flex-col gap-0.5">
+            <div className="flex items-center gap-2 text-xs font-mono text-[#f2ca50]">
+              <span className="material-symbols-outlined text-base">layers</span>
+              <span className="font-bold uppercase tracking-wider">
+                Index 600 Niveaux · Groupes de 50
+              </span>
+              <span className="text-[#99907c] tabular-nums">
+                ({conqueredLevelsSet.size}/{MAX_CITY_LEVEL} conquis)
+              </span>
+            </div>
+            <p className="text-xs text-[#d0c5af]/85">
+              Condensez ou étendez chaque plage de 50 niveaux (1–50, 51–100…) et filtrez par tranche de 10 pour accéder directement aux chapitres.
+            </p>
+          </div>
+        </div>
+
+        {lockedLevelNotice !== null && (
+          <div className="p-3 rounded-xl bg-[#0c1322] border border-[#f2ca50]/45 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2 text-[#dce2f8]">
+              <span className="material-symbols-outlined text-base text-[#f2ca50]">lock</span>
+              <span>
+                Le <strong>Niveau {lockedLevelNotice}</strong> est verrouillé. Complétez d&apos;abord les 10 chapitres du{' '}
+                <strong className="text-[#f2ca50]">Niveau {unlockedCityLevel}</strong>.
+              </span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+              <button
+                type="button"
+                onClick={() => setLockedLevelNotice(null)}
+                className="px-2.5 py-1 rounded-lg bg-[#191f2f] text-[#99907c] hover:text-white cursor-pointer"
+              >
+                Fermer
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setLockedLevelNotice(null);
+                  setActiveCityLevelModal(unlockedCityLevel);
+                }}
+                className="px-3 py-1 rounded-lg bg-[#f2ca50] text-[#3c2f00] font-bold cursor-pointer"
+              >
+                Ouvrir Niveau {unlockedCityLevel}
+              </button>
+            </div>
+          </div>
+        )}
+
+        <LevelGroupNavigator
+          blocks={levelBlocks50}
+          expandedBlocks={expandedLevelBlocks}
+          onToggleBlock={handleToggleLevelBlock}
+          onExpandSingleBlock={handleExpandSingleLevelBlock}
+          onSetAllBlocks={handleSetAllLevelBlocks}
+          unlockedLevel={unlockedCityLevel}
+          conqueredSet={conqueredLevelsSet}
+          completedChaptersByLevel={effectiveCityProgression.completedChaptersByLevel || {}}
+          onSelectLevel={handleSelectCityLevelNode}
+        />
       </section>
 
       {/* 7-GRADE CLASS SELECTOR BAR */}
@@ -950,6 +1117,18 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
         onToggleFavorite={activeLesson ? () => handleToggleFav(activeLesson.id) : undefined}
       />
 
+      {/* 600-LEVEL CHAPTERS & QUIZ MODAL LAUNCHED FROM COLLAPSIBLE LEVEL GROUP */}
+      {activeCityLevelModal !== null && (
+        <CityLevelChaptersModal
+          levelNumber={activeCityLevelModal}
+          progression={effectiveCityProgression}
+          playerLevel={playerLevel}
+          onClose={() => setActiveCityLevelModal(null)}
+          onChapterCompleted={handleCityChapterComplete}
+          onNavigateToLevel={(nextLvl) => setActiveCityLevelModal(nextLvl)}
+        />
+      )}
+
       {/* TEXT-TO-SPEECH AUDIO SUMMARY MODAL */}
       {showAudioModal && audioSummaryLesson && (
         <div
@@ -1369,6 +1548,8 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
     </div>
   );
 };
+
+export { CollapsibleLevelGroup, type CollapsibleLevelGroupProps } from './LevelGroupNavigator';
 
 /**
  * Composant de carte individuelle affichant toutes les propriétés d'une leçon

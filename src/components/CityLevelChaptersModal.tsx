@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import type { CityMapProgressionState } from '../firebase/types';
@@ -8,10 +8,13 @@ import {
   getCityLevelByNumber,
   getDistrictForLevel,
   MAX_CITY_LEVEL,
+  type CityChapterData,
   type CityChapterQuestion
 } from '../data/cityMapData';
 import {
   completeCityChapter,
+  getSeenQuizHistory,
+  recordSeenQuizQuestions,
   type CityChapterCompletionResult
 } from '../utils/cityMapManager';
 import { speakText, stopSpeech } from '../services/speechService';
@@ -75,14 +78,16 @@ export const CityLevelChaptersModal: React.FC<CityLevelChaptersModalProps> = ({
   const [completionResult, setCompletionResult] = useState<CityChapterCompletionResult | null>(null);
   const [isSaving, setIsSaving] = useState<boolean>(false);
 
+  // Explicit active chapter data + anti-repetition tracking (session + persisted history)
+  const [chapterData, setChapterData] = useState<CityChapterData | null>(null);
+  const sessionSeenQRef = useRef<Set<string>>(new Set());
+  const sessionSeenARef = useRef<Set<string>>(new Set());
+  const attemptNonceRef = useRef<number>(0);
+
   const completedChapters = progression.completedChaptersByLevel[String(levelNumber)] || [];
   const isLevelConquered = completedChapters.length >= 10 || progression.conqueredLevels.includes(levelNumber);
 
-  const chapterData = useMemo(
-    () => generateChapterContent(levelNumber, activeChapterNum),
-    [levelNumber, activeChapterNum]
-  );
-  const questions = chapterData.questions;
+  const questions = chapterData?.questions || [];
   const currentQuestion: CityChapterQuestion | undefined = questions[questionIndex];
 
   // Reset question widgets whenever question changes
@@ -122,6 +127,31 @@ export const CityLevelChaptersModal: React.FC<CityLevelChaptersModalProps> = ({
       setLockedNoticeChapter(chNum);
       return;
     }
+
+    attemptNonceRef.current += 1;
+    const persistent = getSeenQuizHistory();
+    const excludeQuestionHashes = new Set<string>([
+      ...persistent.seenQuestionHashes,
+      ...sessionSeenQRef.current
+    ]);
+    const excludeAnswerHashes = new Set<string>([
+      ...persistent.seenAnswerHashes,
+      ...sessionSeenARef.current
+    ]);
+
+    const generated = generateChapterContent(levelNumber, chNum, {
+      excludeQuestionHashes,
+      excludeAnswerHashes,
+      sessionNonce: Date.now() + attemptNonceRef.current * 97
+    });
+
+    for (const q of generated.questions) {
+      if (q.qHash) sessionSeenQRef.current.add(q.qHash);
+      if (q.aHash) sessionSeenARef.current.add(q.aHash);
+    }
+    recordSeenQuizQuestions(generated.questions);
+
+    setChapterData(generated);
     setLockedNoticeChapter(null);
     setActiveChapterNum(chNum);
     setQuestionIndex(0);
@@ -519,7 +549,7 @@ export const CityLevelChaptersModal: React.FC<CityLevelChaptersModalProps> = ({
         {/* SCREEN 2: INTERACTIVE CHAPTER QUIZ (LARGE TYPOGRAPHY) */}
         {screen === 'playing' && currentQuestion && (
           <motion.div
-            key={`${activeChapterNum}-${questionIndex}`}
+            key={`${activeChapterNum}-${questionIndex}-${currentQuestion.id}`}
             initial={{ opacity: 0, x: 12 }}
             animate={{ opacity: 1, x: 0 }}
             className="flex flex-col gap-5"

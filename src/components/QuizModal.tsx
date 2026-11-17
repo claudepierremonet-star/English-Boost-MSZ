@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { QUIZ_QUESTIONS, type QuizQuestion } from '../data/curriculum';
+import React, { useEffect, useRef, useState } from 'react';
+import { generateGeneralQuizSession, type GeneralQuizQuestionItem } from '../data/cityMapData';
+import { getSeenQuizHistory, recordSeenQuizQuestions } from '../utils/cityMapManager';
 import { recordAttempt } from '../firebase/client';
 import type { CEFRLevel } from '../firebase/types';
 import confetti from 'canvas-confetti';
@@ -16,22 +17,57 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   onClose,
   onQuizFinished
 }) => {
+  const sessionSeenQRef = useRef<Set<string>>(new Set());
+  const sessionSeenARef = useRef<Set<string>>(new Set());
+  const attemptNonceRef = useRef<number>(1);
+
+  const createUnseenBatch = (): GeneralQuizQuestionItem[] => {
+    attemptNonceRef.current += 1;
+    const persistent = getSeenQuizHistory();
+    const excludeQuestionHashes = new Set<string>([
+      ...persistent.seenQuestionHashes,
+      ...sessionSeenQRef.current
+    ]);
+    const excludeAnswerHashes = new Set<string>([
+      ...persistent.seenAnswerHashes,
+      ...sessionSeenARef.current
+    ]);
+
+    const batch = generateGeneralQuizSession(currentLevel, 10, {
+      excludeQuestionHashes,
+      excludeAnswerHashes,
+      sessionNonce: Date.now() + attemptNonceRef.current * 131
+    });
+
+    for (const q of batch) {
+      sessionSeenQRef.current.add(q.qHash);
+      sessionSeenARef.current.add(q.aHash);
+    }
+    return batch;
+  };
+
+  const [questions, setQuestions] = useState<GeneralQuizQuestionItem[]>(() => createUnseenBatch());
   const [questionIndex, setQuestionIndex] = useState<number>(0);
   const [selectedOptionIdx, setSelectedOptionIdx] = useState<number | null>(null);
   const [hasAnswered, setHasAnswered] = useState<boolean>(false);
   const [score, setScore] = useState<number>(0);
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
 
-  // Filter questions or use entire pool
-  const questions = QUIZ_QUESTIONS;
-  const currentQ: QuizQuestion = questions[questionIndex] || questions[0];
+  // Persist seen questions/answers cleanly outside render
+  useEffect(() => {
+    if (questions.length > 0) {
+      recordSeenQuizQuestions(questions);
+    }
+  }, [questions]);
+
+  const currentQ = questions[questionIndex] || questions[0];
 
   const handleSelectOption = (idx: number) => {
-    if (hasAnswered) return;
+    if (hasAnswered || !currentQ) return;
     setSelectedOptionIdx(idx);
     setHasAnswered(true);
 
-    const isCorrect = currentQ.options[idx].isCorrect;
+    const isCorrect = currentQ.options[idx]?.isCorrect;
     if (isCorrect) {
       setScore((prev) => prev + 1);
       playCorrectCue();
@@ -48,7 +84,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
     } else {
       setIsCompleted(true);
       playVictoryCue();
-      const finalScore = Math.round(((score + (currentQ.options[selectedOptionIdx || 0]?.isCorrect ? 0 : 0)) / questions.length) * 100);
+      const finalScore = Math.round((score / Math.max(1, questions.length)) * 100);
 
       try {
         confetti({
@@ -74,6 +110,8 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   };
 
   const handleRestart = () => {
+    const nextBatch = createUnseenBatch();
+    setQuestions(nextBatch);
     setQuestionIndex(0);
     setSelectedOptionIdx(null);
     setHasAnswered(false);

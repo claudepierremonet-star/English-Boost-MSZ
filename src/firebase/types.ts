@@ -55,6 +55,8 @@ export interface CityMapProgressionState {
   chapterStars?: Record<string, number>; // key: "${level}-${chapter}", value: 1..3 stars
   totalStars: number;
   lastPlayedLevel?: number;
+  seenQuestionHashes?: string[]; // bounded latest 2500 compact question hashes for cross-device anti-repetition
+  seenAnswerHashes?: string[]; // bounded latest 2500 compact answer hashes for cross-device anti-repetition
   updatedAt: string;
 }
 

@@ -9,6 +9,7 @@ import { RhetoricalAnalyzerView } from './RhetoricalAnalyzerView';
 import { awardMszCoins } from '../utils/mszCoinsManager';
 import { playSelectCue, playCorrectCue, playIncorrectCue, playVictoryCue } from '../utils/soundEffects';
 import { ChapterMasteryProgressBar } from './ChapterMasteryProgressBar';
+import { completeSchoolLessonForCityProgress } from '../utils/cityMapManager';
 import { LessonDictionaryProvider, useLessonDictionary } from './LessonDictionaryContext';
 import { InteractiveHighlightText } from './InteractiveHighlightText';
 import { normalizeSelectionQuery } from '../services/dictionaryService';
@@ -301,6 +302,7 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
       });
       // Récompense : 1 MSZ Coin sur la validation d'une leçon de cursus
       awardMszCoins('cursus', lesson.id, 1, 14, lesson.title);
+      void completeSchoolLessonForCityProgress(lesson.id, lesson.title);
       if (onCompleteLesson) {
         onCompleteLesson(lesson.id, 100);
       }
@@ -338,6 +340,7 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
     }).catch(console.warn);
 
     if (score >= 80) {
+      void completeSchoolLessonForCityProgress(lesson.id, lesson.title);
       confetti({
         particleCount: 40,
         spread: 50,

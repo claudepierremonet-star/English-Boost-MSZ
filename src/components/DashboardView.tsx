@@ -15,7 +15,7 @@ import {
   CartesianGrid,
   ReferenceLine
 } from 'recharts';
-import { motion, AnimatePresence, type Variants } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion, type Variants } from 'framer-motion';
 import { useSyncStatus } from '../offline/useSyncStatus';
 import { VocabularyMasterySummary } from './VocabularyMasterySummary';
 import { StudyCalendarWidget } from './StudyCalendarWidget';
@@ -228,6 +228,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onOpenFlashcards,
   onNavigateLeaderboard
 }) => {
+  const shouldReduceMotion = useReducedMotion();
+  const [dashboardTab, setDashboardTab] = useState<'all' | 'mastery' | 'analytics' | 'curriculum'>('all');
   const [showAdjustModal, setShowAdjustModal] = useState<boolean>(false);
   const [selectedTarget, setSelectedTarget] = useState<number>(user.stats.studyMinutesTarget || 30);
   const [chartMetric, setChartMetric] = useState<'xp' | 'score'>('xp');
@@ -363,19 +365,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           {/* Flame Streak Counter with Gentle Spring Entrance */}
           <motion.div
-            initial={{ scale: 0.8, opacity: 0 }}
+            initial={shouldReduceMotion ? { opacity: 1 } : { scale: 0.85, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.18, type: 'spring', stiffness: 220, damping: 16 }}
+            transition={{ delay: 0.14, type: 'spring', stiffness: 220, damping: 18 }}
             className="flex flex-col items-center justify-center px-3.5 py-2 rounded-xl bg-[#070e1d]/90 border border-[#4d4635]/40 shadow-inner shrink-0"
           >
             <div className="flex items-center gap-1 text-[#f2ca50]">
               <span
-                className="material-symbols-outlined text-xl animate-pulse"
+                className="material-symbols-outlined text-xl"
                 style={{ fontVariationSettings: "'FILL' 1" }}
               >
                 local_fire_department
               </span>
-              <span className="text-lg font-bold font-mono tracking-tight">
+              <span className="text-lg font-bold font-mono tabular-nums tracking-tight">
                 {animatedStreak}
               </span>
             </div>
@@ -462,7 +464,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
             <div className="flex flex-col min-w-0">
               <span className="text-[10px] text-[#d0c5af] uppercase tracking-wider">Précision Moy.</span>
-              <span className="text-sm font-bold text-[#d4c78f] font-mono truncate">
+              <span className="text-sm font-bold text-[#d4c78f] font-mono tabular-nums truncate">
                 {avgScore.toFixed(0)}%
               </span>
             </div>
@@ -470,9 +472,58 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </motion.div>
       </motion.section>
 
+      {/* FRAMER MOTION ANIMATED DASHBOARD SUB-TAB NAVIGATOR */}
+      <nav
+        aria-label="Onglets de progression du tableau de bord"
+        className="flex items-center gap-1 p-1.5 rounded-2xl bg-[#151b2b] border border-[#232a3a] overflow-x-auto no-scrollbar"
+      >
+        {[
+          { id: 'all' as const, label: 'Vue Complète', icon: 'dashboard' },
+          { id: 'mastery' as const, label: 'Objectifs & Maîtrise', icon: 'verified' },
+          { id: 'analytics' as const, label: 'Courbes 7 Jours', icon: 'show_chart' },
+          { id: 'curriculum' as const, label: 'Cursus & Boutique', icon: 'auto_stories' }
+        ].map((tab) => {
+          const isActive = dashboardTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setDashboardTab(tab.id)}
+              className={`relative flex-1 min-w-fit px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                isActive ? 'text-[#3c2f00] font-bold' : 'text-[#d0c5af] hover:text-[#dce2f8]'
+              }`}
+            >
+              {isActive && (
+                <motion.div
+                  layoutId="dashboardSubTabActivePill"
+                  transition={{ type: 'spring', stiffness: 360, damping: 28 }}
+                  className="absolute inset-0 rounded-xl bg-[#f2ca50] shadow-sm pointer-events-none"
+                />
+              )}
+              <span className="relative z-10 material-symbols-outlined text-[16px]">{tab.icon}</span>
+              <span className="relative z-10">{tab.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={`dashboard-panel-${dashboardTab}`}
+          initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -10 }}
+          transition={{ duration: 0.28, ease: luxuryEase }}
+          className="flex flex-col gap-4"
+        >
+          {(dashboardTab === 'all' || dashboardTab === 'mastery') && (
+            <>
       {/* Curriculum Mastery Card & Radial Gauge (La Carte de Progression) */}
       <motion.section
         variants={dashboardCardVariants}
+        initial="hidden"
+        animate="show"
+        whileHover={shouldReduceMotion ? undefined : { y: -2, transition: { duration: 0.18 } }}
         className="relative w-full rounded-2xl bg-[#191f2f] p-5 shadow-xl border border-[#4d4635]/40 flex items-center justify-between gap-4 overflow-hidden"
       >
         <div className="flex flex-col gap-1 min-w-0">
@@ -485,11 +536,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <p className="text-xs text-[#d0c5af]/80">
             {user.stats.completedModules} modules sur {user.stats.totalModules} complétés avec mention d’excellence.
           </p>
-          <div className="mt-2 flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#f2ca50]/15 border border-[#f2ca50]/30 text-[11px] font-semibold text-[#f2ca50]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#f2ca50] animate-pulse" />
-              +4.2% cette semaine
-            </span>
+          <div className="mt-2 flex items-center gap-2 text-[11px] font-mono tabular-nums font-semibold text-[#f2ca50]">
+            <span className="material-symbols-outlined text-sm">trending_up</span>
+            <span>+4.2% cette semaine</span>
           </div>
         </div>
 
@@ -536,7 +585,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </motion.section>
 
       {/* Weekly Objectives Breakdown with Smoothly Filling Progress Bars */}
-      <motion.section variants={dashboardCardVariants} className="flex flex-col gap-2.5">
+      <motion.section
+        variants={dashboardCardVariants}
+        initial="hidden"
+        animate="show"
+        className="flex flex-col gap-2.5"
+      >
         <div className="flex items-center justify-between">
           <h3 className="font-serif text-base sm:text-lg text-[#dce2f8] font-semibold">
             Objectifs Hebdomadaires
@@ -551,7 +605,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </button>
         </div>
 
-        <motion.div variants={staggeredListContainerVariants} className="flex flex-col gap-2">
+        <motion.div
+          variants={staggeredListContainerVariants}
+          initial="hidden"
+          animate="show"
+          className="flex flex-col gap-2"
+        >
           {/* Goal 1: Dictée */}
           <motion.div
             variants={subItemVariants}
@@ -563,14 +622,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <span className="material-symbols-outlined text-[#f2ca50] text-base">edit_note</span>
                 <span className="text-[#dce2f8] font-medium">Dictées Lexicales Avancées</span>
               </div>
-              <span className="text-[#f2ca50] font-bold font-mono">3 / 4</span>
+              <span className="text-[#f2ca50] font-bold font-mono tabular-nums">3 / 4</span>
             </div>
             <div className="w-full h-1.5 rounded-full bg-[#070e1d] overflow-hidden">
               <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: '75%' }}
-                transition={{ duration: 0.9, delay: 0.35, ease: [0.16, 1, 0.3, 1] }}
-                className="h-full bg-[#f2ca50] rounded-full shadow-[0_0_8px_rgba(242,202,80,0.4)]"
+                initial={{ scaleX: 0 }}
+                animate={{ scaleX: 0.75 }}
+                transition={{ duration: 0.75, delay: 0.15, ease: luxuryEase }}
+                style={{ transformOrigin: 'left center' }}
+                className="w-full h-full bg-[#f2ca50] rounded-full shadow-[0_0_8px_rgba(242,202,80,0.4)]"
               />
             </div>
           </motion.div>
@@ -586,14 +646,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <span className="material-symbols-outlined text-[#d4c78f] text-base">style</span>
                 <span className="text-[#dce2f8] font-medium">Vocabulaire Spécialisé SM-2</span>
               </div>
-              <span className="text-[#d4c78f] font-bold font-mono">150 / 150</span>
+              <span className="text-[#d4c78f] font-bold font-mono tabular-nums">150 / 150</span>
             </div>
             <div className="w-full h-1.5 rounded-full bg-[#070e1d] overflow-hidden">
               <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: '100%' }}
-                transition={{ duration: 0.9, delay: 0.43, ease: [0.16, 1, 0.3, 1] }}
-                className="h-full bg-[#d4c78f] rounded-full shadow-[0_0_8px_rgba(212,199,143,0.4)]"
+                initial={{ scaleX: 0 }}
+                animate={{ scaleX: 1 }}
+                transition={{ duration: 0.75, delay: 0.22, ease: luxuryEase }}
+                style={{ transformOrigin: 'left center' }}
+                className="w-full h-full bg-[#d4c78f] rounded-full shadow-[0_0_8px_rgba(212,199,143,0.4)]"
               />
             </div>
           </motion.div>
@@ -609,14 +670,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <span className="material-symbols-outlined text-[#e9cd67] text-base">mic</span>
                 <span className="text-[#dce2f8] font-medium">Enregistrements Rhétoriques</span>
               </div>
-              <span className="text-[#e9cd67] font-bold font-mono">2 / 2</span>
+              <span className="text-[#e9cd67] font-bold font-mono tabular-nums">2 / 2</span>
             </div>
             <div className="w-full h-1.5 rounded-full bg-[#070e1d] overflow-hidden">
               <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: '100%' }}
-                transition={{ duration: 0.9, delay: 0.51, ease: [0.16, 1, 0.3, 1] }}
-                className="h-full bg-[#e9cd67] rounded-full shadow-[0_0_8px_rgba(233,205,103,0.4)]"
+                initial={{ scaleX: 0 }}
+                animate={{ scaleX: 1 }}
+                transition={{ duration: 0.75, delay: 0.29, ease: luxuryEase }}
+                style={{ transformOrigin: 'left center' }}
+                className="w-full h-full bg-[#e9cd67] rounded-full shadow-[0_0_8px_rgba(233,205,103,0.4)]"
               />
             </div>
           </motion.div>
@@ -632,29 +694,38 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <span className="material-symbols-outlined text-[#f2ca50] text-base">hourglass_bottom</span>
                 <span className="text-[#dce2f8] font-medium">Cadence Quotidienne</span>
               </div>
-              <span className="text-[#f2ca50] font-bold font-mono">
+              <span className="text-[#f2ca50] font-bold font-mono tabular-nums">
                 {animatedTodayMinutes} / {user.stats.studyMinutesTarget || 30} min
               </span>
             </div>
             <div className="w-full h-1.5 rounded-full bg-[#070e1d] overflow-hidden">
               <motion.div
-                initial={{ width: 0 }}
+                initial={{ scaleX: 0 }}
                 animate={{
-                  width: `${Math.min(
-                    100,
-                    Math.round(((user.stats.studyMinutesToday ?? 0) / (user.stats.studyMinutesTarget || 30)) * 100)
-                  )}%`
+                  scaleX: Math.min(
+                    1,
+                    (user.stats.studyMinutesToday ?? 0) / Math.max(1, user.stats.studyMinutesTarget || 30)
+                  )
                 }}
-                transition={{ duration: 0.9, delay: 0.59, ease: [0.16, 1, 0.3, 1] }}
-                className="h-full bg-[#f2ca50] rounded-full shadow-[0_0_8px_rgba(242,202,80,0.4)]"
+                transition={{ duration: 0.75, delay: 0.36, ease: luxuryEase }}
+                style={{ transformOrigin: 'left center' }}
+                className="w-full h-full bg-[#f2ca50] rounded-full shadow-[0_0_8px_rgba(242,202,80,0.4)]"
               />
             </div>
           </motion.div>
         </motion.div>
       </motion.section>
+            </>
+          )}
 
-      {/* 7-Day Performance & Weekly XP Evolution Section with Recharts */}
-      <motion.section variants={dashboardCardVariants} className="w-full rounded-2xl bg-[#191f2f] p-5 shadow-xl border border-[#4d4635]/40 flex flex-col gap-3">
+          {/* 7-Day Performance & Weekly XP Evolution Section with Recharts */}
+          {(dashboardTab === 'all' || dashboardTab === 'analytics') && (
+            <motion.section
+        variants={dashboardCardVariants}
+        initial="hidden"
+        animate="show"
+        className="w-full rounded-2xl bg-[#191f2f] p-5 shadow-xl border border-[#4d4635]/40 flex flex-col gap-3"
+      >
         {/* Section Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
           <div className="flex flex-col">
@@ -870,7 +941,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   Ligne bleue pointillée : Objectif régulier de 300 XP/j • Les points au-dessus attestent d'une assiduité remarquable.
                 </span>
                 <span className="not-italic text-emerald-400 font-mono font-semibold flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="material-symbols-outlined text-xs">check_circle</span>
                   Régularité active (7/7 jours)
                 </span>
               </div>
@@ -970,16 +1041,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </AnimatePresence>
       </motion.section>
 
-      {/* Visual Statistical Summary: Vocabulary Mastery & SM-2 Retention Over Time */}
-      <motion.div variants={dashboardCardVariants}>
-        <VocabularyMasterySummary
-          user={user}
-          onOpenFlashcards={onOpenFlashcards}
-        />
-      </motion.div>
+          )}
 
+      {(dashboardTab === 'all' || dashboardTab === 'mastery') && (
+        <motion.div variants={dashboardCardVariants} initial="hidden" animate="show">
+          <VocabularyMasterySummary
+            user={user}
+            onOpenFlashcards={onOpenFlashcards}
+          />
+        </motion.div>
+      )}
+
+      {(dashboardTab === 'all' || dashboardTab === 'curriculum') && (
+        <>
       {/* Composant MSZ-Shop du Dashboard (10 Catégories, Rendu 3D Recto-Verso au Clic, Prix en MSZ Coins & Rareté) */}
-      <motion.div variants={dashboardCardVariants}>
+      <motion.div variants={dashboardCardVariants} initial="hidden" animate="show">
         <MszShop
           userLevel={calculateLevel(user.stats?.totalXp ?? 0)}
           onOpenFullShop={() => setIsShopModalOpen(true)}
@@ -988,7 +1064,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </motion.div>
 
       {/* Visual Study Calendar, Weekly Goals & Study Reminders */}
-      <motion.div variants={dashboardCardVariants}>
+      <motion.div variants={dashboardCardVariants} initial="hidden" animate="show">
         <StudyCalendarWidget
           user={user}
           onResumePractice={onResumePractice}
@@ -998,6 +1074,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* Programme des Leçons & Folios Cursus (Staggered Lessons List) */}
       <motion.section
         variants={dashboardCardVariants}
+        initial="hidden"
+        animate="show"
         className="w-full rounded-2xl bg-[#191f2f] p-5 shadow-xl border border-[#4d4635]/40 flex flex-col gap-3.5 overflow-hidden"
       >
         <div className="flex items-center justify-between">
@@ -1080,10 +1158,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
                 <div className="w-full h-1.5 rounded-full bg-[#070e1d] overflow-hidden">
                   <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${folio.progressPercent}%` }}
-                    transition={{ duration: 0.9, delay: 0.2 + idx * 0.1, ease: luxuryEase }}
-                    className="h-full bg-gradient-to-r from-[#d4c78f] to-[#f2ca50] rounded-full shadow-[0_0_8px_rgba(242,202,80,0.3)]"
+                    initial={{ scaleX: 0 }}
+                    animate={{ scaleX: Math.max(0, Math.min(1, folio.progressPercent / 100)) }}
+                    transition={{ duration: 0.75, delay: 0.12 + idx * 0.08, ease: luxuryEase }}
+                    style={{ transformOrigin: 'left center' }}
+                    className="w-full h-full bg-gradient-to-r from-[#d4c78f] to-[#f2ca50] rounded-full shadow-[0_0_8px_rgba(242,202,80,0.3)]"
                   />
                 </div>
 
@@ -1177,8 +1256,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </motion.div>
       </motion.section>
 
-      {/* Recent Validated Trials (Staggered items) */}
-      <motion.section variants={dashboardCardVariants} className="flex flex-col gap-2.5">
+        </>
+      )}
+
+      {(dashboardTab === 'all' || dashboardTab === 'analytics') && (
+      /* Recent Validated Trials (Staggered items) */
+      <motion.section
+        variants={dashboardCardVariants}
+        initial="hidden"
+        animate="show"
+        className="flex flex-col gap-2.5"
+      >
         <div className="flex items-center justify-between">
           <h3 className="font-serif text-base sm:text-lg text-[#dce2f8] font-semibold">
             Dernières Épreuves Validées
@@ -1189,7 +1277,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* Dynamic Recent Trials List with Staggered Fade-in */}
-        <motion.div variants={staggeredListContainerVariants} className="flex flex-col gap-2.5">
+        <motion.div
+          variants={staggeredListContainerVariants}
+          initial="hidden"
+          animate="show"
+          className="flex flex-col gap-2.5"
+        >
           {recentAttempts.length > 0 ? (
             recentAttempts.slice(0, 3).map((att) => (
               <motion.div
@@ -1321,9 +1414,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           )}
         </motion.div>
       </motion.section>
+      )}
 
-      {/* IndexedDB Persistent Offline Storage & Cloud Firestore Sync Section */}
-      <motion.section variants={dashboardCardVariants} className="w-full rounded-2xl bg-[#070e1d]/90 p-5 border border-[#4d4635]/40 flex flex-col gap-3.5 relative overflow-hidden shadow-xl">
+      {(dashboardTab === 'all' || dashboardTab === 'curriculum') && (
+      /* IndexedDB Persistent Offline Storage & Cloud Firestore Sync Section */
+      <motion.section
+        variants={dashboardCardVariants}
+        initial="hidden"
+        animate="show"
+        className="w-full rounded-2xl bg-[#070e1d]/90 p-5 border border-[#4d4635]/40 flex flex-col gap-3.5 relative overflow-hidden shadow-xl"
+      >
         <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#f2ca50]/50 to-transparent" />
         
         {/* Header row */}
@@ -1358,7 +1458,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             >
               <span
                 className={`w-2 h-2 rounded-full ${
-                  isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+                  isOnline ? 'bg-emerald-400' : 'bg-amber-400'
                 }`}
               />
               <span>{isOnline ? 'En Ligne • Synchronisé' : 'Mode Hors-Ligne Actif'}</span>
@@ -1444,6 +1544,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </button>
         </div>
       </motion.section>
+      )}
+        </motion.div>
+      </AnimatePresence>
 
       {/* Primary Action Button */}
       <motion.button

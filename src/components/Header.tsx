@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import type { UserProfile, CEFRLevel } from '../firebase/types';
+import type { UserProfile, CEFRLevel, CityMapProgressionState } from '../firebase/types';
 import type { SchoolLesson } from '../data/schoolCurriculum';
 import { useSyncStatus } from '../offline/useSyncStatus';
 import { calculateLevel } from '../utils/levelUtils';
 import { getMszCoinsBalance } from '../utils/mszCoinsManager';
 import { HeaderSessionTimer } from './HeaderSessionTimer';
+import { HeaderLevelProgressBar } from './HeaderLevelProgressBar';
 import { isSoundEffectsEnabled, toggleSoundEffects, SOUND_EFFECTS_EVENT } from '../utils/soundEffects';
 import appIconImg from '../assets/images/app_icon_msz_1792789129742.jpg';
 
@@ -25,6 +26,8 @@ interface HeaderProps {
   onOpenAccentStudio?: () => void;
   onOpenLevelCelebration?: () => void;
   onOpenShop?: () => void;
+  cityMapProgression?: CityMapProgressionState;
+  onNavigateCityMap?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -43,7 +46,9 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAuthModal,
   onOpenAccentStudio,
   onOpenLevelCelebration,
-  onOpenShop
+  onOpenShop,
+  cityMapProgression,
+  onNavigateCityMap
 }) => {
   const { isOnline, isSyncing, pendingCount, triggerSync } = useSyncStatus();
   const [imageError, setImageError] = useState(false);
@@ -72,7 +77,7 @@ export const Header: React.FC<HeaderProps> = ({
       className="fixed top-0 w-full z-40 bg-[#0c1322]/90 backdrop-blur-xl border-b border-[#232a3a]/80 shadow-[0_4px_20px_rgba(0,0,0,0.5)]"
       style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 10px)' }}
     >
-      <div className="max-w-6xl mx-auto h-16 px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4">
+      <div className="max-w-6xl mx-auto h-14 sm:h-16 px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4">
         {/* Brand Lockup with Luxury App Icon */}
         <div
           onClick={onOpenInstallModal}
@@ -317,6 +322,10 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         </div>
       </div>
+      <HeaderLevelProgressBar
+        progression={cityMapProgression}
+        onNavigateCityMap={onNavigateCityMap}
+      />
     </header>
   );
 };

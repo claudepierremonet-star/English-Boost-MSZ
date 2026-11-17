@@ -7,8 +7,18 @@ import {
   updateUserProfile
 } from '../firebase/client';
 import type { CEFRLevel, CityMapProgressionState, UserProfile } from '../firebase/types';
-import { getCityLevelByNumber, MAX_CITY_LEVEL } from '../data/cityMapData';
+import { getCityLevelByNumber, MAX_CITY_LEVEL, type CityChapterQuestion } from '../data/cityMapData';
+import { computeAnswerKey, computeQuestionKey, hashContentKey } from '../data/cityBank5000';
 import { awardMszCoins } from './mszCoinsManager';
+
+export const LOCAL_SEEN_QUIZ_KEY = 'eb_msz_seen_quiz_history_v1';
+export const LOCAL_COMPLETED_LESSONS_KEY = 'eb_msz_completed_lessons_v1';
+export const LESSON_COMPLETED_EVENT = 'eb_lesson_completed';
+
+interface StoredSeenQuizHistory {
+  qHashes: string[];
+  aHashes: string[];
+}
 
 export interface CityChapterCompletionResult {
   state: CityMapProgressionState;
@@ -53,6 +63,145 @@ export async function saveCityMapProgression(state: CityMapProgressionState): Pr
   }
 
   return updateUserProfile({ cityMapProgression: sanitized });
+}
+
+function readLocalSeenQuizStore(): StoredSeenQuizHistory {
+  try {
+    const raw = localStorage.getItem(LOCAL_SEEN_QUIZ_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<StoredSeenQuizHistory>;
+      return {
+        qHashes: Array.isArray(parsed.qHashes) ? parsed.qHashes.filter((s) => typeof s === 'string') : [],
+        aHashes: Array.isArray(parsed.aHashes) ? parsed.aHashes.filter((s) => typeof s === 'string') : []
+      };
+    }
+  } catch (e) {
+    console.warn('Error reading seen quiz history from localStorage:', e);
+  }
+  return { qHashes: [], aHashes: [] };
+}
+
+/**
+ * Retrieve union of all seen question & answer hashes (full local history + Firestore-synced progression)
+ */
+export function getSeenQuizHistory(): {
+  seenQuestionHashes: Set<string>;
+  seenAnswerHashes: Set<string>;
+} {
+  const localStore = readLocalSeenQuizStore();
+  const prog = getCityMapProgression();
+
+  return {
+    seenQuestionHashes: new Set<string>([...localStore.qHashes, ...(prog.seenQuestionHashes || [])]),
+    seenAnswerHashes: new Set<string>([...localStore.aHashes, ...(prog.seenAnswerHashes || [])])
+  };
+}
+
+export type SeenQuestionInput =
+  | CityChapterQuestion
+  | {
+      questionKey?: string;
+      answerKey?: string;
+      qHash?: string;
+      aHash?: string;
+      type?: 'mcq' | 'word_find';
+      promptEn?: string;
+      questionFr?: string;
+      targetWord?: string;
+      answer?: string;
+      options?: unknown[];
+      correctIndex?: number;
+    };
+
+/**
+ * Record displayed questions & their canonical answers immediately so players never encounter them twice.
+ */
+export function recordSeenQuizQuestions(items: SeenQuestionInput[]): void {
+  if (!items || items.length === 0) return;
+
+  const localStore = readLocalSeenQuizStore();
+  const qSet = new Set<string>(localStore.qHashes);
+  const aSet = new Set<string>(localStore.aHashes);
+  let addedAny = false;
+
+  for (const item of items) {
+    let qHash = 'qHash' in item ? item.qHash : undefined;
+    let aHash = 'aHash' in item ? item.aHash : undefined;
+
+    if (!qHash) {
+      if ('questionKey' in item && item.questionKey) {
+        qHash = hashContentKey(item.questionKey);
+      } else {
+        const type = item.type === 'word_find' ? 'word_find' : 'mcq';
+        const targetWord = 'targetWord' in item ? item.targetWord : undefined;
+        const promptEn = 'promptEn' in item ? item.promptEn : undefined;
+        const questionFr = item.questionFr || '';
+        qHash = hashContentKey(
+          computeQuestionKey({ type, promptEn, questionFr, targetWord })
+        );
+      }
+    }
+
+    if (!aHash) {
+      if ('answerKey' in item && item.answerKey) {
+        aHash = hashContentKey(item.answerKey);
+      } else if (item.type === 'word_find' && 'targetWord' in item && item.targetWord) {
+        aHash = hashContentKey(computeAnswerKey(item.targetWord));
+      } else if ('options' in item && Array.isArray(item.options) && typeof item.correctIndex === 'number') {
+        const rawAns = item.options[item.correctIndex];
+        const ans = typeof rawAns === 'string' ? rawAns : '';
+        if (ans) aHash = hashContentKey(computeAnswerKey(ans));
+      } else if ('answer' in item && item.answer) {
+        aHash = hashContentKey(computeAnswerKey(item.answer));
+      }
+    }
+
+    if (qHash && !qSet.has(qHash)) {
+      qSet.add(qHash);
+      addedAny = true;
+    }
+    if (aHash && !aSet.has(aHash)) {
+      aSet.add(aHash);
+      addedAny = true;
+    }
+  }
+
+  if (!addedAny) return;
+
+  const nextQArr = Array.from(qSet);
+  const nextAArr = Array.from(aSet);
+
+  try {
+    localStorage.setItem(
+      LOCAL_SEEN_QUIZ_KEY,
+      JSON.stringify({ qHashes: nextQArr, aHashes: nextAArr })
+    );
+  } catch (e) {
+    console.warn('Error persisting seen quiz history locally:', e);
+  }
+
+  // Also persist compact bounded latest 2500 hashes into CityMapProgressionState (syncs to Firestore)
+  const prog = getCityMapProgression();
+  const nextProg: CityMapProgressionState = {
+    ...prog,
+    seenQuestionHashes: nextQArr.slice(-2500),
+    seenAnswerHashes: nextAArr.slice(-2500),
+    updatedAt: new Date().toISOString()
+  };
+  saveCityMapProgression(nextProg).catch(() => {});
+}
+
+export function clearSeenQuizHistory(): void {
+  try {
+    localStorage.removeItem(LOCAL_SEEN_QUIZ_KEY);
+  } catch {}
+  const prog = getCityMapProgression();
+  saveCityMapProgression({
+    ...prog,
+    seenQuestionHashes: [],
+    seenAnswerHashes: [],
+    updatedAt: new Date().toISOString()
+  }).catch(() => {});
 }
 
 /**
@@ -134,6 +283,8 @@ export async function completeCityChapter(
     chapterStars: nextStarsMap,
     totalStars,
     lastPlayedLevel: unlockedNextLevel ?? safeLevel,
+    seenQuestionHashes: current.seenQuestionHashes || [],
+    seenAnswerHashes: current.seenAnswerHashes || [],
     updatedAt: new Date().toISOString()
   };
 
@@ -188,3 +339,105 @@ export async function completeCityChapter(
     completedChaptersCount: nextChapters.length
   };
 }
+
+export function getCompletedSchoolLessonIds(): string[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_COMPLETED_LESSONS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export interface LessonCityProgressEventDetail {
+  lessonId: string;
+  lessonTitle?: string;
+  advancedLevel: number | null;
+  totalConqueredLevels: number;
+  completedLessonsCount: number;
+  timestamp: number;
+}
+
+/**
+ * Called whenever a Cursus lesson is completed (quiz or dictation mastery).
+ * Deduplicates per lessonId so each newly completed lesson conquers the active frontier
+ * level in the 600-level City Map, saves state, and dispatches LESSON_COMPLETED_EVENT
+ * so the Header segmented progress bar animates immediately.
+ */
+export async function completeSchoolLessonForCityProgress(
+  lessonId: string,
+  lessonTitle?: string
+): Promise<{
+  state: CityMapProgressionState;
+  isFirstCompletion: boolean;
+  advancedLevel: number | null;
+  completedLessonsCount: number;
+}> {
+  const current = getCityMapProgression();
+  const completedIds = getCompletedSchoolLessonIds();
+  const isFirstCompletion = Boolean(lessonId) && !completedIds.includes(lessonId);
+
+  let nextState = current;
+  let advancedLevel: number | null = null;
+  let nextLessonIds = completedIds;
+
+  if (isFirstCompletion) {
+    nextLessonIds = [...completedIds, lessonId];
+    try {
+      localStorage.setItem(LOCAL_COMPLETED_LESSONS_KEY, JSON.stringify(nextLessonIds));
+    } catch (e) {
+      console.warn('Could not persist completed lesson IDs locally:', e);
+    }
+
+    // Conquer the current frontier level (all 10 chapters) and unlock the next one up to 600
+    let targetLevel = Math.max(1, Math.min(MAX_CITY_LEVEL, current.unlockedLevel || 1));
+    const conqueredSet = new Set<number>(current.conqueredLevels || []);
+    while (conqueredSet.has(targetLevel) && targetLevel < MAX_CITY_LEVEL) {
+      targetLevel++;
+    }
+
+    if (!conqueredSet.has(targetLevel)) {
+      conqueredSet.add(targetLevel);
+      advancedLevel = targetLevel;
+
+      const nextCompletedByLevel: Record<string, number[]> = {
+        ...current.completedChaptersByLevel,
+        [String(targetLevel)]: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+      };
+
+      const nextUnlocked = Math.min(MAX_CITY_LEVEL, targetLevel + 1);
+      nextState = {
+        ...current,
+        unlockedLevel: Math.max(current.unlockedLevel, nextUnlocked),
+        completedChaptersByLevel: nextCompletedByLevel,
+        conqueredLevels: Array.from(conqueredSet).sort((a, b) => a - b),
+        lastPlayedLevel: nextUnlocked,
+        updatedAt: new Date().toISOString()
+      };
+
+      await saveCityMapProgression(nextState);
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    const detail: LessonCityProgressEventDetail = {
+      lessonId,
+      lessonTitle,
+      advancedLevel,
+      totalConqueredLevels: nextState.conqueredLevels.length,
+      completedLessonsCount: nextLessonIds.length,
+      timestamp: Date.now()
+    };
+    window.dispatchEvent(new CustomEvent<LessonCityProgressEventDetail>(LESSON_COMPLETED_EVENT, { detail }));
+  }
+
+  return {
+    state: nextState,
+    isFirstCompletion,
+    advancedLevel,
+    completedLessonsCount: nextLessonIds.length
+  };
+}
+

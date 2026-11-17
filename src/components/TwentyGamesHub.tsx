@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   TWENTY_GAMES_METADATA,
   MiniGameMeta,
@@ -56,6 +57,9 @@ import {
   AstroHangmanQuestion
 } from '../data/twentyGamesData';
 import { StackedGamesShowcase } from './StackedGamesShowcase';
+import { GamesCityMapView } from './GamesCityMapView';
+import { DefiExpressModal } from './DefiExpressModal';
+import type { CEFRLevel } from '../firebase/types';
 import { awardMszCoins } from '../utils/mszCoinsManager';
 import {
   playSelectCue,
@@ -112,8 +116,22 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({
   onClose
 }) => {
   const [selectedFilter, setSelectedFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [viewMode, setViewMode] = useState<'map' | 'grid' | 'deck'>(() => {
+    try {
+      const saved = localStorage.getItem('msz_games_view_mode_v1');
+      if (saved === 'map' || saved === 'grid' || saved === 'deck') return saved;
+    } catch {}
+    return 'map';
+  });
   const [activeGame, setActiveGame] = useState<MiniGameMeta | null>(null);
   const [howToPlayModal, setHowToPlayModal] = useState<MiniGameMeta | null>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('msz_games_view_mode_v1', viewMode);
+    } catch {}
+  }, [viewMode]);
 
   // Progression globale (Niveau 1 à 99, +10 pts victoire, -5 pts défaite, déblocage séquentiel)
   const [progression, setProgression] = useState<ArcadeProgressionState>(() => getStoredArcadeProgression());
@@ -121,6 +139,8 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({
   const [lockedGamePrompt, setLockedGamePrompt] = useState<MiniGameMeta | null>(null);
   const [showLevelUpCelebration, setShowLevelUpCelebration] = useState<{ newLevel: number; oldLevel: number } | null>(null);
   const [showRulesModal, setShowRulesModal] = useState<boolean>(false);
+  const [showDefiExpress, setShowDefiExpress] = useState<boolean>(false);
+  const [expressLevel, setExpressLevel] = useState<CEFRLevel>('B2');
   const [pointsToast, setPointsToast] = useState<{ text: string; isGain: boolean } | null>(null);
 
   // Hydratation asynchrone sécurisée depuis IndexedDB et Firestore au montage
@@ -314,31 +334,47 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({
     }
   };
 
-  // Filtrage des 20 jeux
+  // Filtrage des jeux par catégorie et recherche
   const filteredGames = TWENTY_GAMES_METADATA.filter((game) => {
-    if (selectedFilter === 'all') return true;
-    return game.category === selectedFilter;
+    const matchesCat = selectedFilter === 'all' || game.category === selectedFilter;
+    if (!matchesCat) return false;
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      game.title.toLowerCase().includes(q) ||
+      game.subtitle.toLowerCase().includes(q) ||
+      game.howToPlay.goal.toLowerCase().includes(q) ||
+      String(game.number).includes(q)
+    );
   });
 
   return (
     <div className="w-full min-h-screen bg-[#0c1322] text-[#dce2f8] px-4 sm:px-6 py-6 pb-24 relative">
       {/* Toast Notification Points Change (+10 pts / -5 pts) */}
-      {pointsToast && (
-        <div className="fixed top-5 right-5 z-50 animate-bounce">
-          <div
-            className={`px-4 py-2.5 rounded-2xl shadow-2xl border flex items-center gap-2.5 font-mono font-bold text-xs ${
-              pointsToast.isGain
-                ? 'bg-emerald-950/95 border-emerald-400 text-emerald-200 shadow-[0_0_20px_rgba(16,185,129,0.4)]'
-                : 'bg-rose-950/95 border-rose-400 text-rose-200 shadow-[0_0_20px_rgba(244,63,94,0.4)]'
-            }`}
+      <AnimatePresence>
+        {pointsToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.96 }}
+            transition={{ duration: 0.2 }}
+            className="fixed top-24 right-5 z-50"
           >
-            <span className="material-symbols-outlined text-base">
-              {pointsToast.isGain ? 'trending_up' : 'trending_down'}
-            </span>
-            <span>{pointsToast.text}</span>
-          </div>
-        </div>
-      )}
+            <div
+              className={`px-4 py-2.5 rounded-2xl shadow-2xl border flex items-center gap-2.5 font-mono tabular-nums font-bold text-xs ${
+                pointsToast.isGain
+                  ? 'bg-emerald-950/95 border-emerald-400 text-emerald-200 shadow-[0_0_20px_rgba(16,185,129,0.4)]'
+                  : 'bg-rose-950/95 border-rose-400 text-rose-200 shadow-[0_0_20px_rgba(244,63,94,0.4)]'
+              }`}
+            >
+              <span className="material-symbols-outlined text-base">
+                {pointsToast.isGain ? 'trending_up' : 'trending_down'}
+              </span>
+              <span>{pointsToast.text}</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Top Banner & Header */}
       <div className="max-w-5xl mx-auto mb-8">
@@ -439,78 +475,51 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({
           </div>
         )}
 
-        {/* INDICATEUR DE PERSISTANCE DU STOCKAGE DES DONNÉES */}
-        <div className="mb-4 px-4 py-2 rounded-2xl bg-[#0c1424] border border-emerald-500/30 flex flex-wrap items-center justify-between gap-2 shadow-sm text-xs">
-          <div className="flex items-center gap-2">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-            </span>
-            <span className="font-mono text-emerald-400 font-bold text-[10px] uppercase tracking-wider">
-              Stockage Sécurisé & Persistant
-            </span>
-            <span className="text-gray-500 hidden sm:inline">&bull;</span>
-            <span className="text-gray-300 text-[11px]">
-              Points et progression enregistrés en temps réel sur <strong>Cloud Firestore</strong> & <strong>IndexedDB local</strong> (0 perte au rechargement)
-            </span>
-          </div>
-
-          <div className="flex items-center gap-1.5 font-mono text-[11px] text-amber-300 font-bold">
-            <span className="material-symbols-outlined text-sm text-amber-400">cloud_done</span>
-            <span>{progression.points} pts synchronisés</span>
-          </div>
-        </div>
-
         {/* PANNEAU DE PROGRESSION DU JOUEUR (Niveau 1 à 99 • Points • Paliers) */}
-        <div className="mb-6 p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-[#11192a] via-[#152038] to-[#0d1424] border-2 border-[#f2ca50]/30 shadow-xl">
+        <div className="mb-6 p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-[#11192a] via-[#152038] to-[#0d1424] border border-[#f2ca50]/35 shadow-xl">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             {/* Niveau & Rang Actuel */}
             <div className="flex items-center gap-3.5">
-              <div className="relative">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#f2ca50] via-amber-500 to-amber-700 flex flex-col items-center justify-center text-[#1a1200] font-black shadow-[0_0_25px_rgba(242,202,80,0.4)] border border-amber-300">
+              <div className="relative shrink-0">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#f2ca50] via-amber-500 to-amber-700 flex flex-col items-center justify-center text-[#1a1200] font-black shadow-[0_0_25px_rgba(242,202,80,0.35)] border border-amber-300 tabular-nums">
                   <span className="text-[10px] font-mono leading-none uppercase tracking-tighter">NIV.</span>
                   <span className="text-2xl leading-none">{levelInfo.level}</span>
-                </div>
-                <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-amber-400 text-[#0c1322] flex items-center justify-center text-xs font-black shadow">
-                  ★
                 </div>
               </div>
 
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-serif font-black text-lg text-white">
-                    Niveau {levelInfo.level} <span className="text-xs text-gray-400 font-sans font-normal">/ 99</span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-serif font-black text-lg text-white tabular-nums">
+                    Niveau {levelInfo.level} <span className="text-xs text-[#99907c] font-sans font-normal">/ 99</span>
                   </span>
-                  <span
-                    className={`px-2.5 py-0.5 rounded-full text-xs font-mono font-bold border ${levelInfo.tier.badgeBg} ${levelInfo.tier.badgeColor} ${levelInfo.tier.badgeBorder}`}
-                  >
-                    {levelInfo.tier.label}
+                  <span className={`text-xs font-mono font-bold ${levelInfo.tier.badgeColor}`}>
+                    · {levelInfo.tier.label}
                   </span>
                 </div>
-                <p className="text-xs text-gray-300 mt-0.5">
+                <p className="text-xs text-[#d0c5af]/90 mt-0.5">
                   {levelInfo.tier.description}
                 </p>
               </div>
             </div>
 
-            {/* Statistiques en badges clairs */}
-            <div className="flex flex-wrap items-center gap-2 self-stretch md:self-auto">
-              <div className="flex-1 md:flex-none px-3 py-2 rounded-xl bg-[#090f1d] border border-white/5 text-center">
-                <span className="text-[10px] font-mono text-gray-400 uppercase block">Points Cumulés</span>
-                <span className="text-sm font-mono font-black text-amber-300">⭐ {progression.points} pts</span>
+            {/* Statistiques synthétiques */}
+            <div className="flex flex-wrap items-center gap-2 self-stretch md:self-auto tabular-nums">
+              <div className="flex-1 md:flex-none px-3 py-2 rounded-xl bg-[#090f1d] border border-[#232a3a] text-center">
+                <span className="text-[10px] font-mono text-[#99907c] uppercase block">Points Cumulés</span>
+                <span className="text-sm font-mono font-bold text-[#f2ca50]">{progression.points} pts</span>
               </div>
 
-              <div className="flex-1 md:flex-none px-3 py-2 rounded-xl bg-[#090f1d] border border-white/5 text-center">
-                <span className="text-[10px] font-mono text-gray-400 uppercase block">Jeux Débloqués</span>
-                <span className="text-sm font-mono font-black text-emerald-400">
-                  🔓 {progression.unlockedMaxGameNumber} / 21
+              <div className="flex-1 md:flex-none px-3 py-2 rounded-xl bg-[#090f1d] border border-[#232a3a] text-center">
+                <span className="text-[10px] font-mono text-[#99907c] uppercase block">Débloqués</span>
+                <span className="text-sm font-mono font-bold text-emerald-400">
+                  {progression.unlockedMaxGameNumber}/{TWENTY_GAMES_METADATA.length}
                 </span>
               </div>
 
-              <div className="flex-1 md:flex-none px-3 py-2 rounded-xl bg-[#090f1d] border border-white/5 text-center">
-                <span className="text-[10px] font-mono text-gray-400 uppercase block">Jeux Réussis</span>
-                <span className="text-sm font-mono font-black text-blue-400">
-                  🏆 {progression.completedGames.length} / 21
+              <div className="flex-1 md:flex-none px-3 py-2 rounded-xl bg-[#090f1d] border border-[#232a3a] text-center">
+                <span className="text-[10px] font-mono text-[#99907c] uppercase block">Validés</span>
+                <span className="text-sm font-mono font-bold text-sky-400">
+                  {progression.completedGames.length}/{TWENTY_GAMES_METADATA.length}
                 </span>
               </div>
             </div>
@@ -518,92 +527,242 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({
 
           {/* Jauge vers le prochain niveau (100 points = +1 niveau) */}
           <div className="mt-4 pt-3.5 border-t border-white/10">
-            <div className="flex items-center justify-between text-xs font-mono mb-1.5">
-              <span className="text-gray-300 flex items-center gap-1.5">
-                <span className="text-amber-400 font-bold">Progression Niveau :</span>
+            <div className="flex items-center justify-between text-xs font-mono tabular-nums mb-1.5">
+              <span className="text-[#d0c5af] flex items-center gap-1.5">
+                <span className="text-[#f2ca50] font-bold">Progression Niveau :</span>
                 {levelInfo.level >= 99 ? (
-                  <strong className="text-amber-300">Niveau Maximum 99 Atteint ! 👑</strong>
+                  <strong className="text-[#f2ca50]">Niveau Maximum 99 Atteint</strong>
                 ) : (
                   <span>
-                    <strong>{levelInfo.pointsInCurrentLevel}</strong> / 100 points vers le{' '}
-                    <strong className="text-amber-300">Niveau {levelInfo.level + 1}</strong>
+                    <strong>{levelInfo.pointsInCurrentLevel}</strong> / 100 pts vers{' '}
+                    <strong className="text-[#f2ca50]">Niv. {levelInfo.level + 1}</strong>
                   </span>
                 )}
               </span>
-              <span className="text-gray-400 font-bold">
+              <span className="text-[#99907c] font-bold">
                 {levelInfo.level >= 99 ? '100%' : `${levelInfo.pointsInCurrentLevel}%`}
               </span>
             </div>
 
-            <div className="w-full h-3 rounded-full bg-[#080d1a] border border-white/10 overflow-hidden p-0.5">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-amber-400 to-[#f2ca50] transition-all duration-500 shadow-[0_0_12px_rgba(242,202,80,0.5)]"
-                style={{ width: `${levelInfo.progressPercent}%` }}
+            <div className="w-full h-2.5 rounded-full bg-[#080d1a] border border-[#232a3a] overflow-hidden p-0.5">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${levelInfo.progressPercent}%` }}
+                transition={{ type: 'spring', stiffness: 110, damping: 18 }}
+                className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-amber-400 to-[#f2ca50]"
               />
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-2 mt-2 text-[11px] text-gray-400">
-              <span className="flex items-center gap-1">
-                <span className="text-emerald-400 font-bold">+10 pts</span> par victoire
-                <span className="text-gray-500">•</span>
-                <span className="text-rose-400 font-bold">-5 pts</span> par défaite
+            <div className="flex flex-wrap items-center justify-between gap-2 mt-2 text-[11px] text-[#99907c]">
+              <span className="flex items-center gap-1.5 font-mono tabular-nums">
+                <span className="text-emerald-400 font-semibold">+10 pts</span> victoire
+                <span aria-hidden="true">·</span>
+                <span className="text-rose-400 font-semibold">-5 pts</span> défaite
               </span>
-              <span className="text-amber-300/90 font-medium">
-                Débloque les 21 jeux séquentiellement en réussissant chaque jeu !
+              <span className="text-[#d4c78f]">
+                Progressez pas à pas à travers les {TWENTY_GAMES_METADATA.length} défis d&apos;arcade
               </span>
             </div>
           </div>
         </div>
 
-        {/* ==============================================================
-            COMPOSANT D'AFFICHAGE SUPERPOSÉ DES 21 JEUX (CHEVAUCHEMENT 1/3)
-            Déploiement en éventail au clic avec les 21 jeux intégrés
-            ============================================================== */}
-        <StackedGamesShowcase
-          games={TWENTY_GAMES_METADATA}
-          isGameUnlocked={isGameUnlocked}
-          onSelectGame={handleLaunchGame}
-          progression={progression}
-        />
+        {/* MODE DÉFI EXPRESS : SÉRIE RAPIDE DE 5 QUESTIONS CHRONOMÉTRÉES (BONUS XP) */}
+        <section
+          aria-label="Mode Défi Express : 5 questions rapides chronométrées"
+          className="mb-5 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#17213a] via-[#151e34] to-[#11192c] border border-[#f2ca50]/50 shadow-lg flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+        >
+          <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#f2ca50] to-amber-600 text-[#3c2f00] flex items-center justify-center shrink-0 shadow-[0_0_18px_rgba(242,202,80,0.3)]">
+              <span className="material-symbols-outlined text-2xl font-bold">bolt</span>
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-[11px] font-mono font-bold text-[#f2ca50] flex-wrap">
+                <span>DÉFI EXPRESS</span>
+                <span aria-hidden="true">·</span>
+                <span className="tabular-nums">5 QUESTIONS · 12s / QUESTION</span>
+                <span aria-hidden="true">·</span>
+                <span className="text-emerald-400">JUSQU&apos;À +75 XP BONUS</span>
+              </div>
+              <h2 className="font-serif font-bold text-base sm:text-lg text-[#dce2f8] leading-snug mt-0.5">
+                Sprint Chrono Multi-Compétences
+              </h2>
+              <p className="text-xs text-[#d0c5af]/85 leading-relaxed">
+                Enchaînez 5 questions inédites contre la montre pour accumuler des points bonus d&apos;XP.
+              </p>
+            </div>
+          </div>
 
-        <div className="flex items-center justify-between gap-3 mt-2">
-          <p className="text-sm text-[#d0c5af]/80 max-w-2xl leading-relaxed">
-            Parcourez également la bibliothèque complète des 21 mini-jeux interactifs ci-dessous :
-          </p>
-        </div>
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 shrink-0">
+            <div
+              role="group"
+              aria-label="Niveau CECRL du Défi Express"
+              className="inline-flex items-center gap-1 p-1 rounded-xl bg-[#0c1322] border border-[#232a3a]"
+            >
+              {(['A2', 'B1', 'B2', 'C1'] as CEFRLevel[]).map((lvl) => (
+                <button
+                  key={lvl}
+                  type="button"
+                  onClick={() => {
+                    sfx.playPop();
+                    setExpressLevel(lvl);
+                  }}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold transition-colors cursor-pointer ${
+                    expressLevel === lvl
+                      ? 'bg-[#f2ca50] text-[#3c2f00]'
+                      : 'text-[#d0c5af] hover:text-[#dce2f8]'
+                  }`}
+                >
+                  {lvl}
+                </button>
+              ))}
+            </div>
 
-        {/* Filter Chips */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 mt-3 no-scrollbar">
-          {[
-            { id: 'all', label: 'Tous (21)', icon: 'apps' },
-            { id: 'vocabulaire', label: 'Vocabulaire', icon: 'extension' },
-            { id: 'verbes', label: 'Verbes Irréguliers', icon: 'sports_martial_arts' },
-            { id: 'traduction', label: 'Traduction Express', icon: 'bolt' },
-            { id: 'duolingo', label: 'Style Duolingo', icon: 'reorder' },
-            { id: 'audio', label: 'Écoute & Prononciation', icon: 'headphones' },
-            { id: 'defi', label: 'Boss Battle & Math', icon: 'military_tech' }
-          ].map((tab) => (
             <button
-              key={tab.id}
               type="button"
               onClick={() => {
                 sfx.playPop();
-                setSelectedFilter(tab.id);
+                setShowDefiExpress(true);
               }}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap flex items-center gap-1.5 transition-all shrink-0 ${
-                selectedFilter === tab.id
-                  ? 'bg-[#f2ca50] text-[#3c2f00] shadow-[0_0_12px_rgba(242,202,80,0.3)] font-bold'
-                  : 'bg-[#191f2f]/80 text-[#d0c5af] hover:bg-[#232a3a] border border-[#232a3a]'
-              }`}
+              className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl bg-[#f2ca50] hover:bg-[#ffe088] text-[#3c2f00] font-black text-xs uppercase tracking-wider shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition-all whitespace-nowrap"
             >
-              <span className="material-symbols-outlined text-[16px]">{tab.icon}</span>
-              <span>{tab.label}</span>
+              <span className="material-symbols-outlined text-base">bolt</span>
+              <span>Lancer Défi Express</span>
             </button>
-          ))}
+          </div>
+        </section>
+
+        {/* SÉLECTEUR DE PRÉSENTATION : PLAN URBAIN (CITY MAP) · GRILLE · DECK ÉVENTAIL */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-4 rounded-2xl bg-[#151b2b] border border-[#232a3a] mb-5">
+          <div className="flex flex-col gap-0.5">
+            <h2 className="font-serif font-bold text-base sm:text-lg text-[#dce2f8]">
+              Les {TWENTY_GAMES_METADATA.length} Jeux d&apos;Apprentissage
+            </h2>
+            <p className="text-xs text-[#99907c]">
+              Choisissez votre mode d&apos;exploration : carte urbaine, grille éditoriale ou deck interactif.
+            </p>
+          </div>
+
+          <div
+            role="tablist"
+            aria-label="Mode de présentation des jeux"
+            className="inline-flex items-center gap-1 p-1 rounded-xl bg-[#0c1322] border border-[#232a3a] self-start sm:self-auto"
+          >
+            {[
+              { id: 'map' as const, label: 'Plan Urbain', icon: 'map' },
+              { id: 'grid' as const, label: 'Grille', icon: 'grid_view' },
+              { id: 'deck' as const, label: 'Deck Éventail', icon: 'style' }
+            ].map((mode) => {
+              const active = viewMode === mode.id;
+              return (
+                <button
+                  key={mode.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => {
+                    sfx.playPop();
+                    setViewMode(mode.id);
+                  }}
+                  className={`px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 flex items-center gap-1.5 transition-colors cursor-pointer ${
+                    active
+                      ? 'bg-[#f2ca50] text-[#3c2f00] font-bold shadow-sm'
+                      : 'text-[#d0c5af] hover:text-[#dce2f8]'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-sm">{mode.icon}</span>
+                  <span>{mode.label}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
+
+        {/* PRÉSENTATION 1 : CITY MAP VIEW (PLAN URBAIN INTERACTIF DES JEUX) */}
+        {viewMode === 'map' && (
+          <GamesCityMapView
+            games={TWENTY_GAMES_METADATA}
+            progression={progression}
+            playerLevel={levelInfo.level}
+            isGameUnlocked={isGameUnlocked}
+            onSelectGame={handleLaunchGame}
+            onShowHowToPlay={(game) => {
+              sfx.playPop();
+              setHowToPlayModal(game);
+            }}
+            onLockedGameClick={(game) => {
+              sfx.playWrong();
+              setLockedGamePrompt(game);
+            }}
+          />
+        )}
+
+        {/* PRÉSENTATION 2 : DECK SUPERPOSÉ / ÉVENTAIL INTERACTIF */}
+        {viewMode === 'deck' && (
+          <StackedGamesShowcase
+            games={TWENTY_GAMES_METADATA}
+            isGameUnlocked={isGameUnlocked}
+            onSelectGame={handleLaunchGame}
+            progression={progression}
+          />
+        )}
+
+        {/* PRÉSENTATION 3 : GRILLE ÉDITORIALE DES JEUX AVEC RECHERCHE & FILTRES */}
+        {viewMode === 'grid' && (
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <div className="relative flex-1">
+                <span className="material-symbols-outlined text-base text-[#99907c] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none">
+                  search
+                </span>
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Rechercher un jeu par nom, numéro ou compétence..."
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#151b2b] border border-[#232a3a] focus:border-[#f2ca50] text-xs sm:text-sm text-[#dce2f8] placeholder:text-[#99907c] focus:outline-none"
+                />
+              </div>
+
+              <span className="text-xs font-mono tabular-nums text-[#99907c] px-1 shrink-0">
+                {filteredGames.length} / {TWENTY_GAMES_METADATA.length} affichés
+              </span>
+            </div>
+
+            {/* Filter Chips */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+              {[
+                { id: 'all', label: `Tous (${TWENTY_GAMES_METADATA.length})`, icon: 'apps' },
+                { id: 'vocabulaire', label: 'Vocabulaire', icon: 'extension' },
+                { id: 'verbes', label: 'Verbes Irréguliers', icon: 'sports_martial_arts' },
+                { id: 'traduction', label: 'Traduction Express', icon: 'bolt' },
+                { id: 'duolingo', label: 'Style Duolingo', icon: 'reorder' },
+                { id: 'audio', label: 'Écoute & Prononciation', icon: 'headphones' },
+                { id: 'defi', label: 'Boss Battle & Math', icon: 'military_tech' }
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => {
+                    sfx.playPop();
+                    setSelectedFilter(tab.id);
+                  }}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap flex items-center gap-1.5 transition-all shrink-0 cursor-pointer ${
+                    selectedFilter === tab.id
+                      ? 'bg-[#f2ca50] text-[#3c2f00] shadow-[0_0_12px_rgba(242,202,80,0.3)] font-bold'
+                      : 'bg-[#191f2f]/80 text-[#d0c5af] hover:bg-[#232a3a] border border-[#232a3a]'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[16px]">{tab.icon}</span>
+                  <span>{tab.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Grid of the 20 Mini-Games */}
+      {/* Grid of the Mini-Games (visible in Grid View Mode) */}
+      {viewMode === 'grid' && (
       <div className="max-w-5xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {filteredGames.map((game) => {
           const unlocked = isGameUnlocked(game);
@@ -628,10 +787,10 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({
               {/* COUCHE GRISE AVEC CADENAS SI VERROUILLÉ */}
               {!unlocked && (
                 <div className="absolute inset-0 bg-[#070b14]/85 backdrop-blur-[2px] z-10 flex flex-col items-center justify-between p-4 text-center">
-                  <div className="w-full flex items-center justify-between text-[10px] font-mono font-bold text-gray-400">
+                  <div className="w-full flex items-center justify-between text-[10px] font-mono tabular-nums font-bold text-gray-400">
                     <span>JEU #{game.number.toString().padStart(2, '0')}</span>
                     <span className="px-2 py-0.5 rounded-md bg-stone-800 border border-stone-700 text-stone-300">
-                      🔒 Verrouillé
+                      Verrouillé
                     </span>
                   </div>
 
@@ -649,12 +808,12 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({
                     <div className="space-y-1 my-1">
                       {lockDetails?.missingSeq && (
                         <div className="px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] font-semibold">
-                          🔒 Requis : Terminer Jeu #{game.number - 1}
+                          Requis : Terminer Jeu #{game.number - 1}
                         </div>
                       )}
                       {lockDetails?.missingLvl && (
                         <div className="px-2.5 py-1 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-300 text-[11px] font-semibold">
-                          🔒 Requis : Niveau {game.requiredLevel} (Actuel: {levelInfo.level})
+                          Requis : Niveau {game.requiredLevel} (Actuel: {levelInfo.level})
                         </div>
                       )}
                     </div>
@@ -676,17 +835,13 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({
                         <span className="material-symbols-outlined text-2xl">{game.icon}</span>
                       </div>
                       <div className="flex flex-col">
-                        <span className="text-[10px] font-mono text-[#f2ca50] font-bold">
+                        <span className="text-[10px] font-mono tabular-nums text-[#f2ca50] font-bold">
                           JEU #{game.number.toString().padStart(2, '0')}
                         </span>
-                        <div className="flex items-center gap-1 mt-0.5">
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${game.badgeColor} w-fit`}>
-                            {game.difficulty}
-                          </span>
+                        <div className="flex items-center gap-1.5 mt-0.5 text-[11px] font-mono">
+                          <span className="text-[#d0c5af] font-semibold">{game.difficulty}</span>
                           {isCompleted && (
-                            <span className="px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[9px] font-bold border border-emerald-500/40">
-                              ✓ Réussi
-                            </span>
+                            <span className="text-emerald-400 font-bold">· Réussi</span>
                           )}
                         </div>
                       </div>
@@ -699,7 +854,7 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({
                         sfx.playPop();
                         setHowToPlayModal(game);
                       }}
-                      className="p-1.5 rounded-lg text-[#99907c] hover:text-[#f2ca50] hover:bg-white/5 transition-colors"
+                      className="p-1.5 rounded-lg text-[#99907c] hover:text-[#f2ca50] hover:bg-white/5 transition-colors cursor-pointer"
                       title="Comment jouer (Règles)"
                     >
                       <span className="material-symbols-outlined text-[20px]">help_outline</span>
@@ -707,26 +862,12 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({
                   </div>
 
                   {/* Title & subtitle */}
-                  <h3
-                    className={`font-serif font-bold text-base transition-colors leading-snug ${
-                      game.id === 'speed-match'
-                        ? 'text-orange-500 font-black text-lg'
-                        : 'text-[#dce2f8] group-hover:text-[#f2ca50]'
-                    }`}
-                  >
+                  <h3 className="font-serif font-bold text-base text-[#dce2f8] group-hover:text-[#f2ca50] transition-colors leading-snug">
                     {game.title}
                   </h3>
-                  {game.id === 'speed-match' ? (
-                    <div className="mt-1 mb-2">
-                      <span className="inline-block px-2.5 py-0.5 rounded-lg bg-gradient-to-r from-amber-300 via-amber-400 to-yellow-400 text-black text-[11px] font-black tracking-tight shadow-sm border border-amber-200">
-                        Traduction Éclair • 3 Niveaux
-                      </span>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-[#f2ca50]/90 font-medium mt-0.5 mb-2">
-                      {game.subtitle}
-                    </p>
-                  )}
+                  <p className="text-xs text-[#f2ca50]/90 font-medium mt-0.5 mb-2">
+                    {game.subtitle}
+                  </p>
                   <p className="text-[11px] text-[#d0c5af]/80 line-clamp-2 leading-relaxed">
                     {game.howToPlay.goal}
                   </p>
@@ -734,7 +875,7 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({
 
                 {/* Bottom Actions */}
                 <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between">
-                  <span className="text-[11px] font-mono font-bold text-amber-300 flex items-center gap-1">
+                  <span className="text-[11px] font-mono tabular-nums font-bold text-amber-300 flex items-center gap-1">
                     <span className="material-symbols-outlined text-sm">stars</span>
                     +{game.xpReward} XP
                   </span>
@@ -753,7 +894,25 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({
             </div>
           );
         })}
+        {filteredGames.length === 0 && (
+          <div className="col-span-full p-8 rounded-2xl bg-[#151b2b] border border-[#232a3a] text-center space-y-3">
+            <p className="font-serif text-base font-bold text-[#dce2f8]">
+              Aucun jeu ne correspond à « {searchQuery} »
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery('');
+                setSelectedFilter('all');
+              }}
+              className="px-4 py-2 rounded-xl bg-[#f2ca50] hover:bg-[#ffe088] text-[#3c2f00] text-xs font-bold cursor-pointer"
+            >
+              Afficher les {TWENTY_GAMES_METADATA.length} jeux
+            </button>
+          </div>
+        )}
       </div>
+      )}
 
       {/* MODAL COMMENT JOUER (How to play) */}
       {howToPlayModal && (
@@ -1284,6 +1443,40 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({
           </div>
         </div>
       )}
+
+      {/* MODAL DÉFI EXPRESS (5 QUESTIONS CHRONO BONUS XP) */}
+      <DefiExpressModal
+        isOpen={showDefiExpress}
+        onClose={() => setShowDefiExpress(false)}
+        defaultLevel={expressLevel}
+        playerLevel={levelInfo.level}
+        onBonusXpEarned={(bonusXp, arcadePts = 0) => {
+          setSessionScore((prev) => prev + bonusXp);
+          if (arcadePts > 0) {
+            setStreak((prev) => prev + 1);
+            const nextPoints = progression.points + arcadePts;
+            const nextLevel = calculatePlayerLevel(nextPoints).level;
+            const nextState: ArcadeProgressionState = {
+              ...progression,
+              points: nextPoints,
+              level: nextLevel
+            };
+            setProgression(nextState);
+            saveStoredArcadeProgression(nextState);
+          }
+
+          setPointsToast({
+            text: `+${bonusXp} XP Bonus Défi Express${arcadePts > 0 ? ` · +${arcadePts} pts` : ''}`,
+            isGain: true
+          });
+          if (pointsToastTimerRef.current) clearTimeout(pointsToastTimerRef.current);
+          pointsToastTimerRef.current = setTimeout(() => setPointsToast(null), 3500);
+
+          if (onXpEarned) {
+            onXpEarned(bonusXp);
+          }
+        }}
+      />
     </div>
   );
 };

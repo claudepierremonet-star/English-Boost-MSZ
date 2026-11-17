@@ -164,6 +164,8 @@ export const DEFAULT_CITY_MAP_PROGRESSION: CityMapProgressionState = {
   chapterStars: {},
   totalStars: 0,
   lastPlayedLevel: 1,
+  seenQuestionHashes: [],
+  seenAnswerHashes: [],
   updatedAt: new Date().toISOString()
 };
 
@@ -235,6 +237,27 @@ export function mergeCityMapProgression(
 
   const totalStars = Object.values(chapterStars).reduce((acc, s) => acc + (Number(s) || 0), 0);
 
+  const mergeBoundedHashes = (a?: string[], b?: string[]): string[] => {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const h of [...(a || []), ...(b || [])]) {
+      if (typeof h === 'string' && h.length > 0 && !seen.has(h)) {
+        seen.add(h);
+        out.push(h);
+      }
+    }
+    return out.slice(-2500);
+  };
+
+  const seenQuestionHashes = mergeBoundedHashes(
+    remote?.seenQuestionHashes,
+    local?.seenQuestionHashes
+  );
+  const seenAnswerHashes = mergeBoundedHashes(
+    remote?.seenAnswerHashes,
+    local?.seenAnswerHashes
+  );
+
   return {
     unlockedLevel,
     completedChaptersByLevel,
@@ -246,6 +269,8 @@ export function mergeCityMapProgression(
       unlockedLevel,
       Math.max(1, local?.lastPlayedLevel || remote?.lastPlayedLevel || unlockedLevel)
     ),
+    seenQuestionHashes,
+    seenAnswerHashes,
     updatedAt: new Date().toISOString()
   };
 }
@@ -650,7 +675,7 @@ export function subscribeToAuthState(callback: (profile: UserProfile | null) => 
             const mergedFavs = Array.from(new Set([...localFavs, ...firestoreFavs])).slice(0, 200);
             data.favoriteLessonIds = mergedFavs;
 
-            // Merge 100-level city quiz map progression
+            // Merge 600-level city quiz map progression & anti-repetition seen hashes
             const mergedCityMap = mergeCityMapProgression(
               currentLocal.cityMapProgression,
               data.cityMapProgression
@@ -658,10 +683,14 @@ export function subscribeToAuthState(callback: (profile: UserProfile | null) => 
             const remoteCityUnlocked = data.cityMapProgression?.unlockedLevel || 1;
             const remoteCityStars = data.cityMapProgression?.totalStars || 0;
             const remoteCityConquered = (data.cityMapProgression?.conqueredLevels || []).length;
+            const remoteSeenQ = (data.cityMapProgression?.seenQuestionHashes || []).length;
+            const remoteSeenA = (data.cityMapProgression?.seenAnswerHashes || []).length;
             const cityNeedsSync =
               mergedCityMap.unlockedLevel > remoteCityUnlocked ||
               mergedCityMap.totalStars > remoteCityStars ||
-              mergedCityMap.conqueredLevels.length > remoteCityConquered;
+              mergedCityMap.conqueredLevels.length > remoteCityConquered ||
+              (mergedCityMap.seenQuestionHashes?.length || 0) > remoteSeenQ ||
+              (mergedCityMap.seenAnswerHashes?.length || 0) > remoteSeenA;
             data.cityMapProgression = mergedCityMap;
 
             saveLocalUserProfile(data);

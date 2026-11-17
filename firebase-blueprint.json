@@ -46,7 +46,7 @@
         },
         "cityMapProgression": {
           "type": "object",
-          "description": "100-level City Map quiz progression (unlockedLevel 1-100, completedChaptersByLevel 1-10, conqueredLevels, stars)"
+          "description": "600-level City Map quiz progression (unlockedLevel 1-600, completedChaptersByLevel 1-10, conqueredLevels, stars, bounded seenQuestionHashes & seenAnswerHashes anti-repetition sets)"
         },
         "favoriteLessonIds": {
           "type": "array",

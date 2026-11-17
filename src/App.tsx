@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Header } from './components/Header';
 import { BottomNav, type TabKey } from './components/BottomNav';
 import { HeroSection } from './components/HeroSection';
@@ -337,6 +337,8 @@ export default function App() {
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
         onOpenAccentStudio={() => setIsAccentStudioOpen(true)}
         onOpenShop={() => setIsShopModalOpen(true)}
+        cityMapProgression={cityMapProgression}
+        onNavigateCityMap={() => setActiveTab('carte')}
         onOpenLevelCelebration={() => {
           const currentLvl = calculateLevel(user.stats?.totalXp || 0);
           setLevelUpData({
@@ -353,7 +355,7 @@ export default function App() {
       {!isOnline && (
         <div
           className="fixed left-0 right-0 z-30 bg-amber-950/95 border-b border-amber-500/50 px-4 py-2 text-center text-xs text-amber-200 font-medium flex items-center justify-center gap-2 backdrop-blur-md shadow-lg animate-fadeIn"
-          style={{ top: 'calc(max(env(safe-area-inset-top, 0px), 10px) + 64px)' }}
+          style={{ top: 'calc(max(env(safe-area-inset-top, 0px), 10px) + 90px)' }}
         >
           <span className="material-symbols-outlined text-sm text-amber-400">wifi_off</span>
           <span>
@@ -366,7 +368,7 @@ export default function App() {
       {isOnline && pendingCount > 0 && (
         <div
           className="fixed left-0 right-0 z-30 bg-[#191f2f]/95 border-b border-[#f2ca50]/50 px-4 py-2 text-center text-xs text-[#dce2f8] font-medium flex items-center justify-center gap-3 backdrop-blur-md shadow-lg animate-fadeIn"
-          style={{ top: 'calc(max(env(safe-area-inset-top, 0px), 10px) + 64px)' }}
+          style={{ top: 'calc(max(env(safe-area-inset-top, 0px), 10px) + 90px)' }}
         >
           <span className="material-symbols-outlined text-sm text-[#f2ca50] animate-pulse">cloud_upload</span>
           <span>
@@ -386,7 +388,7 @@ export default function App() {
       <div
         className="w-full z-30 transition-all"
         style={{
-          paddingTop: `calc(max(env(safe-area-inset-top, 0px), 10px) + ${!isOnline || (isOnline && pendingCount > 0) ? '104px' : '68px'})`
+          paddingTop: `calc(max(env(safe-area-inset-top, 0px), 10px) + ${!isOnline || (isOnline && pendingCount > 0) ? '130px' : '92px'})`
         }}
       >
         <DiscreteWeatherBar />
@@ -726,6 +728,16 @@ export default function App() {
               onSelectLesson={(lesson) => setActiveSelectedLesson(lesson)}
               favoriteLessonIds={favoriteLessonIds}
               onToggleFavorite={handleToggleFavoriteLesson}
+              cityProgression={cityMapProgression}
+              playerLevel={calculateLevel(user.stats?.totalXp ?? 0)}
+              onCityXpEarned={(xp) => {
+                handleChallengeComplete(xp);
+                setUser(getLocalUserProfile());
+              }}
+              onCityProgressionUpdated={(nextState) => {
+                setCityMapProgression(nextState);
+                setUser(getLocalUserProfile());
+              }}
             />
           </div>
         )}
@@ -750,19 +762,28 @@ export default function App() {
           </div>
         )}
 
-        {activeTab === 'dashboard' && (
-          <div className="max-w-4xl mx-auto animate-fadeIn pt-2 space-y-6">
-            <DashboardView
-              user={user}
-              onResumePractice={() => setActiveTab('pratique')}
-              onUpdateStudyTarget={handleUpdateStudyTarget}
-              onOpenFlashcards={() => setIsFlashcardsOpen(true)}
-              onNavigateLeaderboard={() => setActiveTab('classement')}
-            />
-            {/* Section 'Mon historique de progression' sous le composant DashboardView */}
-            <ProgressHistorySection user={user} />
-          </div>
-        )}
+        <AnimatePresence mode="wait">
+          {activeTab === 'dashboard' && (
+            <motion.div
+              key="tab-dashboard"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+              className="max-w-4xl mx-auto pt-2 space-y-6"
+            >
+              <DashboardView
+                user={user}
+                onResumePractice={() => setActiveTab('pratique')}
+                onUpdateStudyTarget={handleUpdateStudyTarget}
+                onOpenFlashcards={() => setIsFlashcardsOpen(true)}
+                onNavigateLeaderboard={() => setActiveTab('classement')}
+              />
+              {/* Section 'Mon historique de progression' sous le composant DashboardView */}
+              <ProgressHistorySection user={user} />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {activeTab === 'pratique' && (
           <div className="max-w-4xl mx-auto animate-fadeIn pt-2">

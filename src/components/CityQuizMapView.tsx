@@ -6,16 +6,22 @@ import {
   CITY_LEVELS,
   MAX_CITY_LEVEL,
   TOTAL_CITY_CHAPTERS,
+  getBlock50ForLevel,
   getDistrictForLevel,
   getDistrictSectors,
+  getLevelBlocksOf50,
   getSectorForLevel,
   type CityDistrict,
+  type CityLevelBlock50,
   type CityLevelNode,
   type CityLevelSector
 } from '../data/cityMapData';
 import type { SchoolGrade } from '../data/curriculum';
 import { CityLevelChaptersModal } from './CityLevelChaptersModal';
 import type { CityChapterCompletionResult } from '../utils/cityMapManager';
+import { LevelGroupNavigator } from './LevelGroupNavigator';
+
+const CITY_NAV_PREFS_KEY = 'eb_msz_city_nav_prefs_v1';
 
 interface CityQuizMapViewProps {
   progression: CityMapProgressionState;
@@ -160,6 +166,43 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
   const unlockedLevel = Math.max(1, Math.min(MAX_CITY_LEVEL, progression.unlockedLevel || 1));
   const activeDistrictMeta = useMemo(() => getDistrictForLevel(unlockedLevel), [unlockedLevel]);
   const activeSectorMeta = useMemo(() => getSectorForLevel(unlockedLevel), [unlockedLevel]);
+  const activeBlock50Meta = useMemo(() => getBlock50ForLevel(unlockedLevel), [unlockedLevel]);
+  const levelBlocks50 = useMemo(() => getLevelBlocksOf50(50), []);
+
+  // Navigation mode on Plan Principal: 12 groups of 50 levels (1-50, 51-100...) OR 7 school classes
+  const [navMode, setNavMode] = useState<'blocks_50' | 'classes'>(() => {
+    try {
+      const raw = localStorage.getItem(CITY_NAV_PREFS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { navMode?: string };
+        if (parsed.navMode === 'classes' || parsed.navMode === 'blocks_50') return parsed.navMode;
+      }
+    } catch {}
+    return 'blocks_50';
+  });
+  // Which 50-level range blocks are expanded (persisted so user layout stays clean)
+  const [expandedBlocks50, setExpandedBlocks50] = useState<Record<string, boolean>>(() => {
+    try {
+      const raw = localStorage.getItem(CITY_NAV_PREFS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { expandedBlocks50?: Record<string, boolean> };
+        if (parsed.expandedBlocks50 && typeof parsed.expandedBlocks50 === 'object') {
+          return parsed.expandedBlocks50;
+        }
+      }
+    } catch {}
+    return {};
+  });
+
+  // Persist navigation preferences locally
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        CITY_NAV_PREFS_KEY,
+        JSON.stringify({ navMode, expandedBlocks50 })
+      );
+    } catch {}
+  }, [navMode, expandedBlocks50]);
 
   // Filter / Retractable Class View: default focuses ONLY the user's current active class & sector to keep canvas super clean
   const [selectedDistrict, setSelectedDistrict] = useState<'all_retractable' | SchoolGrade>(
@@ -175,7 +218,7 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
       [activeDistrictMeta.id]: activeSectorMeta.id
     })
   );
-  // Optional Global 1–600 Index Drawer for instant level-range jumping
+  // Optional Global Class & Sector Atlas Index Drawer
   const [showGlobalRangeIndex, setShowGlobalRangeIndex] = useState<boolean>(false);
 
   const [activeLevelModal, setActiveLevelModal] = useState<number | null>(null);
@@ -263,17 +306,38 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
     setExpandedDistricts((prev) => ({ ...prev, [districtId]: !prev[districtId] }));
   }, []);
 
+  // Toggle condense/expand for a 50-level range block (e.g. 1-50, 51-100)
+  const toggleBlock50Expanded = useCallback((blockId: string) => {
+    setExpandedBlocks50((prev) => ({ ...prev, [blockId]: !prev[blockId] }));
+  }, []);
+
+  const expandSingleBlock50 = useCallback((blockId: string) => {
+    setExpandedBlocks50({ [blockId]: true });
+  }, []);
+
+  const handleToggleAllBlocks50 = useCallback(
+    (expandAll: boolean) => {
+      const next: Record<string, boolean> = {};
+      for (const blk of levelBlocks50) {
+        next[blk.id] = expandAll;
+      }
+      setExpandedBlocks50(next);
+    },
+    [levelBlocks50]
+  );
+
   // Retract all classes except active one (or all when in retractable overview)
   const handleRetractAllDistricts = useCallback(() => {
     setSelectedDistrict('all_retractable');
     setExpandedDistricts({});
   }, []);
 
-  // Smooth scroll helper that guarantees target sector & class are expanded
+  // Smooth scroll helper that guarantees target sector, class, and 50-level group are expanded
   const scrollToLevelNode = useCallback(
     (targetLevel: number, options?: { isUnlock?: boolean; delayMs?: number }) => {
       const targetDistrict = getDistrictForLevel(targetLevel);
       const targetSector = getSectorForLevel(targetLevel);
+      const targetBlock50 = getBlock50ForLevel(targetLevel);
 
       setSelectedDistrict(targetDistrict.id);
       setExpandedDistricts((prev) => ({ ...prev, [targetDistrict.id]: true }));
@@ -281,6 +345,7 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
         ...prev,
         [targetDistrict.id]: targetSector.id
       }));
+      setExpandedBlocks50((prev) => ({ ...prev, [targetBlock50.id]: true }));
 
       if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
       if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
@@ -528,30 +593,30 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
           </div>
         </section>
 
-        {/* SOPHISTICATED GLOBAL INDEX DRAWER (DE QUEL NIVEAU À QUEL NIVEAU : 1..600) */}
+        {/* ATLAS PAR CLASSES & SECTEURS (6e À TERMINALE · 1..600) */}
         <AnimatePresence>
           {showGlobalRangeIndex && (
             <motion.section
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.28, ease: 'easeOut' }}
+              transition={{ duration: 0.24, ease: 'easeOut' }}
               className="overflow-hidden"
             >
               <div className="p-4 sm:p-5 rounded-3xl bg-[#151b2b] border border-[#f2ca50]/45 shadow-2xl space-y-4">
                 <div className="flex items-center justify-between gap-3 border-b border-[#232a3a] pb-3">
                   <div>
                     <h3 className="font-serif text-base sm:text-lg font-bold text-[#f2ca50]">
-                      Index des Niveaux par Classe &amp; Tranche (1 – {MAX_CITY_LEVEL})
+                      Atlas des Quartiers &amp; Secteurs (1 – {MAX_CITY_LEVEL})
                     </h3>
                     <p className="text-xs text-[#d0c5af]">
-                      Appuyez sur une plage de niveaux pour afficher directement son boulevard sans encombrer la carte.
+                      Sélectionnez directement un secteur cartographique par classe (6e à Terminale).
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => setShowGlobalRangeIndex(false)}
-                    className="w-8 h-8 rounded-lg bg-[#232a3a] text-[#d0c5af] hover:text-[#f2ca50] flex items-center justify-center shrink-0 cursor-pointer"
+                    className="w-9 h-9 rounded-xl bg-[#232a3a] text-[#d0c5af] hover:text-[#f2ca50] flex items-center justify-center shrink-0 cursor-pointer"
                     aria-label="Fermer l'index"
                   >
                     <span className="material-symbols-outlined text-base">close</span>
@@ -565,19 +630,18 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
                     return (
                       <div
                         key={dist.id}
-                        className="p-3 rounded-2xl bg-[#0c1322] border border-[#232a3a] flex flex-col gap-2"
+                        className="p-3.5 rounded-2xl bg-[#0c1322] border border-[#232a3a] flex flex-col gap-2.5"
                       >
                         <div className="flex items-center justify-between gap-2 text-xs">
                           <div className="flex items-center gap-2">
                             <span
-                              className="w-2.5 h-2.5 rounded-full shrink-0"
-                              style={{ backgroundColor: dist.accentHex }}
-                            />
-                            <strong className="text-[#dce2f8] font-serif text-sm">
+                              className="font-serif text-sm font-bold"
+                              style={{ color: dist.accentHex }}
+                            >
                               {dist.classLabel}
-                            </strong>
-                            <span className="text-[#99907c]">·</span>
-                            <span className="text-[#d0c5af]">{dist.name}</span>
+                            </span>
+                            <span className="text-[#99907c]" aria-hidden="true">·</span>
+                            <span className="text-[#dce2f8] font-medium">{dist.name}</span>
                           </div>
                           <span className="font-mono tabular-nums text-[11px] text-[#d4c78f]">
                             {dist.badgeText}
@@ -673,71 +737,152 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
           )}
         </AnimatePresence>
 
-        {/* CLASS DISTRICT SELECTOR & RETRACTABLE SYNTHESIS CONTROL */}
+        {/* NAVIGATION PANEL: CONDENSABLE 50-LEVEL RANGE GROUPS & CLASS DISTRICTS */}
         <nav
-          aria-label="Sélection de classe et rétraction des quartiers"
-          className="flex items-center gap-1.5 p-1.5 rounded-2xl bg-[#151b2b] border border-[#232a3a] overflow-x-auto no-scrollbar"
+          aria-label="Navigation par groupes de niveaux de 50 et par classes sur le Plan Principal"
+          className="flex flex-col gap-3.5 p-4 sm:p-5 rounded-2xl bg-[#151b2b] border border-[#232a3a]"
         >
-          <button
-            type="button"
-            onClick={handleRetractAllDistricts}
-            className={`px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-colors flex items-center gap-1.5 cursor-pointer ${
-              selectedDistrict === 'all_retractable'
-                ? 'bg-[#f2ca50] text-[#3c2f00] font-bold shadow-sm'
-                : 'text-[#d0c5af] hover:text-[#dce2f8] hover:bg-[#191f2f]'
-            }`}
-            title="Rétracter toutes les classes pour une vue épurée et choisir librement"
-          >
-            <span className="material-symbols-outlined text-sm">unfold_less</span>
-            <span>Classes rétractées</span>
-          </button>
-
-          {CITY_DISTRICTS.map((dist) => {
-            const isSelected = selectedDistrict === dist.id;
-            const totalInDistrict = dist.endLevel - dist.startLevel + 1;
-            let conqueredInDist = 0;
-            for (let n = dist.startLevel; n <= dist.endLevel; n++) {
-              if (conqueredSet.has(n)) conqueredInDist++;
-            }
-            const isDistrictUnlocked = unlockedLevel >= dist.startLevel;
-
-            return (
+          {/* Navigation Mode Switch Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-2.5 pb-3 border-b border-[#232a3a]/80">
+            <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-[#0c1322] border border-[#232a3a]">
               <button
-                key={dist.id}
                 type="button"
-                onClick={() => {
-                  setSelectedDistrict(dist.id);
-                  setExpandedDistricts((prev) => ({ ...prev, [dist.id]: true }));
-                }}
-                className={`px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-colors flex items-center gap-1.5 cursor-pointer ${
-                  isSelected
+                onClick={() => setNavMode('blocks_50')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 flex items-center gap-1.5 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] ${
+                  navMode === 'blocks_50'
                     ? 'bg-[#f2ca50] text-[#3c2f00] font-bold shadow-sm'
-                    : 'text-[#dce2f8] hover:bg-[#191f2f]'
+                    : 'text-[#d0c5af] hover:text-[#dce2f8]'
                 }`}
               >
-                {!isDistrictUnlocked && (
-                  <span className="material-symbols-outlined text-xs opacity-70">lock</span>
-                )}
-                <span>{dist.classLabel}</span>
-                <span
-                  className={`font-mono tabular-nums text-[10px] ${
-                    isSelected ? 'text-[#3c2f00]/85' : 'text-[#99907c]'
-                  }`}
-                >
-                  {dist.startLevel}–{dist.endLevel}
-                </span>
-                {conqueredInDist > 0 && (
-                  <span
-                    className={`font-mono tabular-nums text-[10px] font-bold ${
-                      isSelected ? 'text-[#3c2f00]' : 'text-emerald-400'
+                <span className="material-symbols-outlined text-sm">layers</span>
+                <span>Groupes de 50 (1–600)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setNavMode('classes')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 flex items-center gap-1.5 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] ${
+                  navMode === 'classes'
+                    ? 'bg-[#f2ca50] text-[#3c2f00] font-bold shadow-sm'
+                    : 'text-[#d0c5af] hover:text-[#dce2f8]'
+                }`}
+              >
+                <span className="material-symbols-outlined text-sm">account_balance</span>
+                <span>Par Classes (6e–Term.)</span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 text-xs font-mono tabular-nums text-[#d4c78f]">
+              <span>Plage active :</span>
+              <strong className="text-[#f2ca50]">{activeBlock50Meta.rangeLabel}</strong>
+              <button
+                type="button"
+                onClick={() => {
+                  setNavMode('blocks_50');
+                  expandSingleBlock50(activeBlock50Meta.id);
+                }}
+                className="ml-1 px-2.5 py-1 rounded-lg bg-[#0c1322] border border-[#232a3a] text-[#dce2f8] hover:border-[#f2ca50]/50 hover:text-[#f2ca50] font-sans font-semibold cursor-pointer transition-colors"
+                title={`Ouvrir uniquement la plage active ${activeBlock50Meta.rangeLabel}`}
+              >
+                Centrer
+              </button>
+            </div>
+          </div>
+
+          {navMode === 'classes' ? (
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+              <button
+                type="button"
+                onClick={handleRetractAllDistricts}
+                className={`px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-colors flex items-center gap-1.5 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] ${
+                  selectedDistrict === 'all_retractable'
+                    ? 'bg-[#f2ca50] text-[#3c2f00] font-bold shadow-sm'
+                    : 'text-[#d0c5af] hover:text-[#dce2f8] hover:bg-[#191f2f]'
+                }`}
+                title="Rétracter toutes les classes pour une vue épurée et choisir librement"
+              >
+                <span className="material-symbols-outlined text-sm">unfold_less</span>
+                <span>Classes rétractées</span>
+              </button>
+
+              {CITY_DISTRICTS.map((dist) => {
+                const isSelected = selectedDistrict === dist.id;
+                const totalInDistrict = dist.endLevel - dist.startLevel + 1;
+                let conqueredInDist = 0;
+                for (let n = dist.startLevel; n <= dist.endLevel; n++) {
+                  if (conqueredSet.has(n)) conqueredInDist++;
+                }
+                const isDistrictUnlocked = unlockedLevel >= dist.startLevel;
+
+                return (
+                  <button
+                    key={dist.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedDistrict(dist.id);
+                      setExpandedDistricts((prev) => ({ ...prev, [dist.id]: true }));
+                    }}
+                    className={`px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-colors flex items-center gap-1.5 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] ${
+                      isSelected
+                        ? 'bg-[#f2ca50] text-[#3c2f00] font-bold shadow-sm'
+                        : 'text-[#dce2f8] hover:bg-[#191f2f]'
                     }`}
                   >
-                    ({conqueredInDist}/{totalInDistrict})
-                  </span>
-                )}
-              </button>
-            );
-          })}
+                    {!isDistrictUnlocked && (
+                      <span className="material-symbols-outlined text-xs opacity-70">lock</span>
+                    )}
+                    <span>{dist.classLabel}</span>
+                    <span
+                      className={`font-mono tabular-nums text-[10px] ${
+                        isSelected ? 'text-[#3c2f00]/85' : 'text-[#99907c]'
+                      }`}
+                    >
+                      {dist.startLevel}–{dist.endLevel}
+                    </span>
+                    {conqueredInDist > 0 && (
+                      <span
+                        className={`font-mono tabular-nums text-[10px] font-bold ${
+                          isSelected ? 'text-[#3c2f00]' : 'text-emerald-400'
+                        }`}
+                      >
+                        ({conqueredInDist}/{totalInDistrict})
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <LevelGroupNavigator
+              blocks={levelBlocks50}
+              expandedBlocks={expandedBlocks50}
+              onToggleBlock={toggleBlock50Expanded}
+              onExpandSingleBlock={expandSingleBlock50}
+              onSetAllBlocks={handleToggleAllBlocks50}
+              unlockedLevel={unlockedLevel}
+              conqueredSet={conqueredSet}
+              completedChaptersByLevel={progression.completedChaptersByLevel || {}}
+              activeViewingSectorId={
+                selectedDistrict !== 'all_retractable'
+                  ? selectedSectorByDistrict[selectedDistrict] ||
+                    getSectorForLevel(unlockedLevel).id
+                  : undefined
+              }
+              onSelectSector={(sec) => {
+                const dist = getDistrictForLevel(sec.startLevel);
+                selectDistrictAndSector(dist.id, sec.id, true);
+              }}
+              onSelectLevel={(lvl) => {
+                if (lvl.levelNumber > unlockedLevel) {
+                  setLockedPromptLevel(lvl.levelNumber);
+                } else {
+                  setLockedPromptLevel(null);
+                }
+                scrollToLevelNode(lvl.levelNumber, { delayMs: 80 });
+              }}
+              onPlayLevelDirect={(lvl) => handleOpenLevel(lvl)}
+            />
+          )}
         </nav>
 
         {/* LOCKED LEVEL EXPLANATION NOTICE */}
