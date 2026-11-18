@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { DICTATION_ITEMS, type DictationItem } from '../data/curriculum';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { DICTATION_ITEMS, shuffleArray, type DictationItem } from '../data/curriculum';
 import { THEMES_500, GRADES_500 } from '../data/spacedRepetition500';
 import { recordAttempt } from '../firebase/client';
 import type { CEFRLevel } from '../firebase/types';
@@ -13,13 +14,17 @@ interface DictationModalProps {
   currentLevel: CEFRLevel;
   onClose: () => void;
   onAttemptRecorded?: () => void;
+  initialFocusMode?: boolean;
 }
 
 export const DictationModal: React.FC<DictationModalProps> = ({
   currentLevel,
   onClose,
-  onAttemptRecorded
+  onAttemptRecorded,
+  initialFocusMode = false
 }) => {
+  const shouldReduceMotion = useReducedMotion();
+
   // Navigation & Filtering across 500+ items
   const [selectedGrade, setSelectedGrade] = useState<string>('all');
   const [selectedTheme, setSelectedTheme] = useState<string>('all');
@@ -30,6 +35,9 @@ export const DictationModal: React.FC<DictationModalProps> = ({
   // Card Flip State: Recto (Dictation & Audio) vs Verso (Definitions, Etymology, Collocations)
   const [isFlipped, setIsFlipped] = useState<boolean>(false);
   const [dictationTargetMode, setDictationTargetMode] = useState<'sentence' | 'word'>('sentence');
+
+  // Focus Immersion Mode (hides non-essential chrome during paced dictation)
+  const [isFocusMode, setIsFocusMode] = useState<boolean>(initialFocusMode);
 
   // Audio Playback states
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
@@ -53,6 +61,7 @@ export const DictationModal: React.FC<DictationModalProps> = ({
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
   const isScrollingOrDraggingRef = useRef<boolean>(false);
   const versoScrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -143,6 +152,49 @@ export const DictationModal: React.FC<DictationModalProps> = ({
     };
   }, []);
 
+  const toggleFocusMode = useCallback(() => {
+    setIsFocusMode((prev) => {
+      const next = !prev;
+      if (next) {
+        setIsFlipped(false);
+        setShowJumper(false);
+        requestAnimationFrame(() => {
+          textareaRef.current?.focus();
+        });
+        showToast('Mode Focus activé • Immersion dictée cadencée');
+      } else {
+        showToast('Mode Standard restauré');
+      }
+      return next;
+    });
+  }, [showToast]);
+
+  // Keyboard shortcuts for Focus mode (F outside inputs, Alt+F anywhere, Escape to exit Focus first)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isEditing =
+        target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.isContentEditable;
+
+      if (e.key === 'Escape') {
+        if (isFocusMode) {
+          e.preventDefault();
+          setIsFocusMode(false);
+          showToast('Mode Standard restauré');
+        }
+        return;
+      }
+
+      if ((e.key === 'f' || e.key === 'F') && (!isEditing || e.altKey)) {
+        e.preventDefault();
+        toggleFocusMode();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFocusMode, toggleFocusMode, showToast]);
+
   // Card Navigation
   const handleNextItem = useCallback(() => {
     setIsFlipped(false);
@@ -170,11 +222,7 @@ export const DictationModal: React.FC<DictationModalProps> = ({
 
   const handleShuffle = () => {
     if (filteredItems.length <= 1) return;
-    const indices = Array.from({ length: filteredItems.length }, (_, i) => i);
-    for (let i = indices.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [indices[i], indices[j]] = [indices[j], indices[i]];
-    }
+    const indices = shuffleArray(Array.from({ length: filteredItems.length }, (_, i) => i));
     setShuffledOrder(indices);
     setCurrentIndex(0);
     setIsFlipped(false);
@@ -386,75 +434,144 @@ export const DictationModal: React.FC<DictationModalProps> = ({
   const wordCount = userText.trim().length === 0 ? 0 : userText.trim().split(/\s+/).length;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#0c1322] flex flex-col pt-safe pb-safe animate-fadeIn select-none">
+    <div
+      className={`fixed inset-0 z-50 overflow-y-auto flex flex-col pt-safe pb-safe transition-colors duration-300 select-none ${
+        isFocusMode ? 'bg-[#050913]' : 'bg-[#0c1322]'
+      }`}
+    >
       {/* Toast Alert */}
-      {toastMessage && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-[#191f2f] text-[#f2ca50] border border-[#f2ca50]/40 px-4 py-2 rounded-xl text-xs font-semibold shadow-2xl animate-bounce flex items-center gap-2">
-          <span className="material-symbols-outlined text-sm">info</span>
-          <span>{toastMessage}</span>
-        </div>
-      )}
-
-      {/* Top Studio Header with iPhone safe area clearance */}
-      <header
-        className="sticky top-0 z-30 px-4 sm:px-6 py-3 bg-[#0c1322]/95 backdrop-blur-xl border-b border-[#232a3a] flex items-center justify-between"
-        style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 20px)' }}
-      >
-        <div className="flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-10 h-10 rounded-full flex items-center justify-center text-[#dce2f8] hover:text-[#f2ca50] hover:bg-[#191f2f] transition-all"
-            aria-label="Fermer la dictée"
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.18 }}
+            className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-[#191f2f] text-[#f2ca50] border border-[#f2ca50]/40 px-4 py-2 rounded-xl text-xs font-semibold shadow-2xl flex items-center gap-2 whitespace-nowrap"
           >
-            <span className="material-symbols-outlined text-xl">arrow_back_ios_new</span>
-          </button>
-          <div className="flex flex-col">
-            <h1 className="font-serif text-lg font-bold text-[#dce2f8] leading-tight flex items-center gap-2">
-              Dictation Engine
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#f2ca50]/15 text-[#f2ca50] font-mono border border-[#f2ca50]/30 font-bold">
-                500 Mots & Sessions
+            <span className="material-symbols-outlined text-sm">info</span>
+            <span>{toastMessage}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Top Studio Header (Standard vs Focus Immersion Bar) */}
+      {!isFocusMode ? (
+        <header
+          className="sticky top-0 z-30 px-4 sm:px-6 py-3 bg-[#0c1322]/95 backdrop-blur-xl border-b border-[#232a3a] flex items-center justify-between gap-3"
+          style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 20px)' }}
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-10 h-10 rounded-full flex items-center justify-center text-[#dce2f8] hover:text-[#f2ca50] hover:bg-[#191f2f] transition-all shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50]"
+              aria-label="Fermer la dictée"
+            >
+              <span className="material-symbols-outlined text-xl">arrow_back_ios_new</span>
+            </button>
+            <div className="flex flex-col min-w-0">
+              <h1 className="font-serif text-lg font-bold text-[#dce2f8] leading-tight flex items-center gap-2 truncate">
+                <span className="truncate">Dictation Engine</span>
+                <span className="text-[11px] text-[#f2ca50] font-mono font-semibold hidden sm:inline whitespace-nowrap">
+                  · 500 Sessions
+                </span>
+              </h1>
+              <span className="text-[11px] text-[#d4c78f]/85 truncate">
+                Deck Recto-Verso · UK &amp; US Audio · Étymologie &amp; Collocations
               </span>
-            </h1>
-            <span className="text-[10px] text-[#d4c78f] uppercase font-mono">
-              Deck Recto-Verso • UK & US Audio • Étymologie & Collocations
+            </div>
+          </div>
+
+          {/* Quick controls */}
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Quick Grade Label */}
+            <span className="hidden sm:inline px-2 py-1 text-xs font-bold text-[#f2ca50] font-mono whitespace-nowrap">
+              {item.gradeLevel ? item.gradeLevel.toUpperCase() : item.level}
+            </span>
+
+            {/* Focus Immersion Button */}
+            <button
+              type="button"
+              onClick={toggleFocusMode}
+              className="px-3 py-1.5 min-h-[40px] rounded-xl bg-[#191f2f] hover:bg-[#232a3a] border border-[#f2ca50]/35 hover:border-[#f2ca50] text-[#f2ca50] text-xs font-semibold flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50]"
+              title="Activer le mode Focus sans distraction pour la dictée cadencée (Touche F)"
+              aria-pressed={isFocusMode}
+            >
+              <span className="material-symbols-outlined text-base">fullscreen</span>
+              <span>Focus</span>
+            </button>
+
+            {/* Toggle filter bar */}
+            <button
+              type="button"
+              onClick={() => setShowFilters(!showFilters)}
+              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors border shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] ${
+                showFilters
+                  ? 'bg-[#f2ca50] text-[#3c2f00] border-[#f2ca50]'
+                  : 'bg-[#191f2f] text-[#d0c5af] border-[#232a3a]'
+              }`}
+              title="Afficher/masquer les filtres thématiques et scolaires"
+              aria-label="Afficher ou masquer les filtres"
+            >
+              <span className="material-symbols-outlined text-base">filter_list</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-10 h-10 rounded-full bg-[#191f2f] flex items-center justify-center text-[#d0c5af] hover:text-[#f2ca50] shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50]"
+              aria-label="Fermer"
+            >
+              <span className="material-symbols-outlined text-base">close</span>
+            </button>
+          </div>
+        </header>
+      ) : (
+        /* Minimal Focus Mode Top Bar */
+        <header
+          className="sticky top-0 z-30 px-4 sm:px-6 py-2.5 bg-[#050913]/90 backdrop-blur-xl border-b border-white/10 flex items-center justify-between gap-3"
+          style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 18px)' }}
+        >
+          <div className="flex items-center gap-2 text-xs font-mono tabular-nums text-[#d4c78f] min-w-0">
+            <span className="font-bold text-[#f2ca50] whitespace-nowrap">Mode Focus</span>
+            <span aria-hidden="true" className="text-[#99907c]">·</span>
+            <span className="whitespace-nowrap">
+              Session {safeIndex + 1} / {filteredItems.length}
+            </span>
+            <span aria-hidden="true" className="text-[#99907c] hidden sm:inline">·</span>
+            <span className="text-[#d0c5af]/85 hidden sm:inline whitespace-nowrap">
+              Cadence {item.durationLabel}
             </span>
           </div>
-        </div>
 
-        {/* Quick controls */}
-        <div className="flex items-center gap-2">
-          {/* Quick Grade Badge */}
-          <span className="px-2.5 py-1 rounded-lg bg-[#191f2f] border border-[#f2ca50]/30 text-xs font-bold text-[#f2ca50] font-mono">
-            {item.gradeLevel ? item.gradeLevel.toUpperCase() : item.level}
-          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={toggleFocusMode}
+              className="px-3.5 py-1.5 min-h-[40px] rounded-xl bg-[#151f33] hover:bg-[#f2ca50] text-[#ffe082] hover:text-[#2c2000] border border-[#f2ca50]/40 text-xs font-semibold flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50]"
+              title="Quitter le mode Focus (Échap)"
+              aria-pressed={isFocusMode}
+            >
+              <span className="material-symbols-outlined text-base">fullscreen_exit</span>
+              <span>Quitter Focus</span>
+            </button>
 
-          {/* Toggle filter bar */}
-          <button
-            type="button"
-            onClick={() => setShowFilters(!showFilters)}
-            className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors border ${
-              showFilters
-                ? 'bg-[#f2ca50] text-[#3c2f00] border-[#f2ca50]'
-                : 'bg-[#191f2f] text-[#d0c5af] border-[#232a3a]'
-            }`}
-            title="Afficher/masquer les filtres thématiques et scolaires"
-          >
-            <span className="material-symbols-outlined text-base">filter_list</span>
-          </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-10 h-10 rounded-full bg-[#151f33]/80 hover:bg-[#232a3a] text-[#d0c5af] hover:text-white flex items-center justify-center transition-colors border border-white/10 shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50]"
+              title="Fermer la dictée"
+              aria-label="Fermer la dictée"
+            >
+              <span className="material-symbols-outlined text-base">close</span>
+            </button>
+          </div>
+        </header>
+      )}
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-9 h-9 rounded-full bg-[#191f2f] flex items-center justify-center text-[#d0c5af] hover:text-[#f2ca50]"
-          >
-            <span className="material-symbols-outlined text-base">close</span>
-          </button>
-        </div>
-      </header>
-
-      {/* FILTER & SEARCH BAR SECTION (Collapsible) */}
-      {showFilters && (
+      {/* FILTER & SEARCH BAR SECTION (Hidden in Focus Mode) */}
+      {!isFocusMode && showFilters && (
         <section className="px-4 sm:px-6 py-3 bg-[#111726] border-b border-[#232a3a] flex flex-col gap-2.5 animate-fadeIn">
           {/* Search bar & quick actions */}
           <div className="flex items-center gap-2">
@@ -567,73 +684,79 @@ export const DictationModal: React.FC<DictationModalProps> = ({
       )}
 
       {/* Main Studio Body */}
-      <main className="max-w-2xl mx-auto w-full px-4 sm:px-6 py-5 flex flex-col gap-4">
-        {/* Progress & Pagination Bar */}
-        <div className="flex flex-col gap-1.5">
-          <div className="flex justify-between items-center text-xs text-[#d0c5af]">
-            <div className="flex items-center gap-2">
-              <span className="text-[#f2ca50] font-semibold font-serif">
-                {item.themeLabel || item.source}
-              </span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#232a3a] text-[#d4c78f] font-mono">
-                {item.gradeLabel || `Niveau ${item.level}`}
-              </span>
+      <main
+        className={`mx-auto w-full px-4 sm:px-6 flex flex-col gap-4 transition-all duration-300 ${
+          isFocusMode ? 'max-w-xl my-auto py-6' : 'max-w-2xl py-5'
+        }`}
+      >
+        {/* Progress & Pagination Bar (Hidden in Focus Mode) */}
+        {!isFocusMode && (
+          <div className="flex flex-col gap-1.5">
+            <div className="flex justify-between items-center text-xs text-[#d0c5af]">
+              <div className="flex items-center gap-2">
+                <span className="text-[#f2ca50] font-semibold font-serif">
+                  {item.themeLabel || item.source}
+                </span>
+                <span className="text-[11px] text-[#d4c78f] font-mono">
+                  · {item.gradeLabel || `Niveau ${item.level}`}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowJumper(!showJumper)}
+                  className="font-mono tabular-nums text-xs text-[#f2ca50] hover:underline cursor-pointer"
+                >
+                  Session {safeIndex + 1} / {filteredItems.length}
+                </button>
+              </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setShowJumper(!showJumper)}
-                className="font-mono text-xs text-[#f2ca50] hover:underline"
-              >
-                Session {safeIndex + 1} / {filteredItems.length}
-              </button>
-            </div>
-          </div>
-
-          {/* Visual Progress bar */}
-          <div className="w-full h-1.5 rounded-full bg-[#191f2f] overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-[#d4af37] to-[#f2ca50] rounded-full transition-all duration-300"
-              style={{
-                width: `${((safeIndex + 1) / Math.max(1, filteredItems.length)) * 100}%`
-              }}
-            />
-          </div>
-
-          {/* Jump to index popover */}
-          {showJumper && (
-            <div className="p-3 rounded-xl bg-[#151b2b] border border-[#f2ca50]/40 flex items-center gap-2 animate-fadeIn text-xs">
-              <span className="text-[#d0c5af]">Aller à la session :</span>
-              <input
-                key={safeIndex}
-                type="number"
-                min={1}
-                max={filteredItems.length}
-                defaultValue={safeIndex + 1}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const val = parseInt((e.target as HTMLInputElement).value, 10);
-                    if (!isNaN(val) && val >= 1 && val <= filteredItems.length) {
-                      setCurrentIndex(val - 1);
-                      setShowJumper(false);
-                      setIsFlipped(false);
-                    }
-                  }
+            {/* Visual Progress bar */}
+            <div className="w-full h-1.5 rounded-full bg-[#191f2f] overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-[#d4af37] to-[#f2ca50] rounded-full transition-all duration-300"
+                style={{
+                  width: `${((safeIndex + 1) / Math.max(1, filteredItems.length)) * 100}%`
                 }}
-                className="w-20 px-2 py-1 rounded bg-[#070e1d] text-[#f2ca50] font-mono border border-[#232a3a] outline-none"
               />
-              <span className="text-[#99907c] font-mono">/ {filteredItems.length}</span>
-              <button
-                type="button"
-                onClick={() => setShowJumper(false)}
-                className="ml-auto text-xs text-[#d0c5af] hover:text-[#f2ca50]"
-              >
-                Fermer
-              </button>
             </div>
-          )}
-        </div>
+
+            {/* Jump to index popover */}
+            {showJumper && (
+              <div className="p-3 rounded-xl bg-[#151b2b] border border-[#f2ca50]/40 flex items-center gap-2 animate-fadeIn text-xs">
+                <span className="text-[#d0c5af]">Aller à la session :</span>
+                <input
+                  key={safeIndex}
+                  type="number"
+                  min={1}
+                  max={filteredItems.length}
+                  defaultValue={safeIndex + 1}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const val = parseInt((e.target as HTMLInputElement).value, 10);
+                      if (!isNaN(val) && val >= 1 && val <= filteredItems.length) {
+                        setCurrentIndex(val - 1);
+                        setShowJumper(false);
+                        setIsFlipped(false);
+                      }
+                    }
+                  }}
+                  className="w-20 px-2 py-1 rounded bg-[#070e1d] text-[#f2ca50] font-mono border border-[#232a3a] outline-none"
+                />
+                <span className="text-[#99907c] font-mono">/ {filteredItems.length}</span>
+                <button
+                  type="button"
+                  onClick={() => setShowJumper(false)}
+                  className="ml-auto text-xs text-[#d0c5af] hover:text-[#f2ca50]"
+                >
+                  Fermer
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ========================================================================= */}
         {/* INTERACTIVE RECTO-VERSO DYNAMIC DECK CARD */}
@@ -656,81 +779,92 @@ export const DictationModal: React.FC<DictationModalProps> = ({
             {/* RECTO: DICTATION SLATE & DUAL AUDIO PLAYER */}
             {/* =================================================================== */}
             <div
-              className={`p-5 sm:p-6 rounded-2xl bg-gradient-to-br from-[#191f2f] via-[#151b2b] to-[#0c1322] border border-[#4d4635]/40 flex flex-col gap-4.5 [backface-visibility:hidden] ${
+              className={`p-5 sm:p-6 rounded-2xl bg-gradient-to-br from-[#191f2f] via-[#151b2b] to-[#0c1322] border ${
+                isFocusMode ? 'border-[#f2ca50]/35 shadow-[0_20px_60px_rgba(0,0,0,0.65)]' : 'border-[#4d4635]/40'
+              } flex flex-col gap-4.5 [backface-visibility:hidden] ${
                 isFlipped ? 'pointer-events-none' : ''
               }`}
             >
-              {/* Card Header: Term / Title and Mode Selector */}
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] uppercase font-bold text-[#f2ca50] tracking-wider">
-                      {item.gradeLabel || `Niveau ${item.level}`}
-                    </span>
-                    <span className="text-xs text-[#99907c]">•</span>
-                    <span className="text-[10px] text-[#d4c78f] uppercase font-mono">
-                      {item.themeLabel}
+              {/* Card Header & Linguistic Hints (Hidden in Focus Mode to remove visual distractions & spoilers) */}
+              {!isFocusMode && (
+                <>
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex flex-col">
+                      <div className="flex items-center gap-2 text-[11px]">
+                        <span className="uppercase font-bold text-[#f2ca50] tracking-wider">
+                          {item.gradeLabel || `Niveau ${item.level}`}
+                        </span>
+                        <span className="text-[#99907c]" aria-hidden="true">·</span>
+                        <span className="text-[#d4c78f] uppercase font-mono">
+                          {item.themeLabel}
+                        </span>
+                      </div>
+                      <h2 className="font-serif text-lg sm:text-xl font-bold text-[#dce2f8] mt-0.5">
+                        {item.targetWord || item.title}
+                      </h2>
+                    </div>
+
+                    {/* Mode Selector: Phrase Complète vs Mot Cible */}
+                    <div className="flex rounded-xl bg-[#0c1322] p-1 border border-[#232a3a]">
+                      <button
+                        type="button"
+                        onClick={() => setDictationTargetMode('sentence')}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all whitespace-nowrap ${
+                          dictationTargetMode === 'sentence'
+                            ? 'bg-[#f2ca50] text-[#3c2f00] font-bold shadow-sm'
+                            : 'text-[#d0c5af] hover:text-[#f2ca50]'
+                        }`}
+                      >
+                        Phrase
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDictationTargetMode('word')}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all whitespace-nowrap ${
+                          dictationTargetMode === 'word'
+                            ? 'bg-[#f2ca50] text-[#3c2f00] font-bold shadow-sm'
+                            : 'text-[#d0c5af] hover:text-[#f2ca50]'
+                        }`}
+                      >
+                        Mot Clé
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Phonetic Transcription & Linguistic metadata */}
+                  <div className="flex items-center gap-2 flex-wrap text-xs">
+                    {item.phonetic && (
+                      <span className="text-[#f2ca50] font-mono bg-[#070e1d] px-2.5 py-1 rounded-lg border border-[#f2ca50]/20 font-bold">
+                        {item.phonetic}
+                      </span>
+                    )}
+                    {linguisticDetails && (
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold border ${linguisticDetails.partOfSpeech.color}`}
+                      >
+                        {linguisticDetails.partOfSpeech.label}
+                      </span>
+                    )}
+                    <span className="text-[11px] text-[#d0c5af]/80 italic">
+                      Cadence {item.durationLabel}
                     </span>
                   </div>
-                  <h2 className="font-serif text-lg sm:text-xl font-bold text-[#dce2f8] mt-0.5">
-                    {item.targetWord || item.title}
-                  </h2>
-                </div>
+                </>
+              )}
 
-                {/* Mode Selector: Phrase Complète vs Mot Cible */}
-                <div className="flex rounded-xl bg-[#0c1322] p-1 border border-[#232a3a]">
-                  <button
-                    type="button"
-                    onClick={() => setDictationTargetMode('sentence')}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
-                      dictationTargetMode === 'sentence'
-                        ? 'bg-[#f2ca50] text-[#3c2f00] font-bold shadow-sm'
-                        : 'text-[#d0c5af] hover:text-[#f2ca50]'
-                    }`}
-                  >
-                    Phrase
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDictationTargetMode('word')}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
-                      dictationTargetMode === 'word'
-                        ? 'bg-[#f2ca50] text-[#3c2f00] font-bold shadow-sm'
-                        : 'text-[#d0c5af] hover:text-[#f2ca50]'
-                    }`}
-                  >
-                    Mot Clé
-                  </button>
-                </div>
-              </div>
-
-              {/* Phonetic Transcription & Linguistic pill */}
-              <div className="flex items-center gap-2 flex-wrap text-xs">
-                {item.phonetic && (
-                  <span className="text-[#f2ca50] font-mono bg-[#070e1d] px-2.5 py-1 rounded-lg border border-[#f2ca50]/20 font-bold">
-                    {item.phonetic}
-                  </span>
-                )}
-                {linguisticDetails && (
-                  <span
-                    className={`px-2 py-0.5 rounded text-[10px] font-bold border ${linguisticDetails.partOfSpeech.color}`}
-                  >
-                    {linguisticDetails.partOfSpeech.label}
-                  </span>
-                )}
-                <span className="text-[11px] text-[#d0c5af]/80 italic">
-                  Cadence {item.durationLabel}
-                </span>
-              </div>
-
-              {/* DUAL SPEAKER AUDIO BAR: British UK 🇬🇧 & American US 🇺🇸 */}
+              {/* DUAL SPEAKER AUDIO BAR: British UK & American US */}
               <div className="p-3.5 rounded-xl bg-[#0c1322]/80 border border-[#4d4635]/30 flex flex-col gap-3">
-                <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center justify-between text-xs gap-2">
                   <span className="text-[11px] text-[#99907c] uppercase font-bold tracking-wider flex items-center gap-1.5">
                     <span className="material-symbols-outlined text-sm text-[#f2ca50]">headphones</span>
-                    Écoute & Prononciation Comparative
+                    {isFocusMode ? 'Audio Dictée Cadencée' : 'Écoute & Prononciation Comparative'}
                   </span>
-                  <div className="flex items-center gap-1 text-[11px] font-mono text-[#d4c78f]">
+                  <div className="flex items-center gap-2 text-[11px] font-mono tabular-nums text-[#d4c78f] shrink-0">
+                    {isFocusMode && (
+                      <span className="text-[#d0c5af]/80">
+                        {dictationTargetMode === 'sentence' ? 'Phrase' : 'Mot clé'} ·
+                      </span>
+                    )}
                     <span>Écoutes :</span>
                     <span className="font-bold text-[#f2ca50]">{listenCount} / 6</span>
                   </div>
@@ -797,8 +931,9 @@ export const DictationModal: React.FC<DictationModalProps> = ({
 
                 <div className="p-3.5 rounded-xl bg-[#0c1322] border border-[#4d4635]/40 shadow-inner">
                   <textarea
+                    ref={textareaRef}
                     id="dictation-input"
-                    rows={dictationTargetMode === 'sentence' ? 3 : 2}
+                    rows={isFocusMode ? 4 : dictationTargetMode === 'sentence' ? 3 : 2}
                     value={userText}
                     onChange={(e) => setUserText(e.target.value)}
                     placeholder={
@@ -809,13 +944,13 @@ export const DictationModal: React.FC<DictationModalProps> = ({
                     className="w-full bg-transparent resize-none outline-none font-sans text-sm sm:text-base text-[#dce2f8] placeholder:text-[#99907c]/60 leading-relaxed"
                   />
                   <div className="flex justify-between items-center pt-2 border-t border-[#232a3a] text-xs text-[#99907c]">
-                    <span className="text-[#d4c78f] font-mono">
+                    <span className="text-[#d4c78f] font-mono tabular-nums">
                       {wordCount} mot{wordCount > 1 ? 's' : ''} saisi{wordCount > 1 ? 's' : ''}
                     </span>
                     <button
                       type="button"
                       onClick={() => setUserText('')}
-                      className="hover:text-[#ffb4ab] transition-colors flex items-center gap-1 text-[11px]"
+                      className="hover:text-[#ffb4ab] transition-colors flex items-center gap-1 text-[11px] cursor-pointer"
                     >
                       <span className="material-symbols-outlined text-sm">backspace</span> Effacer
                     </button>
@@ -888,22 +1023,35 @@ export const DictationModal: React.FC<DictationModalProps> = ({
                       ))}
                     </div>
                   </div>
+                  {/* Next Session Action directly accessible in Focus Mode */}
+                  {isFocusMode && (
+                    <button
+                      type="button"
+                      onClick={handleNextItem}
+                      className="w-full py-3 px-4 rounded-xl bg-[#f2ca50] hover:bg-[#ffe088] text-[#3c2f00] font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer"
+                    >
+                      <span>Dictée suivante</span>
+                      <span className="material-symbols-outlined text-base">arrow_forward</span>
+                    </button>
+                  )}
                 </div>
               )}
 
-              {/* FLIP CARD TRIGGER CALLOUT (RECTO ➔ VERSO) */}
-              <button
-                type="button"
-                onClick={handleCardFlip}
-                className="w-full py-3 px-4 rounded-xl bg-[#151b2b] hover:bg-[#232a3a] text-[#f2ca50] font-semibold text-xs flex items-center justify-center gap-2 border border-[#f2ca50]/30 transition-all group shadow-md"
-              >
-                <span className="material-symbols-outlined text-base group-hover:rotate-180 transition-transform duration-300">
-                  flip
-                </span>
-                <span>
-                  Toucher la carte pour afficher le VERSO (Signification, Étymologie & Collocations)
-                </span>
-              </button>
+              {/* FLIP CARD TRIGGER CALLOUT (Hidden in Focus Mode) */}
+              {!isFocusMode && (
+                <button
+                  type="button"
+                  onClick={handleCardFlip}
+                  className="w-full py-3 px-4 rounded-xl bg-[#151b2b] hover:bg-[#232a3a] text-[#f2ca50] font-semibold text-xs flex items-center justify-center gap-2 border border-[#f2ca50]/30 transition-all group shadow-md cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-base group-hover:rotate-180 transition-transform duration-300">
+                    flip
+                  </span>
+                  <span>
+                    Toucher la carte pour afficher le VERSO (Signification, Étymologie & Collocations)
+                  </span>
+                </button>
+              )}
             </div>
 
             {/* =================================================================== */}
@@ -1052,37 +1200,39 @@ export const DictationModal: React.FC<DictationModalProps> = ({
           </div>
         </div>
 
-        {/* BOTTOM GLOBAL ACTION BAR: Previous, Next, Save to Revision */}
-        <div className="flex items-center justify-between gap-3 pt-2">
-          <button
-            type="button"
-            onClick={handlePrevItem}
-            className="flex-1 py-3 px-4 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] text-[#dce2f8] font-semibold text-xs flex items-center justify-center gap-2 border border-[#232a3a] transition-all active:scale-95"
-          >
-            <span className="material-symbols-outlined text-base">arrow_back</span>
-            <span>Précédent</span>
-          </button>
+        {/* BOTTOM GLOBAL ACTION BAR (Hidden in Focus Mode) */}
+        {!isFocusMode && (
+          <div className="flex items-center justify-between gap-3 pt-2">
+            <button
+              type="button"
+              onClick={handlePrevItem}
+              className="flex-1 py-3 px-4 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] text-[#dce2f8] font-semibold text-xs flex items-center justify-center gap-2 border border-[#232a3a] transition-all active:scale-95 cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-base">arrow_back</span>
+              <span>Précédent</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={handleSaveToRevision}
-            className="py-3 px-3.5 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] text-[#f2ca50] border border-[#4d4635]/40 transition-colors shrink-0"
-            title="Enregistrer la session dans mon carnet de révision"
-          >
-            <span className="material-symbols-outlined text-base">
-              {isSavedToCloud ? 'cloud_done' : 'bookmark_add'}
-            </span>
-          </button>
+            <button
+              type="button"
+              onClick={handleSaveToRevision}
+              className="py-3 px-3.5 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] text-[#f2ca50] border border-[#4d4635]/40 transition-colors shrink-0 cursor-pointer"
+              title="Enregistrer la session dans mon carnet de révision"
+            >
+              <span className="material-symbols-outlined text-base">
+                {isSavedToCloud ? 'cloud_done' : 'bookmark_add'}
+              </span>
+            </button>
 
-          <button
-            type="button"
-            onClick={handleNextItem}
-            className="flex-1 py-3 px-4 rounded-xl bg-[#f2ca50] hover:bg-[#ffe088] text-[#3c2f00] font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-[#f2ca50]/20 transition-all active:scale-95"
-          >
-            <span>Suivant</span>
-            <span className="material-symbols-outlined text-base">arrow_forward</span>
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={handleNextItem}
+              className="flex-1 py-3 px-4 rounded-xl bg-[#f2ca50] hover:bg-[#ffe088] text-[#3c2f00] font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-[#f2ca50]/20 transition-all active:scale-95 cursor-pointer"
+            >
+              <span>Suivant</span>
+              <span className="material-symbols-outlined text-base">arrow_forward</span>
+            </button>
+          </div>
+        )}
       </main>
     </div>
   );

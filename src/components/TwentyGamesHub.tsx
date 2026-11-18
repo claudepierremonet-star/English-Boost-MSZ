@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   TWENTY_GAMES_METADATA,
@@ -4689,7 +4689,19 @@ const AudioBlitzGame: React.FC<{ onSuccess: () => void; onError: () => void; spe
   onError,
   speak
 }) => {
-  const item = AUDIO_BLITZ_ITEMS[0];
+  const item = useMemo(() => {
+    const raw = AUDIO_BLITZ_ITEMS[Math.floor(Math.random() * AUDIO_BLITZ_ITEMS.length)] || AUDIO_BLITZ_ITEMS[0];
+    const tagged = raw.options.map((text, i) => ({ text, isCorrect: i === raw.correctIndex }));
+    for (let i = tagged.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [tagged[i], tagged[j]] = [tagged[j], tagged[i]];
+    }
+    return {
+      audioText: raw.audioText,
+      options: tagged.map((o) => o.text),
+      correctIndex: Math.max(0, tagged.findIndex((o) => o.isCorrect))
+    };
+  }, []);
   const safeTimeout = useSafeTimeouts();
   const [isDone, setIsDone] = useState(false);
 

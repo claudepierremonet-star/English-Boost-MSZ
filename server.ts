@@ -8,7 +8,12 @@ import { GoogleGenAI, Type, ThinkingLevel } from '@google/genai';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PORT = Number(process.env.PORT) || 3000;
+const rawPort = Number(process.env.PORT);
+const nginxPort = Number(process.env.NGINX_PORT);
+const PORT =
+  rawPort && rawPort !== nginxPort
+    ? rawPort
+    : Number(process.env.DEFAULT_APP_PORT) || 3000;
 const MODEL_NAME = 'gemini-4-hydrogen';
 
 interface WordInsightRequestBody {
@@ -236,7 +241,11 @@ async function startServer(): Promise<void> {
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: process.env.DISABLE_HMR === 'true' ? false : undefined,
+        watch: process.env.DISABLE_HMR === 'true' ? null : undefined
+      },
       appType: 'spa'
     });
     app.use(vite.middlewares);

@@ -1,5 +1,30 @@
 import type { CEFRLevel } from '../firebase/types';
 
+/**
+ * Mélange aléatoire impartial de Fisher-Yates sans mutation du tableau d'origine.
+ * Utilise crypto.getRandomValues lorsque disponible pour une entropie maximale.
+ */
+export function shuffleArray<T>(array: readonly T[]): T[] {
+  const copy = [...array];
+  const len = copy.length;
+  if (len <= 1) return copy;
+
+  const getRandomInt = (maxExclusive: number): number => {
+    if (typeof globalThis !== 'undefined' && globalThis.crypto && typeof globalThis.crypto.getRandomValues === 'function') {
+      const buf = new Uint32Array(1);
+      globalThis.crypto.getRandomValues(buf);
+      return buf[0] % maxExclusive;
+    }
+    return Math.floor(Math.random() * maxExclusive);
+  };
+
+  for (let i = len - 1; i > 0; i--) {
+    const j = getRandomInt(i + 1);
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
 export interface HeroPreset {
   id: string;
   name: string;
@@ -447,7 +472,24 @@ export interface QuizQuestion {
   }>;
 }
 
-export const QUIZ_QUESTIONS: QuizQuestion[] = [
+const OPTION_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'] as const;
+
+export function shuffleQuizQuestion(question: QuizQuestion): QuizQuestion {
+  const shuffledOptions = shuffleArray(question.options).map((opt, idx) => ({
+    ...opt,
+    label: OPTION_LETTERS[idx] || String.fromCharCode(65 + idx)
+  }));
+  return {
+    ...question,
+    options: shuffledOptions
+  };
+}
+
+export function shuffleQuizQuestions(questions: readonly QuizQuestion[]): QuizQuestion[] {
+  return shuffleArray(questions).map(shuffleQuizQuestion);
+}
+
+const RAW_QUIZ_QUESTIONS: QuizQuestion[] = [
   {
     id: 'q-1',
     level: 'C1',
@@ -548,6 +590,8 @@ export const QUIZ_QUESTIONS: QuizQuestion[] = [
     ]
   }
 ];
+
+export const QUIZ_QUESTIONS: QuizQuestion[] = shuffleQuizQuestions(RAW_QUIZ_QUESTIONS);
 
 export interface SpeakingItem {
   id: string;
@@ -765,6 +809,56 @@ export const SCHOOL_THEMES_DATA: SchoolThemeInfo[] = CURRICULUM_200_STRUCTURE.th
 export const ALL_200_LESSONS: SchoolLesson[] = CURRICULUM_200_STRUCTURE.allLessons;
 
 /**
+ * Mélange aléatoirement les choix d'une question scolaire tout en recalculant
+ * `correct_index` pour qu'il pointe exactement vers la bonne réponse.
+ */
+export function shuffleSchoolQuizQuestion(
+  question: SchoolQuizQuestion,
+  fallbackId?: string
+): SchoolQuizQuestion {
+  const taggedOptions = (question.options || []).map((text, idx) => ({
+    text,
+    isCorrect: idx === question.correct_index
+  }));
+  const shuffledOptions = shuffleArray(taggedOptions);
+  const nextCorrectIndex = Math.max(
+    0,
+    shuffledOptions.findIndex((o) => o.isCorrect)
+  );
+  return {
+    ...question,
+    id: question.id || fallbackId || 'q',
+    options: shuffledOptions.map((o) => o.text),
+    correct_index: nextCorrectIndex
+  };
+}
+
+/**
+ * Mélange l'ordre des questions ainsi que l'ordre des réponses de chaque question.
+ */
+export function shuffleSchoolQuizQuestions(
+  questions: readonly SchoolQuizQuestion[],
+  lessonIdPrefix = 'lesson'
+): SchoolQuizQuestion[] {
+  return shuffleArray(
+    questions.map((q, origIdx) =>
+      shuffleSchoolQuizQuestion(q, `${lessonIdPrefix}-q-${origIdx}`)
+    )
+  );
+}
+
+/**
+ * Retourne une version prête pour l'affichage d'une leçon dont le quiz
+ * (questions et réponses) a été mélangé aléatoirement via `shuffleArray`.
+ */
+export function shuffleLessonContent(lesson: SchoolLesson): SchoolLesson {
+  return {
+    ...lesson,
+    quiz: shuffleSchoolQuizQuestions(lesson.quiz || [], lesson.id)
+  };
+}
+
+/**
  * Récupère le cursus complet d'un niveau scolaire donné (ex: '6e', '3e', 'terminale')
  * avec ses 10 thèmes et leurs leçons respectives.
  */
@@ -788,6 +882,13 @@ export function getLessonsForGradeAndTheme(grade: SchoolGrade, themeId?: string)
     return gradeCurriculum.themes.flatMap((tg) => tg.lessons);
   }
   return gradeCurriculum.themesMap[themeId]?.lessons || [];
+}
+
+/**
+ * Récupère les leçons filtrées par classe et thème avec contenu pédagogique mélangé aléatoirement.
+ */
+export function getShuffledLessonsForGradeAndTheme(grade: SchoolGrade, themeId?: string): SchoolLesson[] {
+  return getLessonsForGradeAndTheme(grade, themeId).map(shuffleLessonContent);
 }
 
 /**

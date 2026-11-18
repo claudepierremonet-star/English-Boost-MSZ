@@ -514,9 +514,15 @@ export const CHAPTER_TEMPLATES: CityChapterMeta[] = [
   { chapterNumber: 10, title: 'Chapitre X · Épreuve du Monument', categoryLabel: 'Conquête Finale', categoryIcon: 'emoji_events', isBossChapter: true }
 ];
 
-// Deterministic pseudo-random generator for reproducible chapters
-function seededRand(seed: number): () => number {
-  let state = (seed % 2147483647) || 1;
+// High-entropy PRNG combining optional caller nonce with runtime entropy so questions & options are genuinely randomized per session
+function createDynamicRand(seedHint: number): () => number {
+  let entropy = Math.floor(Math.random() * 2147483646) + 1;
+  if (typeof globalThis !== 'undefined' && globalThis.crypto && typeof globalThis.crypto.getRandomValues === 'function') {
+    const buf = new Uint32Array(1);
+    globalThis.crypto.getRandomValues(buf);
+    entropy = (buf[0] % 2147483646) + 1;
+  }
+  let state = ((Math.abs(Math.floor(seedHint)) ^ entropy) % 2147483647) || 1;
   if (state <= 0) state += 2147483646;
   return () => {
     state = (state * 16807) % 2147483647;
@@ -611,6 +617,16 @@ function getOrderedGradeProximity(targetGrade: SchoolGrade): SchoolGrade[] {
   });
 }
 
+function isShapeCompatibleDistractor(targetAns: string, candAns: string, maxLenDiff: number): boolean {
+  const tLen = targetAns.length;
+  const cLen = candAns.length;
+  if (Math.abs(tLen - cLen) > maxLenDiff) return false;
+  const tWords = targetAns.split(/\s+/).length;
+  const cWords = candAns.split(/\s+/).length;
+  if (Math.abs(tWords - cWords) > 3) return false;
+  return true;
+}
+
 function buildMcqOptionsFromEntry(
   entry: CityBankEntry,
   rand: () => number,
@@ -629,35 +645,26 @@ function buildMcqOptionsFromEntry(
     }
   }
 
-  // Borrow genuine domain-appropriate answers from fallbackPool if fewer than 3 distractors
-  if (distractors.length < 3 && fallbackPool.length > 0) {
-    const startOffset = Math.floor(rand() * fallbackPool.length);
-    for (let step = 0; step < fallbackPool.length && distractors.length < 3; step++) {
-      const candidate = fallbackPool[(startOffset + step * 7) % fallbackPool.length];
+  // Borrow shape- & length-matched domain distractors from fallbackPool if < 3
+  const pickFromPool = (pool: CityBankEntry[], maxLenDiff: number) => {
+    if (distractors.length >= 3 || pool.length === 0) return;
+    const startOffset = Math.floor(rand() * pool.length);
+    for (let step = 0; step < pool.length && distractors.length < 3; step++) {
+      const candidate = pool[(startOffset + step * 7) % pool.length];
       if (candidate.kind === 'word_find') continue;
       const ans = candidate.answer.trim();
       const norm = normalizeBankKey(ans);
-      if (ans && norm && !seenNorm.has(norm) && ans.length <= 90) {
+      if (ans && norm && !seenNorm.has(norm) && ans.length <= 90 && isShapeCompatibleDistractor(entry.answer, ans, maxLenDiff)) {
         seenNorm.add(norm);
         distractors.push(ans);
       }
     }
-  }
+  };
 
-  // Emergency borrow across global bank if still < 3
-  if (distractors.length < 3) {
-    const startOffset = Math.floor(rand() * CITY_BANK_5000_ITEMS.length);
-    for (let step = 0; step < CITY_BANK_5000_ITEMS.length && distractors.length < 3; step++) {
-      const candidate = CITY_BANK_5000_ITEMS[(startOffset + step * 13) % CITY_BANK_5000_ITEMS.length];
-      if (candidate.kind === 'word_find') continue;
-      const ans = candidate.answer.trim();
-      const norm = normalizeBankKey(ans);
-      if (ans && norm && !seenNorm.has(norm)) {
-        seenNorm.add(norm);
-        distractors.push(ans);
-      }
-    }
-  }
+  pickFromPool(fallbackPool, 10);
+  pickFromPool(fallbackPool, 18);
+  pickFromPool(CITY_BANK_5000_ITEMS, 12);
+  pickFromPool(CITY_BANK_5000_ITEMS, 25);
 
   const allOpts = seededShuffle([entry.answer, ...distractors.slice(0, 3)], rand);
   return {
@@ -720,7 +727,8 @@ function entryMatchesSlot(entry: CityBankEntry, slot: ChapterSlotPreference): bo
 
 /**
  * Generates level-appropriate 4-question chapter content drawing from the 9,000+ item bank,
- * strictly skipping every question and answer already seen by the player.
+ * strictly skipping every question and answer already seen by the player, with truly randomized
+ * question ordering and option positions per session.
  */
 export function generateChapterContent(
   levelNumber: number,
@@ -732,47 +740,55 @@ export function generateChapterContent(
   const levelMeta = getCityLevelByNumber(safeLevel);
   const meta = CHAPTER_TEMPLATES[safeChapter - 1] || CHAPTER_TEMPLATES[0];
   const nonce = options?.sessionNonce || 0;
-  const rand = seededRand(safeLevel * 997 + safeChapter * 131 + (nonce % 999983) + 42);
+  const rand = createDynamicRand(safeLevel * 997 + safeChapter * 131 + (nonce % 999983) + 42);
 
   const excludeQ = options?.excludeQuestionHashes;
   const excludeA = options?.excludeAnswerHashes;
 
-  // Prioritized candidate sequence:
+  // Prioritized candidate bands (lazily materialized so common path is ultra-fast):
   // 1. Dedicated items mapped specifically to this exact level (1..600)
   // 2. Remaining items in the same district grade (shuffled)
-  // 3. Adjacent grade bands sorted by proximity
+  // 3. Adjacent grade bands sorted by proximity (loaded only if needed)
   const dedicated = seededShuffle(getLevelDedicatedItems(safeLevel), rand);
   const sameGrade = seededShuffle(getGradeBankItems(levelMeta.districtId), rand);
 
-  const orderedPool: CityBankEntry[] = [];
+  const primaryPool: CityBankEntry[] = [];
   const addedEntryIds = new Set<string>();
-  const pushUniqueEntry = (e: CityBankEntry) => {
-    if (!addedEntryIds.has(e.id)) {
-      addedEntryIds.add(e.id);
-      orderedPool.push(e);
+  const appendUnique = (list: CityBankEntry[], dest: CityBankEntry[]) => {
+    for (const e of list) {
+      if (!addedEntryIds.has(e.id)) {
+        addedEntryIds.add(e.id);
+        dest.push(e);
+      }
     }
   };
+  appendUnique(dedicated, primaryPool);
+  appendUnique(sameGrade, primaryPool);
 
-  dedicated.forEach(pushUniqueEntry);
-  sameGrade.forEach(pushUniqueEntry);
+  let extendedPool: CityBankEntry[] | null = null;
+  const getExtendedPool = (): CityBankEntry[] => {
+    if (extendedPool) return extendedPool;
+    const all: CityBankEntry[] = [...primaryPool];
+    for (const grade of getOrderedGradeProximity(levelMeta.districtId)) {
+      if (grade === levelMeta.districtId) continue;
+      appendUnique(seededShuffle(getGradeBankItems(grade), rand), all);
+    }
+    extendedPool = all;
+    return extendedPool;
+  };
 
-  for (const grade of getOrderedGradeProximity(levelMeta.districtId)) {
-    if (grade === levelMeta.districtId) continue;
-    const bandItems = seededShuffle(getGradeBankItems(grade), rand);
-    bandItems.forEach(pushUniqueEntry);
-  }
-
-  // Chapter slot specialization matching the 10 chapter archetypes
-  let slots: ChapterSlotPreference[];
+  // Chapter slot specialization matching the 10 chapter archetypes, dynamically shuffled per session
+  let baseSlots: ChapterSlotPreference[];
   if (safeChapter === 2 || safeChapter === 5 || safeChapter === 9) {
-    slots = ['word_find', 'grammar', 'word_find', 'vocab'];
+    baseSlots = ['word_find', 'grammar', 'word_find', 'vocab'];
   } else if (safeChapter === 3 || safeChapter === 6 || safeChapter === 8) {
-    slots = ['grammar', 'vocab', 'grammar', 'word_find'];
+    baseSlots = ['grammar', 'vocab', 'grammar', 'word_find'];
   } else if (safeChapter === 10) {
-    slots = ['grammar', 'vocab', 'word_find', 'any_mcq'];
+    baseSlots = ['grammar', 'vocab', 'word_find', 'any_mcq'];
   } else {
-    slots = ['vocab', 'grammar', 'vocab', 'word_find'];
+    baseSlots = ['vocab', 'grammar', 'vocab', 'word_find'];
   }
+  const slots = seededShuffle(baseSlots, rand);
 
   const pickedQHashes = new Set<string>();
   const pickedAHashes = new Set<string>();
@@ -788,31 +804,35 @@ export function generateChapterContent(
     return true;
   };
 
-  const pickForSlot = (slot: ChapterSlotPreference): CityBankEntry | undefined => {
-    // Pass 1: Match slot preference AND unseen globally
-    for (const entry of orderedPool) {
-      if (entryMatchesSlot(entry, slot) && isEligible(entry, true)) {
-        return entry;
-      }
-    }
-    // Pass 2: Any unseen entry across entire 9,000+ pool (even if slot kind differs)
-    for (const entry of orderedPool) {
-      if (isEligible(entry, true)) {
-        return entry;
-      }
-    }
-    // Pass 3 (only if ALL 9,000+ unique items in the app were seen): rotate while keeping current chapter disjoint
-    for (const entry of orderedPool) {
-      if (entryMatchesSlot(entry, slot) && isEligible(entry, false)) {
-        return entry;
-      }
-    }
-    for (const entry of orderedPool) {
-      if (isEligible(entry, false)) {
+  const scanList = (list: CityBankEntry[], slot: ChapterSlotPreference | null, respectHistory: boolean): CityBankEntry | undefined => {
+    for (const entry of list) {
+      if ((!slot || entryMatchesSlot(entry, slot)) && isEligible(entry, respectHistory)) {
         return entry;
       }
     }
     return undefined;
+  };
+
+  const pickForSlot = (slot: ChapterSlotPreference): CityBankEntry | undefined => {
+    // Pass 1a: Dedicated + same grade matching slot AND unseen globally
+    const hitPrimary = scanList(primaryPool, slot, true);
+    if (hitPrimary) return hitPrimary;
+
+    // Pass 1b: Adjacent grades matching slot AND unseen globally
+    const ext = getExtendedPool();
+    const hitExtSlot = scanList(ext, slot, true);
+    if (hitExtSlot) return hitExtSlot;
+
+    // Pass 2: Any unseen entry across pool (even if slot kind differs)
+    const hitExtAny = scanList(ext, null, true);
+    if (hitExtAny) return hitExtAny;
+
+    // Pass 3 (only if ALL 9,000+ unique items in the app were seen): rotate while keeping chapter disjoint
+    return (
+      scanList(primaryPool, slot, false) ||
+      scanList(ext, slot, false) ||
+      scanList(ext, null, false)
+    );
   };
 
   for (const slot of slots) {
@@ -848,7 +868,7 @@ const CEFR_TO_GRADES: Record<CEFRLevel, SchoolGrade[]> = {
 
 /**
  * Generates an unseen batch of General Quiz MCQ questions tailored to the user's CEFR level,
- * strictly avoiding previously seen questions and answers.
+ * strictly avoiding previously seen questions and answers, with randomized option order.
  */
 export function generateGeneralQuizSession(
   cefrLevel: CEFRLevel,
@@ -856,31 +876,16 @@ export function generateGeneralQuizSession(
   options?: ChapterGenerationOptions
 ): GeneralQuizQuestionItem[] {
   const nonce = options?.sessionNonce || 0;
-  const rand = seededRand(Date.now() % 1000003 + nonce * 193 + count * 31);
+  const rand = createDynamicRand(Date.now() % 1000003 + nonce * 193 + count * 31);
   const excludeQ = options?.excludeQuestionHashes;
   const excludeA = options?.excludeAnswerHashes;
 
   const gradePriority = CEFR_TO_GRADES[cefrLevel] || CEFR_TO_GRADES.B2;
-  const orderedMcqs: CityBankEntry[] = [];
   const seenIds = new Set<string>();
-
-  for (const g of gradePriority) {
-    const gradeMcqs = seededShuffle(
-      getGradeBankItems(g).filter((e) => e.kind !== 'word_find'),
-      rand
-    );
-    // Prioritize grammar nuances & richer quiz items mixed cleanly with vocab
-    for (const e of gradeMcqs) {
-      if (!seenIds.has(e.id)) {
-        seenIds.add(e.id);
-        orderedMcqs.push(e);
-      }
-    }
-  }
-
   const pickedQHashes = new Set<string>();
   const pickedAHashes = new Set<string>();
   const selectedEntries: CityBankEntry[] = [];
+  const loadedMcqs: CityBankEntry[] = [];
 
   const isEligible = (e: CityBankEntry, checkHistory: boolean): boolean => {
     const qh = hashContentKey(e.questionKey);
@@ -890,18 +895,29 @@ export function generateGeneralQuizSession(
     return true;
   };
 
-  for (const entry of orderedMcqs) {
-    if (selectedEntries.length >= count) break;
-    if (isEligible(entry, true)) {
-      pickedQHashes.add(hashContentKey(entry.questionKey));
-      pickedAHashes.add(hashContentKey(entry.answerKey));
-      selectedEntries.push(entry);
+  // Lazy per-grade selection so common sessions don't shuffle unused grades
+  for (const g of gradePriority) {
+    const gradeMcqs = seededShuffle(
+      getGradeBankItems(g).filter((e) => e.kind !== 'word_find'),
+      rand
+    );
+    for (const e of gradeMcqs) {
+      if (!seenIds.has(e.id)) {
+        seenIds.add(e.id);
+        loadedMcqs.push(e);
+        if (selectedEntries.length < count && isEligible(e, true)) {
+          pickedQHashes.add(hashContentKey(e.questionKey));
+          pickedAHashes.add(hashContentKey(e.answerKey));
+          selectedEntries.push(e);
+        }
+      }
     }
+    if (selectedEntries.length >= count) break;
   }
 
-  // Fallback pass only if full 9,000+ database was exhausted
+  // Fallback pass only if full database was exhausted
   if (selectedEntries.length < count) {
-    for (const entry of orderedMcqs) {
+    for (const entry of loadedMcqs) {
       if (selectedEntries.length >= count) break;
       if (isEligible(entry, false)) {
         pickedQHashes.add(hashContentKey(entry.questionKey));
@@ -911,9 +927,10 @@ export function generateGeneralQuizSession(
     }
   }
 
+  const shuffledSelected = seededShuffle(selectedEntries, rand);
   const labels = ['A', 'B', 'C', 'D'];
-  return selectedEntries.map((entry, idx) => {
-    const { options: mcqOptions, correctIndex } = buildMcqOptionsFromEntry(entry, rand, orderedMcqs);
+  return shuffledSelected.map((entry, idx) => {
+    const { options: mcqOptions, correctIndex } = buildMcqOptionsFromEntry(entry, rand, loadedMcqs);
     return {
       id: `gq-${nonce}-${idx}-${entry.id}`,
       category: entry.category,

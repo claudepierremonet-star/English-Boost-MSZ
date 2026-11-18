@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { SchoolLesson, SchoolVocabularyItem } from '../data/schoolCurriculum';
+import { shuffleArray, shuffleSchoolQuizQuestions } from '../data/curriculum';
 import { GRAMMAR_6E_ITEMS } from '../data/grammar6eData';
 import { SentenceStructuringExercise } from './SentenceStructuringExercise';
 import confetti from 'canvas-confetti';
@@ -160,6 +161,7 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
   // Quiz state
   const [quizAnswers, setQuizAnswers] = useState<Record<string, number>>({});
   const [quizSubmitted, setQuizSubmitted] = useState<boolean>(false);
+  const [quizShuffleNonce, setQuizShuffleNonce] = useState<number>(1);
 
   // Dictation state
   const [userInputDictation, setUserInputDictation] = useState<string>('');
@@ -174,10 +176,12 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
       setActiveTab('overview');
       setQuizAnswers({});
       setQuizSubmitted(false);
+      setQuizShuffleNonce((n) => n + 1);
       setUserInputDictation('');
       setDictationChecked(false);
       setDictationScore(null);
       setFlashcardIndex(0);
+      setVocabShuffleNonce(0);
       setIsFlipped(false);
       setActiveDialogueIndex(null);
       setVocabSearchQuery('');
@@ -223,6 +227,21 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
       return true;
     });
   }, [lesson?.vocabulary, vocabFilterType, vocabSearchQuery]);
+
+  // Randomize both quiz question order and each question's options per opening/retry via shared shuffleArray
+  const randomizedQuiz = useMemo(() => {
+    if (!lesson?.quiz?.length) return [];
+    return shuffleSchoolQuizQuestions(lesson.quiz, lesson.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lesson?.id, lesson?.quiz, quizShuffleNonce]);
+
+  const [vocabShuffleNonce, setVocabShuffleNonce] = useState<number>(0);
+  const flashcardDeck = useMemo(() => {
+    if (!lesson?.vocabulary?.length) return [];
+    if (vocabShuffleNonce === 0) return lesson.vocabulary;
+    return shuffleArray(lesson.vocabulary);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lesson?.id, lesson?.vocabulary, vocabShuffleNonce]);
 
   if (!isOpen || !lesson) return null;
 
@@ -277,11 +296,11 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
   const handleValidateQuiz = () => {
     setQuizSubmitted(true);
     let correct = 0;
-    lesson.quiz.forEach((q) => {
+    randomizedQuiz.forEach((q) => {
       if (quizAnswers[q.id] === q.correct_index) correct++;
     });
 
-    const quizScore = Math.round((correct / Math.max(1, lesson.quiz.length)) * 100);
+    const quizScore = Math.round((correct / Math.max(1, randomizedQuiz.length)) * 100);
 
     // Persist attempt into IndexedDB (works offline) & Cloud Firestore
     recordAttempt({
@@ -623,7 +642,7 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                   <div className="flex items-center gap-2">
                     <span className="material-symbols-outlined text-[#f2ca50] text-base">style</span>
                     <span className="text-xs font-bold text-[#f2ca50] uppercase tracking-wider font-mono">
-                      Flashcard • {flashcardIndex + 1} / {lesson.vocabulary.length} ({Math.round(((flashcardIndex + 1) / Math.max(1, lesson.vocabulary.length)) * 100)}%)
+                      Flashcard • {flashcardIndex + 1} / {flashcardDeck.length} ({Math.round(((flashcardIndex + 1) / Math.max(1, flashcardDeck.length)) * 100)}%)
                     </span>
                   </div>
                   <button
@@ -640,13 +659,13 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                   <div
                     className="h-full bg-gradient-to-r from-[#d4c78f] to-[#f2ca50] transition-all duration-300 rounded-full"
                     style={{
-                      width: `${Math.round(((flashcardIndex + 1) / Math.max(1, lesson.vocabulary.length)) * 100)}%`
+                      width: `${Math.round(((flashcardIndex + 1) / Math.max(1, flashcardDeck.length)) * 100)}%`
                     }}
                   />
                 </div>
 
                 {/* Flip Card */}
-                {lesson.vocabulary[flashcardIndex] && (
+                {flashcardDeck[flashcardIndex] && (
                   <div
                     onClick={() => setIsFlipped(!isFlipped)}
                     className="cursor-pointer min-h-[145px] rounded-xl bg-[#0c1322] border border-[#232a3a] p-5 flex flex-col items-center justify-center text-center shadow-inner relative group transition-all hover:border-[#f2ca50]/40"
@@ -654,13 +673,13 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                     {!isFlipped ? (
                       <div className="flex flex-col items-center gap-1.5">
                         <span className="text-[10px] font-mono text-[#99907c] uppercase">
-                          {lesson.vocabulary[flashcardIndex].part_of_speech}
+                          {flashcardDeck[flashcardIndex].part_of_speech}
                         </span>
                         <h4 className="font-serif text-2xl font-bold text-[#f2ca50]">
-                          {lesson.vocabulary[flashcardIndex].term}
+                          {flashcardDeck[flashcardIndex].term}
                         </h4>
                         <span className="text-xs text-[#d4c78f] font-mono">
-                          {lesson.vocabulary[flashcardIndex].phonetic}
+                          {flashcardDeck[flashcardIndex].phonetic}
                         </span>
                         <span className="text-[10px] text-[#99907c] mt-2">
                           (Cliquez pour révéler la traduction française)
@@ -672,13 +691,13 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                           Traduction Française
                         </span>
                         <h4 className="font-serif text-xl font-bold text-[#dce2f8]">
-                          {lesson.vocabulary[flashcardIndex].translation_fr}
+                          {flashcardDeck[flashcardIndex].translation_fr}
                         </h4>
                         <p
                           className="text-xs text-[#d0c5af]/80 italic mt-1 max-w-md"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          « <InteractiveHighlightText text={lesson.vocabulary[flashcardIndex].example_en} /> »
+                          « <InteractiveHighlightText text={flashcardDeck[flashcardIndex].example_en} /> »
                         </p>
                       </div>
                     )}
@@ -704,7 +723,7 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                       type="button"
                       onClick={() => {
                         setIsFlipped(false);
-                        setFlashcardIndex((prev) => (prev > 0 ? prev - 1 : lesson.vocabulary.length - 1));
+                        setFlashcardIndex((prev) => (prev > 0 ? prev - 1 : flashcardDeck.length - 1));
                       }}
                       className="px-3 py-1.5 rounded-lg bg-[#232a3a] text-xs font-mono font-bold text-[#d0c5af] hover:text-[#f2ca50] active:scale-95"
                     >
@@ -712,12 +731,12 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                     </button>
                   </div>
 
-                  {lesson.vocabulary[flashcardIndex] && (
+                  {flashcardDeck[flashcardIndex] && (
                     <DualSpeakerButton
-                      text={lesson.vocabulary[flashcardIndex].term}
+                      text={flashcardDeck[flashcardIndex].term}
                       id={`fc-audio-${flashcardIndex}`}
-                      phonetic={lesson.vocabulary[flashcardIndex].phonetic}
-                      explanation={lesson.vocabulary[flashcardIndex].translation_fr}
+                      phonetic={flashcardDeck[flashcardIndex].phonetic}
+                      explanation={flashcardDeck[flashcardIndex].translation_fr}
                       variant="pill"
                     />
                   )}
@@ -727,7 +746,7 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                       type="button"
                       onClick={() => {
                         setIsFlipped(false);
-                        setFlashcardIndex((prev) => (prev < lesson.vocabulary.length - 1 ? prev + 1 : 0));
+                        setFlashcardIndex((prev) => (prev < flashcardDeck.length - 1 ? prev + 1 : 0));
                       }}
                       className="px-3 py-1.5 rounded-lg bg-[#232a3a] text-xs font-mono font-bold text-[#d0c5af] hover:text-[#f2ca50] active:scale-95"
                     >
@@ -737,9 +756,9 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                       type="button"
                       onClick={() => {
                         setIsFlipped(false);
-                        setFlashcardIndex((prev) => Math.min(lesson.vocabulary.length - 1, prev + 10));
+                        setFlashcardIndex((prev) => Math.min(flashcardDeck.length - 1, prev + 10));
                       }}
-                      disabled={flashcardIndex >= lesson.vocabulary.length - 1}
+                      disabled={flashcardIndex >= flashcardDeck.length - 1}
                       className="px-2 py-1 rounded bg-[#232a3a] text-[10px] font-mono font-bold text-[#d0c5af] hover:text-[#f2ca50] disabled:opacity-40"
                       title="Avancer de 10 cartes"
                     >
@@ -750,11 +769,11 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
 
                 {/* Range Scrubber across 50 cards with randomizer */}
                 <div className="flex items-center gap-2 pt-2 border-t border-[#232a3a]/80">
-                  <span className="text-[10px] text-[#99907c] font-mono shrink-0">Naviguer (1-{lesson.vocabulary.length}) :</span>
+                  <span className="text-[10px] text-[#99907c] font-mono shrink-0">Naviguer (1-{flashcardDeck.length}) :</span>
                   <input
                     type="range"
                     min={0}
-                    max={Math.max(0, lesson.vocabulary.length - 1)}
+                    max={Math.max(0, flashcardDeck.length - 1)}
                     value={flashcardIndex}
                     onChange={(e) => {
                       setIsFlipped(false);
@@ -767,13 +786,14 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                     type="button"
                     onClick={() => {
                       setIsFlipped(false);
-                      setFlashcardIndex(Math.floor(Math.random() * lesson.vocabulary.length));
+                      setVocabShuffleNonce((n) => n + 1);
+                      setFlashcardIndex(0);
                     }}
                     className="px-2 py-1 rounded bg-[#101b33] border border-[#f2ca50]/30 text-[#f2ca50] text-[10px] font-mono font-bold hover:bg-[#f2ca50] hover:text-[#2c2000] transition-colors shrink-0 flex items-center gap-1 shadow-sm"
-                    title="Tirer une carte au hasard"
+                    title="Mélanger aléatoirement les cartes"
                   >
                     <span className="material-symbols-outlined text-xs">shuffle</span>
-                    <span>Aléatoire</span>
+                    <span>Mélanger</span>
                   </button>
                 </div>
               </div>
@@ -1087,7 +1107,7 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
               <div className="p-4 rounded-xl bg-[#151b2b] border border-[#232a3a] flex items-center justify-between">
                 <div>
                   <h4 className="font-serif font-bold text-base text-[#f2ca50]">
-                    Quiz d’Évaluation ({lesson.quiz.length} Questions)
+                    Quiz d’Évaluation ({randomizedQuiz.length} Questions)
                   </h4>
                   <p className="text-xs text-[#d0c5af]/80">
                     Testez votre compréhension du vocabulaire et de la grammaire de {lesson.class_label}.
@@ -1098,15 +1118,15 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                   <span className="px-3 py-1 rounded-full bg-[#f2ca50]/20 text-[#f2ca50] font-mono text-xs font-bold">
                     Score :{' '}
                     {
-                      lesson.quiz.filter((q) => quizAnswers[q.id] === q.correct_index).length
+                      randomizedQuiz.filter((q) => quizAnswers[q.id] === q.correct_index).length
                     }{' '}
-                    / {lesson.quiz.length}
+                    / {randomizedQuiz.length}
                   </span>
                 )}
               </div>
 
               <div className="space-y-4">
-                {lesson.quiz.map((q, qIdx) => {
+                {randomizedQuiz.map((q, qIdx) => {
                   const userAnswer = quizAnswers[q.id];
                   const hasAnswered = userAnswer !== undefined;
                   const isCorrect = userAnswer === q.correct_index;
@@ -1182,7 +1202,7 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                 <button
                   type="button"
                   onClick={handleValidateQuiz}
-                  disabled={Object.keys(quizAnswers).length < lesson.quiz.length}
+                  disabled={Object.keys(quizAnswers).length < randomizedQuiz.length}
                   className="w-full py-3.5 rounded-xl bg-[#f2ca50] text-[#3c2f00] font-bold text-xs uppercase tracking-wider hover:bg-[#ffe088] disabled:opacity-40 disabled:cursor-not-allowed shadow-lg active:scale-98 transition-all"
                 >
                   Valider mes réponses au Quiz (+100 XP)
@@ -1193,6 +1213,7 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                   onClick={() => {
                     setQuizAnswers({});
                     setQuizSubmitted(false);
+                    setQuizShuffleNonce((n) => n + 1);
                   }}
                   className="w-full py-3 rounded-xl bg-[#232a3a] text-[#f2ca50] font-bold text-xs uppercase tracking-wider hover:bg-[#2e3545]"
                 >

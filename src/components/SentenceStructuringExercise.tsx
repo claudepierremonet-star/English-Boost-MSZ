@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { Grammar6eItem } from '../data/grammar6eData';
+import { shuffleArray } from '../data/curriculum';
 import confetti from 'canvas-confetti';
 import { DualSpeakerButton } from './DualSpeakerButton';
 import { speakText, stopSpeech } from '../services/speechService';
@@ -40,11 +41,13 @@ export const SentenceStructuringExercise: React.FC<SentenceStructuringExercisePr
 
   // Initialize or reset tokens on item change
   useEffect(() => {
-    // Generate scrambled tokens with unique IDs
-    const tokens: WordToken[] = item.exercise.scrambled_words.map((word, idx) => ({
-      id: `${item.id}-word-${idx}-${word}`,
-      text: word
-    }));
+    // Generate scrambled tokens with unique IDs and shuffle them randomly
+    const tokens: WordToken[] = shuffleArray(
+      item.exercise.scrambled_words.map((word, idx) => ({
+        id: `${item.id}-word-${idx}-${word}`,
+        text: word
+      }))
+    );
     setAvailableWords(tokens);
     setSelectedWords([]);
     setIsSubmitted(false);
@@ -76,10 +79,12 @@ export const SentenceStructuringExercise: React.FC<SentenceStructuringExercisePr
 
   const handleReset = () => {
     playDeselectCue();
-    const tokens: WordToken[] = item.exercise.scrambled_words.map((word, idx) => ({
-      id: `${item.id}-word-${idx}-${word}`,
-      text: word
-    }));
+    const tokens: WordToken[] = shuffleArray(
+      item.exercise.scrambled_words.map((word, idx) => ({
+        id: `${item.id}-word-${idx}-${word}`,
+        text: word
+      }))
+    );
     setAvailableWords(tokens);
     setSelectedWords([]);
     setIsSubmitted(false);

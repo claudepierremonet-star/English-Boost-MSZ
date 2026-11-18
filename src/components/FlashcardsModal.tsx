@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { FLASHCARD_ITEMS, type FlashcardItem } from '../data/curriculum';
+import { FLASHCARD_ITEMS, shuffleArray, type FlashcardItem } from '../data/curriculum';
 import { THEMES_500, GRADES_500 } from '../data/spacedRepetition500';
 import { saveFlashcardProgress } from '../firebase/client';
 import type { CEFRLevel } from '../firebase/types';
@@ -127,11 +127,7 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
 
   const handleShuffle = useCallback(() => {
     if (filteredCards.length <= 1) return;
-    const indices = Array.from({ length: filteredCards.length }, (_, i) => i);
-    for (let i = indices.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [indices[i], indices[j]] = [indices[j], indices[i]];
-    }
+    const indices = shuffleArray(Array.from({ length: filteredCards.length }, (_, i) => i));
     setShuffledOrder(indices);
     setCardIndex(0);
     setIsFlipped(false);

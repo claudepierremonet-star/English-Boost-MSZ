@@ -11,6 +11,7 @@ import {
   type RhetoricalAnalysisReport
 } from '../services/rhetoricalAnalyzer';
 import { getLessonsByGrade, type SchoolLesson } from '../data/schoolCurriculum';
+import { shuffleArray } from '../data/curriculum';
 import { recordAttempt } from '../firebase/client';
 import { playSelectCue, playCorrectCue, playIncorrectCue } from '../utils/soundEffects';
 
@@ -46,12 +47,21 @@ export const RhetoricalAnalyzerView: React.FC<RhetoricalAnalyzerViewProps> = ({
   const [isPlayingAudio, setIsPlayingAudio] = useState<string | null>(null);
 
   // Quiz state
+  const [quizShuffleNonce, setQuizShuffleNonce] = useState<number>(1);
   const [currentQuizIdx, setCurrentQuizIdx] = useState<number>(0);
   const [selectedOption, setSelectedOption] = useState<RhetoricalFigureType | null>(null);
   const [isAnswerSubmitted, setIsAnswerSubmitted] = useState<boolean>(false);
   const [quizScore, setQuizScore] = useState<number>(0);
   const [showHint, setShowHint] = useState<boolean>(false);
   const [quizFinished, setQuizFinished] = useState<boolean>(false);
+
+  const randomizedQuizQuestions = useMemo(() => {
+    return shuffleArray(RHETORICAL_QUIZ_QUESTIONS_6E).map((q) => ({
+      ...q,
+      options: shuffleArray(q.options)
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quizShuffleNonce]);
 
   // Compute text to analyze based on selections
   const textToAnalyze = useMemo(() => {
@@ -126,7 +136,7 @@ export const RhetoricalAnalyzerView: React.FC<RhetoricalAnalyzerViewProps> = ({
   }, []);
 
   // Handle Quiz flow
-  const currentQ = RHETORICAL_QUIZ_QUESTIONS_6E[currentQuizIdx];
+  const currentQ = randomizedQuizQuestions[currentQuizIdx];
 
   const handleValidateQuizAnswer = () => {
     if (!selectedOption || isAnswerSubmitted) return;
@@ -147,7 +157,7 @@ export const RhetoricalAnalyzerView: React.FC<RhetoricalAnalyzerViewProps> = ({
   };
 
   const handleNextQuizQuestion = () => {
-    if (currentQuizIdx < RHETORICAL_QUIZ_QUESTIONS_6E.length - 1) {
+    if (currentQuizIdx < randomizedQuizQuestions.length - 1) {
       setCurrentQuizIdx((prev) => prev + 1);
       setSelectedOption(null);
       setIsAnswerSubmitted(false);
@@ -159,13 +169,14 @@ export const RhetoricalAnalyzerView: React.FC<RhetoricalAnalyzerViewProps> = ({
         moduleType: 'quiz',
         title: 'Atelier Rhétorique 6e • Figures de Style',
         level: 'A1',
-        score: Math.round((quizScore / RHETORICAL_QUIZ_QUESTIONS_6E.length) * 100),
+        score: Math.round((quizScore / randomizedQuizQuestions.length) * 100),
         durationSeconds: 150
       }).catch(console.warn);
     }
   };
 
   const handleRestartQuiz = () => {
+    setQuizShuffleNonce((n) => n + 1);
     setCurrentQuizIdx(0);
     setSelectedOption(null);
     setIsAnswerSubmitted(false);
@@ -257,7 +268,7 @@ export const RhetoricalAnalyzerView: React.FC<RhetoricalAnalyzerViewProps> = ({
           <span className="material-symbols-outlined text-sm">psychology</span>
           <span>Défi Quiz Rhétorique (15 Défis)</span>
           <span className="px-1.5 py-0.2 rounded-full bg-[#3c2f00]/20 text-[10px] font-mono">
-            {quizScore}/{RHETORICAL_QUIZ_QUESTIONS_6E.length}
+            {quizScore}/{randomizedQuizQuestions.length}
           </span>
         </button>
 
@@ -800,7 +811,7 @@ export const RhetoricalAnalyzerView: React.FC<RhetoricalAnalyzerViewProps> = ({
                 <div className="flex items-center gap-2">
                   <span className="material-symbols-outlined text-[#f2ca50] text-base">psychology</span>
                   <span className="text-xs font-mono font-bold text-[#f2ca50] uppercase tracking-wider">
-                    Question {currentQuizIdx + 1} sur {RHETORICAL_QUIZ_QUESTIONS_6E.length}
+                    Question {currentQuizIdx + 1} sur {randomizedQuizQuestions.length}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -815,7 +826,7 @@ export const RhetoricalAnalyzerView: React.FC<RhetoricalAnalyzerViewProps> = ({
                 <div
                   className="bg-gradient-to-r from-[#cca639] to-[#f2ca50] h-full rounded-full transition-all duration-300"
                   style={{
-                    width: `${((currentQuizIdx + 1) / RHETORICAL_QUIZ_QUESTIONS_6E.length) * 100}%`
+                    width: `${((currentQuizIdx + 1) / randomizedQuizQuestions.length) * 100}%`
                   }}
                 />
               </div>
@@ -952,7 +963,7 @@ export const RhetoricalAnalyzerView: React.FC<RhetoricalAnalyzerViewProps> = ({
                     onClick={handleNextQuizQuestion}
                     className="px-5 py-2.5 rounded-xl bg-[#f2ca50] text-[#3c2f00] font-bold text-xs uppercase tracking-wider hover:brightness-110 active:scale-95 transition-all shadow-md shadow-[#f2ca50]/20 flex items-center gap-2"
                   >
-                    <span>{currentQuizIdx < RHETORICAL_QUIZ_QUESTIONS_6E.length - 1 ? 'Question suivante' : 'Voir mon bilan'}</span>
+                    <span>{currentQuizIdx < randomizedQuizQuestions.length - 1 ? 'Question suivante' : 'Voir mon bilan'}</span>
                     <span className="material-symbols-outlined text-sm">arrow_forward</span>
                   </button>
                 )}
@@ -971,7 +982,7 @@ export const RhetoricalAnalyzerView: React.FC<RhetoricalAnalyzerViewProps> = ({
                 <span className="text-4xl font-bold font-serif text-[#f2ca50]">
                   {quizScore}
                 </span>
-                <span className="text-sm text-[#99907c]">/ {RHETORICAL_QUIZ_QUESTIONS_6E.length}</span>
+                <span className="text-sm text-[#99907c]">/ {randomizedQuizQuestions.length}</span>
               </div>
               <p className="text-xs sm:text-sm text-[#d0c5af] max-w-md leading-relaxed">
                 {quizScore >= 12
