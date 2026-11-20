@@ -16,6 +16,7 @@ import {
 } from '../services/dictionaryService';
 import { speakText } from '../services/speechService';
 import { playSelectCue } from '../utils/soundEffects';
+import { lookupLocalWord, type LocalVocabEntry } from '../data/localVocabularyDb';
 
 interface AnchorRect {
   top: number;
@@ -26,11 +27,15 @@ interface AnchorRect {
 
 interface LessonDictionaryContextValue {
   activeInspectWord: string | null;
+  activeQuickWord: string | null;
   highlightedWords: string[];
   isWordHighlighted: (word: string) => boolean;
   toggleWordHighlight: (word: string) => void;
   triggerWordLookup: (selectionText: string, rect?: DOMRect | null) => void;
+  triggerQuickTooltip: (word: string, rect?: DOMRect | null) => void;
   closeDictionaryPopover: () => void;
+  closeQuickTooltip: () => void;
+  shouldSuppressSelectionLookup: () => boolean;
 }
 
 const LessonDictionaryContext = createContext<LessonDictionaryContextValue | null>(null);
@@ -97,24 +102,49 @@ export const LessonDictionaryProvider: React.FC<LessonDictionaryProviderProps> =
   const [isLoadingBase, setIsLoadingBase] = useState<boolean>(false);
   const [lookupResult, setLookupResult] = useState<DictionaryLookupResult | null>(null);
 
+  // Ephemeral double-click tooltip state (local vocabulary DB + IPA)
+  const [activeQuickWord, setActiveQuickWord] = useState<string | null>(null);
+  const [quickTooltipData, setQuickTooltipData] = useState<LocalVocabEntry | null>(null);
+  const [quickAnchorRect, setQuickAnchorRect] = useState<AnchorRect | null>(null);
+  const [quickTooltipNonce, setQuickTooltipNonce] = useState<number>(0);
+  const [isQuickHovered, setIsQuickHovered] = useState<boolean>(false);
+
   const activeRequestIdRef = useRef<number>(0);
   const lastTriggerRef = useRef<{ query: string; timestamp: number } | null>(null);
+  const suppressSelectionUntilRef = useRef<number>(0);
+  const quickDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const quickTooltipRef = useRef<HTMLDivElement | null>(null);
+
+  const clearQuickTimer = useCallback(() => {
+    if (quickDismissTimerRef.current) {
+      clearTimeout(quickDismissTimerRef.current);
+      quickDismissTimerRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     setHighlightedWords(loadLessonHighlights(lessonId));
     setActiveInspectWord(null);
     setLookupResult(null);
     setAnchorRect(null);
+    clearQuickTimer();
+    setActiveQuickWord(null);
+    setQuickTooltipData(null);
+    setQuickAnchorRect(null);
     activeRequestIdRef.current += 1;
-  }, [lessonId]);
+  }, [lessonId, clearQuickTimer]);
 
   const isWordHighlighted = useCallback(
     (word: string) => {
       const key = normalizeHighlightKey(word);
       if (!key) return false;
-      return highlightedWords.includes(key) || activeInspectWord?.toLowerCase() === key;
+      return (
+        highlightedWords.includes(key) ||
+        activeInspectWord?.toLowerCase() === key ||
+        activeQuickWord?.toLowerCase() === key
+      );
     },
-    [highlightedWords, activeInspectWord]
+    [highlightedWords, activeInspectWord, activeQuickWord]
   );
 
   const toggleWordHighlight = useCallback(
@@ -132,12 +162,80 @@ export const LessonDictionaryProvider: React.FC<LessonDictionaryProviderProps> =
     [lessonId]
   );
 
+  const closeQuickTooltip = useCallback(() => {
+    clearQuickTimer();
+    setActiveQuickWord(null);
+    setQuickTooltipData(null);
+    setIsQuickHovered(false);
+  }, [clearQuickTimer]);
+
   const closeDictionaryPopover = useCallback(() => {
     activeRequestIdRef.current += 1;
     setActiveInspectWord(null);
     setLookupResult(null);
     setIsLoadingBase(false);
   }, []);
+
+  const shouldSuppressSelectionLookup = useCallback(() => {
+    return Date.now() < suppressSelectionUntilRef.current;
+  }, []);
+
+  const scheduleQuickDismiss = useCallback(
+    (delayMs: number = 4800) => {
+      clearQuickTimer();
+      quickDismissTimerRef.current = setTimeout(() => {
+        setActiveQuickWord(null);
+        setQuickTooltipData(null);
+        setIsQuickHovered(false);
+      }, delayMs);
+    },
+    [clearQuickTimer]
+  );
+
+  const triggerQuickTooltip = useCallback(
+    (rawWord: string, rect?: DOMRect | null) => {
+      const cleanQuery = normalizeSelectionQuery(rawWord);
+      if (!cleanQuery || cleanQuery.length < 1) return;
+      if (!/[a-zA-Z]/.test(cleanQuery)) return;
+
+      // Empêcher l'ouverture simultanée de la modale de sélection lors d'un double-clic
+      suppressSelectionUntilRef.current = Date.now() + 950;
+
+      const localEntry = lookupLocalWord(cleanQuery, vocabulary);
+      if (!localEntry) return;
+
+      playSelectCue();
+      if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+        try {
+          navigator.vibrate(10);
+        } catch {
+          // Ignore vibration permission errors
+        }
+      }
+
+      if (rect && (rect.width > 0 || rect.height > 0)) {
+        setQuickAnchorRect({
+          top: rect.top,
+          left: rect.left,
+          bottom: rect.bottom,
+          width: rect.width
+        });
+      }
+
+      // Fermer la grande modale si ouverte et afficher l'infobulle éphémère locale
+      activeRequestIdRef.current += 1;
+      setActiveInspectWord(null);
+      setLookupResult(null);
+      setIsLoadingBase(false);
+
+      setActiveQuickWord(cleanQuery);
+      setQuickTooltipData(localEntry);
+      setIsQuickHovered(false);
+      setQuickTooltipNonce((n) => n + 1);
+      scheduleQuickDismiss(4800);
+    },
+    [vocabulary, scheduleQuickDismiss]
+  );
 
   const triggerWordLookup = useCallback(
     async (rawSelection: string, rect?: DOMRect | null) => {
@@ -156,6 +254,7 @@ export const LessonDictionaryProvider: React.FC<LessonDictionaryProviderProps> =
       }
       lastTriggerRef.current = { query: lowerQuery, timestamp: now };
 
+      closeQuickTooltip();
       const reqId = ++activeRequestIdRef.current;
 
       playSelectCue();
@@ -200,20 +299,76 @@ export const LessonDictionaryProvider: React.FC<LessonDictionaryProviderProps> =
         }
       }
     },
-    [vocabulary, lessonContext, gradeLevel]
+    [vocabulary, lessonContext, gradeLevel, closeQuickTooltip]
   );
 
-  // Close on Escape key
+  // Close on Escape key (either modal or ephemeral tooltip)
   useEffect(() => {
-    if (!activeInspectWord) return;
+    if (!activeInspectWord && !activeQuickWord) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         closeDictionaryPopover();
+        closeQuickTooltip();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [activeInspectWord, closeDictionaryPopover]);
+  }, [activeInspectWord, activeQuickWord, closeDictionaryPopover, closeQuickTooltip]);
+
+  // Fermer l'infobulle éphémère au clic extérieur ou au défilement
+  useEffect(() => {
+    if (!activeQuickWord) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (quickTooltipRef.current && quickTooltipRef.current.contains(e.target as Node)) {
+        return;
+      }
+      closeQuickTooltip();
+    };
+    const onScroll = () => {
+      closeQuickTooltip();
+    };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [activeQuickWord, closeQuickTooltip]);
+
+  useEffect(() => {
+    return () => clearQuickTimer();
+  }, [clearQuickTimer]);
+
+  // Compute safe ephemeral tooltip positioning above/below the double-clicked word
+  const quickTooltipPosition = useMemo<{
+    style: React.CSSProperties;
+    placement: 'top' | 'bottom';
+  }>(() => {
+    if (typeof window === 'undefined' || !quickAnchorRect) {
+      return { style: { left: '16px', bottom: '20px' }, placement: 'top' };
+    }
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const tooltipW = Math.min(310, vw - 24);
+    const estH = 148;
+    const centerLeft = quickAnchorRect.left + quickAnchorRect.width / 2 - tooltipW / 2;
+    const clampedLeft = Math.max(12, Math.min(vw - tooltipW - 12, centerLeft));
+
+    const hasRoomAbove = quickAnchorRect.top > estH + 18;
+    const placement: 'top' | 'bottom' = hasRoomAbove ? 'top' : 'bottom';
+    const topPos = hasRoomAbove
+      ? Math.max(12, quickAnchorRect.top - estH - 10)
+      : Math.min(vh - estH - 12, quickAnchorRect.bottom + 10);
+
+    return {
+      placement,
+      style: {
+        left: `${clampedLeft}px`,
+        top: `${topPos}px`,
+        width: `${tooltipW}px`
+      }
+    };
+  }, [quickAnchorRect]);
 
   // Compute safe popover positioning within viewport bounds
   const popoverPositionStyle = useMemo<React.CSSProperties>(() => {
@@ -279,14 +434,189 @@ export const LessonDictionaryProvider: React.FC<LessonDictionaryProviderProps> =
     <LessonDictionaryContext.Provider
       value={{
         activeInspectWord,
+        activeQuickWord,
         highlightedWords,
         isWordHighlighted,
         toggleWordHighlight,
         triggerWordLookup,
-        closeDictionaryPopover
+        triggerQuickTooltip,
+        closeDictionaryPopover,
+        closeQuickTooltip,
+        shouldSuppressSelectionLookup
       }}
     >
       {children}
+
+      {/* INFOBULLE ÉPHÉMÈRE AU DOUBLE-CLIC (TRADUCTION + PHONÉTIQUE IPA LOCALE) */}
+      <AnimatePresence>
+        {activeQuickWord && quickTooltipData && (
+          <motion.div
+            key={`quick-tip-${quickTooltipNonce}`}
+            ref={quickTooltipRef}
+            initial={{
+              opacity: 0,
+              y: quickTooltipPosition.placement === 'top' ? 8 : -8,
+              scale: 0.94
+            }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{
+              opacity: 0,
+              y: quickTooltipPosition.placement === 'top' ? 6 : -6,
+              scale: 0.94
+            }}
+            transition={{ type: 'spring', stiffness: 420, damping: 28 }}
+            style={quickTooltipPosition.style}
+            onMouseEnter={() => {
+              setIsQuickHovered(true);
+              clearQuickTimer();
+            }}
+            onMouseLeave={() => {
+              setIsQuickHovered(false);
+              scheduleQuickDismiss(2600);
+            }}
+            role="status"
+            aria-live="polite"
+            aria-label={`Traduction et IPA pour ${quickTooltipData.term}`}
+            className="fixed z-[65] rounded-2xl bg-[#10182b]/95 backdrop-blur-md border border-[#f2ca50]/75 text-[#dce2f8] shadow-[0_16px_42px_rgba(0,0,0,0.72)] overflow-hidden pointer-events-auto"
+          >
+            <div className="p-3 space-y-2">
+              {/* Ligne supérieure : Mot + Catégorie + Actions */}
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-serif text-base font-bold text-[#f2ca50] leading-tight break-words">
+                      {quickTooltipData.term}
+                    </span>
+                    {quickTooltipData.partOfSpeech && (
+                      <span className="px-1.5 py-0.2 rounded bg-[#232a3a] text-[#d4c78f] text-[10px] font-mono">
+                        {quickTooltipData.partOfSpeech}
+                      </span>
+                    )}
+                    {quickTooltipData.matchedForm && (
+                      <span className="text-[10px] font-mono text-[#99907c]">
+                        (← {quickTooltipData.matchedForm})
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Transcription phonétique IPA */}
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className="text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.2 rounded bg-[#f2ca50]/15 text-[#f2ca50] font-bold border border-[#f2ca50]/30">
+                      IPA
+                    </span>
+                    <span className="text-xs font-mono font-semibold text-[#ffe088] tracking-wide">
+                      {quickTooltipData.phonetic}
+                    </span>
+                    {quickTooltipData.isEstimatedIpa && (
+                      <span
+                        className="text-[10px] font-mono text-[#99907c]"
+                        title="Transcription IPA estimée localement"
+                      >
+                        (≈)
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Boutons d'action rapides */}
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      speakText(
+                        quickTooltipData.term,
+                        voiceAccent,
+                        `quick-ipa-${quickTooltipData.term}`,
+                        { rate: 0.88 }
+                      )
+                    }
+                    className="w-7 h-7 rounded-lg bg-[#19233a] border border-[#28334e] hover:border-[#f2ca50]/60 text-[#f2ca50] flex items-center justify-center transition-colors cursor-pointer"
+                    title="Écouter la prononciation"
+                    aria-label="Écouter la prononciation"
+                  >
+                    <span className="material-symbols-outlined text-sm">volume_up</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleWordHighlight(quickTooltipData.term)}
+                    className={`w-7 h-7 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
+                      highlightedWords.includes(normalizeHighlightKey(quickTooltipData.term))
+                        ? 'bg-[#f2ca50] border-[#f2ca50] text-[#3c2f00]'
+                        : 'bg-[#19233a] border-[#28334e] text-[#d4c78f] hover:border-[#f2ca50]/60 hover:text-[#f2ca50]'
+                    }`}
+                    title="Surligner ce mot dans la leçon"
+                    aria-label="Surligner ce mot"
+                  >
+                    <span className="material-symbols-outlined text-sm">border_color</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const rectObj = quickAnchorRect
+                        ? ({
+                            top: quickAnchorRect.top,
+                            left: quickAnchorRect.left,
+                            bottom: quickAnchorRect.bottom,
+                            width: quickAnchorRect.width,
+                            height: quickAnchorRect.bottom - quickAnchorRect.top,
+                            right: quickAnchorRect.left + quickAnchorRect.width,
+                            x: quickAnchorRect.left,
+                            y: quickAnchorRect.top,
+                            toJSON: () => ({})
+                          } as DOMRect)
+                        : null;
+                      triggerWordLookup(quickTooltipData.term, rectObj);
+                    }}
+                    className="w-7 h-7 rounded-lg bg-[#19233a] border border-[#28334e] hover:border-[#f2ca50]/60 text-[#d4c78f] hover:text-[#f2ca50] flex items-center justify-center transition-colors cursor-pointer"
+                    title="Ouvrir le dictionnaire complet (étymologie & exemples)"
+                    aria-label="Dictionnaire complet"
+                  >
+                    <span className="material-symbols-outlined text-sm">open_in_full</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeQuickTooltip}
+                    className="w-7 h-7 rounded-lg bg-[#19233a] hover:bg-[#232a3a] text-[#99907c] hover:text-[#f2ca50] flex items-center justify-center transition-colors cursor-pointer"
+                    aria-label="Fermer l'infobulle"
+                  >
+                    <span className="material-symbols-outlined text-sm">close</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Traduction française */}
+              <div className="px-2.5 py-2 rounded-xl bg-[#070e1d]/90 border border-[#232a3a]">
+                <p className="text-xs sm:text-[13px] font-semibold text-[#dce2f8] leading-snug">
+                  {quickTooltipData.translationFr}
+                </p>
+              </div>
+
+              {/* Pied discret : origine base locale */}
+              <div className="flex items-center justify-between text-[10px] font-mono text-[#99907c]">
+                <span className="flex items-center gap-1 truncate">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                  <span className="truncate">{quickTooltipData.sourceLabel}</span>
+                </span>
+                <span className="shrink-0">{isQuickHovered ? 'En pause' : 'Éphémère'}</span>
+              </div>
+            </div>
+
+            {/* Barre de compte à rebours éphémère */}
+            <div className="h-0.5 w-full bg-[#1a2234] overflow-hidden">
+              {!isQuickHovered && (
+                <motion.div
+                  key={`bar-${quickTooltipNonce}`}
+                  initial={{ scaleX: 1 }}
+                  animate={{ scaleX: 0 }}
+                  transition={{ duration: 4.8, ease: 'linear' }}
+                  style={{ transformOrigin: 'left center' }}
+                  className="h-full bg-gradient-to-r from-[#f2ca50] to-amber-300"
+                />
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* FLOATING GOOGLE GEMINI + DICTIONARY MODAL */}
       <AnimatePresence>

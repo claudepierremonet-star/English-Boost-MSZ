@@ -51,6 +51,10 @@
         "favoriteLessonIds": {
           "type": "array",
           "description": "List of favorited school lesson IDs (up to 200) saved by the scholar for quick access"
+        },
+        "chartAnnotations": {
+          "type": "array",
+          "description": "Personal text annotations pinned to specific points of the progression chart (up to 60 entries)"
         }
       },
       "required": [

@@ -10,8 +10,8 @@ const WORD_OR_SEP_REGEX = /([A-Za-z][A-Za-z'’-]*|[^A-Za-z]+)/g;
 
 /**
  * Affiche un texte anglais de leçon où chaque mot supporte :
- * - Une pression longue (~420ms, tactile ou souris) pour surligner et consulter la définition Google Dictionary en contexte
- * - Un double-clic rapide sur ordinateur pour la même consultation instantanée
+ * - Un double-clic rapide pour afficher l'infobulle éphémère (traduction FR + transcription IPA depuis la base locale)
+ * - Une pression longue (~420ms, tactile ou souris) pour consulter le dictionnaire complet en contexte
  */
 export const InteractiveHighlightText: React.FC<InteractiveHighlightTextProps> = ({
   text,
@@ -44,7 +44,9 @@ export const InteractiveHighlightText: React.FC<InteractiveHighlightTextProps> =
   return (
     <span className={`select-text ${className}`}>
       {tokens.map((token, idx) => {
-        const isWord = /^[A-Za-z][A-Za-z'’-]*$/.test(token) && token.length >= 2;
+        const isWord =
+          /^[A-Za-z][A-Za-z'’-]*$/.test(token) &&
+          (token.length >= 2 || /^[aAiI]$/.test(token));
         if (!isWord) {
           return <React.Fragment key={idx}>{token}</React.Fragment>;
         }
@@ -90,9 +92,9 @@ export const InteractiveHighlightText: React.FC<InteractiveHighlightTextProps> =
             onDoubleClick={(e) => {
               e.stopPropagation();
               clearHold();
-              dict.triggerWordLookup(token, e.currentTarget.getBoundingClientRect());
+              dict.triggerQuickTooltip(token, e.currentTarget.getBoundingClientRect());
             }}
-            title="Pression longue (ou double-clic) pour la définition Google Dictionary"
+            title="Double-clic : traduction & phonétique IPA • Pression longue : dictionnaire complet"
             className={`cursor-help rounded px-0.5 transition-colors duration-150 ${
               isHighlighted
                 ? 'bg-[#f2ca50]/30 text-[#ffe088] underline decoration-[#f2ca50] decoration-2 underline-offset-4'

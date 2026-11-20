@@ -34,6 +34,7 @@ import { Grammar6eStudio } from './Grammar6eStudio';
 import { RhetoricalAnalyzerView } from './RhetoricalAnalyzerView';
 import { getBestVoice } from '../services/speechService';
 import { getFavoriteLessonIds, toggleFavoriteLesson } from '../firebase/client';
+import { LessonDictionaryProvider } from './LessonDictionaryContext';
 
 interface SchoolCurriculumViewProps {
   onLessonCompleted?: (lessonId: string, xpEarned: number) => void;
@@ -740,9 +741,13 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
 
       {/* RENDER EITHER GRAMMAR 6E STUDIO, RHETORICAL ANALYZER OR STANDARD THEMATIC LESSONS */}
       {selectedGrade === '6e' && subTab6e === 'grammar' ? (
-        <Grammar6eStudio />
+        <LessonDictionaryProvider lessonId="curriculum-6e-grammar" gradeLevel="6e (A1)">
+          <Grammar6eStudio />
+        </LessonDictionaryProvider>
       ) : selectedGrade === '6e' && subTab6e === 'rhetoric' ? (
-        <RhetoricalAnalyzerView />
+        <LessonDictionaryProvider lessonId="curriculum-6e-rhetoric" gradeLevel="6e (A1)">
+          <RhetoricalAnalyzerView />
+        </LessonDictionaryProvider>
       ) : (
         <>
           {/* SEARCH, QUICK AUDIO ACTION AND 10 THEMES FILTER */}

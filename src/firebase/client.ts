@@ -37,7 +37,9 @@ import type {
   CEFRLevel,
   LeaderboardEntry,
   LeagueTier,
-  CityMapProgressionState
+  CityMapProgressionState,
+  ProgressChartAnnotation,
+  ChartAnnotationCategory
 } from './types';
 import firebaseAppletConfig from '../../firebase-applet-config.json';
 
@@ -155,6 +157,7 @@ const LOCAL_ATTEMPTS_KEY = 'eb_msz_attempts';
 const LOCAL_CARDS_KEY = 'eb_msz_cards_progress';
 export const LOCAL_FAVORITES_KEY = 'eb_msz_favorite_lessons';
 export const LOCAL_CITY_MAP_KEY = 'eb_msz_city_map_progression_v1';
+export const LOCAL_CHART_ANNOTATIONS_KEY = 'eb_msz_chart_annotations_v1';
 
 export const DEFAULT_CITY_MAP_PROGRESSION: CityMapProgressionState = {
   unlockedLevel: 1,
@@ -468,6 +471,161 @@ export async function toggleFavoriteLesson(lessonId: string): Promise<string[]> 
   return nextIds;
 }
 
+const VALID_ANNOTATION_CATEGORIES = new Set<ChartAnnotationCategory>(['milestone', 'exam', 'streak', 'note']);
+
+function sanitizeChartAnnotations(list: unknown): ProgressChartAnnotation[] {
+  if (!Array.isArray(list)) return [];
+  const out: ProgressChartAnnotation[] = [];
+  const seenIds = new Set<string>();
+  for (const item of list) {
+    if (!item || typeof item !== 'object') continue;
+    const raw = item as Partial<ProgressChartAnnotation>;
+    if (
+      typeof raw.id !== 'string' ||
+      !raw.id ||
+      typeof raw.pointKey !== 'string' ||
+      !raw.pointKey ||
+      typeof raw.text !== 'string' ||
+      !raw.text.trim()
+    ) {
+      continue;
+    }
+    if (seenIds.has(raw.id)) continue;
+    seenIds.add(raw.id);
+    out.push({
+      id: raw.id.slice(0, 64),
+      granularity: raw.granularity === 'daily' ? 'daily' : 'weekly',
+      pointKey: raw.pointKey.slice(0, 32),
+      pointLabel: typeof raw.pointLabel === 'string' ? raw.pointLabel.slice(0, 64) : raw.pointKey.slice(0, 32),
+      text: raw.text.trim().slice(0, 120),
+      category: VALID_ANNOTATION_CATEGORIES.has(raw.category as ChartAnnotationCategory)
+        ? (raw.category as ChartAnnotationCategory)
+        : 'note',
+      createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : new Date().toISOString(),
+      ...(typeof raw.updatedAt === 'string' ? { updatedAt: raw.updatedAt } : {})
+    });
+    if (out.length >= 60) break;
+  }
+  return out;
+}
+
+function mergeChartAnnotations(
+  localList?: ProgressChartAnnotation[] | null,
+  remoteList?: ProgressChartAnnotation[] | null
+): ProgressChartAnnotation[] {
+  const byId = new Map<string, ProgressChartAnnotation>();
+  for (const item of sanitizeChartAnnotations(remoteList)) {
+    byId.set(item.id, item);
+  }
+  for (const item of sanitizeChartAnnotations(localList)) {
+    const existing = byId.get(item.id);
+    if (!existing) {
+      byId.set(item.id, item);
+    } else {
+      const localTs = item.updatedAt || item.createdAt;
+      const remoteTs = existing.updatedAt || existing.createdAt;
+      if (localTs >= remoteTs) {
+        byId.set(item.id, item);
+      }
+    }
+  }
+  return Array.from(byId.values())
+    .sort((a, b) => (b.updatedAt || b.createdAt).localeCompare(a.updatedAt || a.createdAt))
+    .slice(0, 60);
+}
+
+/**
+ * Retrieve saved personal chart annotations (localStorage + profile cache)
+ */
+export function getChartAnnotations(): ProgressChartAnnotation[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_CHART_ANNOTATIONS_KEY);
+    if (raw) {
+      const parsed = sanitizeChartAnnotations(JSON.parse(raw));
+      if (parsed.length > 0) return parsed;
+    }
+    const prof = getLocalUserProfile();
+    if (Array.isArray(prof.chartAnnotations) && prof.chartAnnotations.length > 0) {
+      return sanitizeChartAnnotations(prof.chartAnnotations);
+    }
+  } catch (e) {
+    console.error('Error reading chart annotations', e);
+  }
+  return [];
+}
+
+function persistAnnotationsLocally(next: ProgressChartAnnotation[]): void {
+  try {
+    localStorage.setItem(LOCAL_CHART_ANNOTATIONS_KEY, JSON.stringify(next));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('eb_chart_annotations_updated', { detail: next }));
+    }
+  } catch (e) {
+    console.error('Error saving chart annotations locally', e);
+  }
+}
+
+/**
+ * Create or update a personal annotation pinned to a point on the 30-day progress chart
+ */
+export async function saveChartAnnotation(input: {
+  id?: string;
+  granularity: 'weekly' | 'daily';
+  pointKey: string;
+  pointLabel: string;
+  text: string;
+  category: ChartAnnotationCategory;
+}): Promise<ProgressChartAnnotation[]> {
+  const cleanedText = input.text.trim().slice(0, 120);
+  if (!cleanedText) return getChartAnnotations();
+
+  const current = getChartAnnotations();
+  const nowIso = new Date().toISOString();
+  let next: ProgressChartAnnotation[];
+
+  if (input.id && current.some((a) => a.id === input.id)) {
+    next = current.map((a) =>
+      a.id === input.id
+        ? {
+            ...a,
+            granularity: input.granularity,
+            pointKey: input.pointKey.slice(0, 32),
+            pointLabel: input.pointLabel.slice(0, 64),
+            text: cleanedText,
+            category: input.category,
+            updatedAt: nowIso
+          }
+        : a
+    );
+  } else {
+    const created: ProgressChartAnnotation = {
+      id: input.id || `ann_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      granularity: input.granularity,
+      pointKey: input.pointKey.slice(0, 32),
+      pointLabel: input.pointLabel.slice(0, 64),
+      text: cleanedText,
+      category: input.category,
+      createdAt: nowIso
+    };
+    next = [created, ...current].slice(0, 60);
+  }
+
+  persistAnnotationsLocally(next);
+  await updateUserProfile({ chartAnnotations: next });
+  return next;
+}
+
+/**
+ * Delete a personal chart annotation by ID
+ */
+export async function deleteChartAnnotation(annotationId: string): Promise<ProgressChartAnnotation[]> {
+  const current = getChartAnnotations();
+  const next = current.filter((a) => a.id !== annotationId);
+  persistAnnotationsLocally(next);
+  await updateUserProfile({ chartAnnotations: next });
+  return next;
+}
+
 /**
  * Authenticate with Google (Sign Up or Sign In)
  * Stores scholar identity and syncs all study metrics to Cloud Firestore
@@ -504,6 +662,14 @@ export async function signInWithGoogle(): Promise<UserProfile> {
           mergedCityMap.totalStars > (profile.cityMapProgression?.totalStars || 0);
         profile.cityMapProgression = mergedCityMap;
 
+        const mergedAnnotations = mergeChartAnnotations(
+          currentLocal?.chartAnnotations || getChartAnnotations(),
+          profile.chartAnnotations
+        );
+        const annotationsChanged = mergedAnnotations.length !== (profile.chartAnnotations || []).length;
+        profile.chartAnnotations = mergedAnnotations;
+        persistAnnotationsLocally(mergedAnnotations);
+
         if (currentLocal && (currentLocal.stats?.totalXp || 0) > (profile.stats?.totalXp || 0)) {
           profile.stats = {
             ...profile.stats,
@@ -515,12 +681,14 @@ export async function signInWithGoogle(): Promise<UserProfile> {
           await updateDoc(userRef, {
             stats: profile.stats,
             favoriteLessonIds: mergedFavs,
-            cityMapProgression: mergedCityMap
+            cityMapProgression: mergedCityMap,
+            chartAnnotations: mergedAnnotations
           });
-        } else if (favsChanged || cityMapChanged) {
+        } else if (favsChanged || cityMapChanged || annotationsChanged) {
           await updateDoc(userRef, {
             favoriteLessonIds: mergedFavs,
-            cityMapProgression: mergedCityMap
+            cityMapProgression: mergedCityMap,
+            chartAnnotations: mergedAnnotations
           });
         }
       } else {
@@ -538,7 +706,8 @@ export async function signInWithGoogle(): Promise<UserProfile> {
             ...(currentLocal.stats || {})
           },
           favoriteLessonIds: currentLocal.favoriteLessonIds || [],
-          cityMapProgression: currentLocal.cityMapProgression || DEFAULT_CITY_MAP_PROGRESSION
+          cityMapProgression: currentLocal.cityMapProgression || DEFAULT_CITY_MAP_PROGRESSION,
+          chartAnnotations: currentLocal.chartAnnotations || getChartAnnotations()
         };
         await setDoc(userRef, profile);
 
@@ -675,6 +844,18 @@ export function subscribeToAuthState(callback: (profile: UserProfile | null) => 
             const mergedFavs = Array.from(new Set([...localFavs, ...firestoreFavs])).slice(0, 200);
             data.favoriteLessonIds = mergedFavs;
 
+            // Merge personal chart annotations
+            const mergedAnnotations = mergeChartAnnotations(
+              currentLocal.chartAnnotations || getChartAnnotations(),
+              data.chartAnnotations
+            );
+            const annotationsNeedSync =
+              mergedAnnotations.length > (data.chartAnnotations?.length || 0);
+            data.chartAnnotations = mergedAnnotations;
+            if (mergedAnnotations.length > 0) {
+              persistAnnotationsLocally(mergedAnnotations);
+            }
+
             // Merge 600-level city quiz map progression & anti-repetition seen hashes
             const mergedCityMap = mergeCityMapProgression(
               currentLocal.cityMapProgression,
@@ -696,12 +877,13 @@ export function subscribeToAuthState(callback: (profile: UserProfile | null) => 
             saveLocalUserProfile(data);
             saveProfileToIndexedDB(data).catch(console.warn);
 
-            // Sync to Firestore if local had higher values, newer card instances or new favorites
+            // Sync to Firestore if local had higher values, newer card instances, favorites or annotations
             const needsSync =
               (localArcade?.points || 0) > (firestoreArcade?.points || 0) ||
               mergedInstances.length > firestoreInstances.length ||
               mergedFavs.length > firestoreFavs.length ||
               localBalance > firestoreBalance ||
+              annotationsNeedSync ||
               cityNeedsSync;
 
             if (needsSync) {
@@ -714,7 +896,8 @@ export function subscribeToAuthState(callback: (profile: UserProfile | null) => 
                   ownedCardInstances: data.ownedCardInstances,
                   mszCoinsBalance: data.mszCoinsBalance,
                   equippedCharacterId: data.equippedCharacterId,
-                  favoriteLessonIds: data.favoriteLessonIds
+                  favoriteLessonIds: data.favoriteLessonIds,
+                  chartAnnotations: data.chartAnnotations
                 },
                 { merge: true }
               ).catch(console.warn);

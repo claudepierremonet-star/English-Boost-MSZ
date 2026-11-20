@@ -14,6 +14,7 @@ import { getLessonsByGrade, type SchoolLesson } from '../data/schoolCurriculum';
 import { shuffleArray } from '../data/curriculum';
 import { recordAttempt } from '../firebase/client';
 import { playSelectCue, playCorrectCue, playIncorrectCue } from '../utils/soundEffects';
+import { InteractiveHighlightText } from './InteractiveHighlightText';
 
 interface RhetoricalAnalyzerViewProps {
   initialLessonId?: string;
@@ -605,7 +606,7 @@ export const RhetoricalAnalyzerView: React.FC<RhetoricalAnalyzerViewProps> = ({
                       >
                         <div className="flex items-start justify-between gap-2">
                           <p className="text-xs sm:text-sm text-[#dce2f8] font-sans leading-relaxed select-text">
-                            {line}
+                            <InteractiveHighlightText text={line} />
                           </p>
                           <button
                             type="button"

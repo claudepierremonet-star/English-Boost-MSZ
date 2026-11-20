@@ -13,7 +13,9 @@ import { DashboardView } from './components/DashboardView';
 import { ProgressHistorySection } from './components/ProgressHistorySection';
 import { PracticeView } from './components/PracticeView';
 import { DictationModal } from './components/DictationModal';
-import { FlashcardsModal } from './components/FlashcardsModal';
+import { FlashcardsModal, type FlashcardDeckMode } from './components/FlashcardsModal';
+import { AtelierDialoguesModal } from './components/AtelierDialoguesModal';
+import type { DialogueThemeId } from './data/atelierDialoguesTypes';
 import { QuizModal } from './components/QuizModal';
 import { SpeakingStudioModal } from './components/SpeakingStudioModal';
 import { ProfileModal } from './components/ProfileModal';
@@ -67,6 +69,9 @@ export default function App() {
   const [isDictationOpen, setIsDictationOpen] = useState<boolean>(false);
   const [isFlashcardsOpen, setIsFlashcardsOpen] = useState<boolean>(false);
   const [flashcardsFocusMode, setFlashcardsFocusMode] = useState<boolean>(false);
+  const [flashcardsDeckMode, setFlashcardsDeckMode] = useState<FlashcardDeckMode>('vocab');
+  const [isDialoguesOpen, setIsDialoguesOpen] = useState<boolean>(false);
+  const [dialoguesInitialTheme, setDialoguesInitialTheme] = useState<DialogueThemeId | 'all'>('all');
   const [isQuizOpen, setIsQuizOpen] = useState<boolean>(false);
   const [isSpeakingOpen, setIsSpeakingOpen] = useState<boolean>(false);
   const [isAccentStudioOpen, setIsAccentStudioOpen] = useState<boolean>(false);
@@ -791,10 +796,23 @@ export default function App() {
               currentLevel={currentLevel}
               onSelectLevel={handleLevelChange}
               onOpenDictation={() => setIsDictationOpen(true)}
-              onOpenFlashcards={() => setIsFlashcardsOpen(true)}
+              onOpenFlashcards={() => {
+                setFlashcardsDeckMode('vocab');
+                setIsFlashcardsOpen(true);
+              }}
               onOpenFlashcardsFocus={() => {
+                setFlashcardsDeckMode('vocab');
                 setFlashcardsFocusMode(true);
                 setIsFlashcardsOpen(true);
+              }}
+              onOpenDialogueFlashcards={() => {
+                setFlashcardsDeckMode('dialogues');
+                setFlashcardsFocusMode(false);
+                setIsFlashcardsOpen(true);
+              }}
+              onOpenDialogues={(themeId = 'all') => {
+                setDialoguesInitialTheme(themeId);
+                setIsDialoguesOpen(true);
               }}
               onOpenQuiz={() => setIsQuizOpen(true)}
               onOpenSpeaking={() => setIsSpeakingOpen(true)}
@@ -851,12 +869,31 @@ export default function App() {
         <FlashcardsModal
           currentLevel={currentLevel}
           initialFocusMode={flashcardsFocusMode}
+          initialDeckMode={flashcardsDeckMode}
           onClose={() => {
             setIsFlashcardsOpen(false);
             setFlashcardsFocusMode(false);
           }}
           onCardReviewed={() => {
             setUser(getLocalUserProfile());
+          }}
+        />
+      )}
+
+      {isDialoguesOpen && (
+        <AtelierDialoguesModal
+          isOpen={isDialoguesOpen}
+          initialTheme={dialoguesInitialTheme}
+          onClose={() => setIsDialoguesOpen(false)}
+          onDialogueCompleted={(_dlgId, xp) => {
+            handleChallengeComplete(xp);
+            setUser(getLocalUserProfile());
+          }}
+          onOpenDialogueFlashcards={() => {
+            setIsDialoguesOpen(false);
+            setFlashcardsDeckMode('dialogues');
+            setFlashcardsFocusMode(false);
+            setIsFlashcardsOpen(true);
           }}
         />
       )}

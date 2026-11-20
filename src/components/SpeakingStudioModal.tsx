@@ -21,6 +21,21 @@ import {
 } from '../utils/speechRecognitionHelper';
 import type { SchoolLesson } from '../data/schoolCurriculum';
 import { stopSpeech } from '../services/speechService';
+import {
+  STUDIO_ACOUSTIC_PRESETS,
+  getStudioAcousticPreset,
+  setStudioAcousticPreset,
+  playStudioNavCue3D,
+  playStudioAccentCue3D,
+  playStudioModeSwitchCue3D,
+  playStudioRecordStartCue3D,
+  playStudioRecordStopCue3D,
+  playStudioValidationCue3D,
+  startStudioAcousticAmbiance,
+  updateStudioAmbianceReactiveVolume,
+  stopStudioAcousticAmbiance,
+  type StudioAcousticPreset
+} from '../utils/studio3dAudio';
 
 interface SpeakingStudioModalProps {
   currentLevel: CEFRLevel;
@@ -51,6 +66,11 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
   const [practiceMode, setPracticeMode] = useState<'cursus' | 'dictation' | 'duel'>('cursus');
   const isFreeDictationMode = practiceMode === 'dictation';
   const isDuelMode = practiceMode === 'duel';
+
+  // 3D Web Audio Acoustic Environment Preset
+  const [acousticRoom, setAcousticRoom] = useState<StudioAcousticPreset>(() =>
+    getStudioAcousticPreset()
+  );
 
   const [customPracticeText, setCustomPracticeText] = useState<string>('');
 
@@ -112,6 +132,7 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
   useEffect(() => {
     return () => {
       stopSpeech();
+      stopStudioAcousticAmbiance(true);
       if (timerRef.current) clearInterval(timerRef.current);
       if (liveAnimFrameRef.current) cancelAnimationFrame(liveAnimFrameRef.current);
       if (micStreamRef.current) {
@@ -130,19 +151,35 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
     };
   }, []);
 
+  const handleSelectAcousticRoom = (room: StudioAcousticPreset) => {
+    setAcousticRoom(room);
+    setStudioAcousticPreset(room);
+    playStudioModeSwitchCue3D('room', room);
+    if (isRecording) {
+      if (room === 'off') {
+        stopStudioAcousticAmbiance();
+      } else {
+        startStudioAcousticAmbiance(room);
+      }
+    }
+  };
+
   // Reset analysis when changing item or accent
   const handleSelectNextItem = () => {
+    playStudioNavCue3D('next');
     resetRecordingState();
     setCurrentIndex((prev) => (prev + 1) % levelItems.length);
   };
 
   const handleSelectPrevItem = () => {
+    playStudioNavCue3D('prev');
     resetRecordingState();
     setCurrentIndex((prev) => (prev - 1 + levelItems.length) % levelItems.length);
   };
 
   const resetRecordingState = () => {
     stopSpeech();
+    stopStudioAcousticAmbiance();
     setIsRecording(false);
     if (blobUrlRef.current) {
       URL.revokeObjectURL(blobUrlRef.current);
@@ -234,7 +271,9 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
             sum += dataArray[i];
           }
           const avg = sum / dataArray.length;
-          setLiveVolume(avg / 255);
+          const normalizedVol = avg / 255;
+          setLiveVolume(normalizedVol);
+          updateStudioAmbianceReactiveVolume(normalizedVol);
 
           // Extract 10 frequency bars
           const step = Math.floor(dataArray.length / 10);
@@ -281,6 +320,8 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
       recorder.start();
       setIsRecording(true);
       setRecordingSeconds(0);
+      playStudioRecordStartCue3D();
+      startStudioAcousticAmbiance(acousticRoom);
 
       timerRef.current = setInterval(() => {
         setRecordingSeconds((prev) => prev + 1);
@@ -303,7 +344,9 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
 
     const fullSpoken = (recognizedText || `${finalTranscript} ${liveTranscript}`).trim();
 
-    // 2. Stop MediaRecorder & Web Audio
+    // 2. Stop MediaRecorder & Web Audio & 3D Studio Ambiance
+    stopStudioAcousticAmbiance();
+    playStudioRecordStopCue3D();
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
     }
@@ -356,6 +399,7 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
       ? analysisResult.overallScore
       : 92;
 
+    playStudioValidationCue3D(finalScore);
     await recordAttempt({
       moduleId: item.id,
       moduleType: 'speaking',
@@ -470,6 +514,7 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
               <button
                 type="button"
                 onClick={() => {
+                  playStudioModeSwitchCue3D('dictation');
                   setPracticeMode('dictation');
                   setCustomPracticeText(activeLesson.model_phrases[0].en);
                   resetRecordingState();
@@ -495,6 +540,7 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
               <button
                 type="button"
                 onClick={() => {
+                  playStudioAccentCue3D('en-GB');
                   setSelectedAccent('en-GB');
                   resetRecordingState();
                 }}
@@ -511,6 +557,7 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
               <button
                 type="button"
                 onClick={() => {
+                  playStudioAccentCue3D('en-US');
                   setSelectedAccent('en-US');
                   resetRecordingState();
                 }}
@@ -531,6 +578,7 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
             <button
               type="button"
               onClick={() => {
+                playStudioModeSwitchCue3D('cursus');
                 setPracticeMode('cursus');
                 resetRecordingState();
               }}
@@ -545,6 +593,7 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
             <button
               type="button"
               onClick={() => {
+                playStudioModeSwitchCue3D('dictation');
                 setPracticeMode('dictation');
                 resetRecordingState();
               }}
@@ -559,6 +608,7 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
             <button
               type="button"
               onClick={() => {
+                playStudioModeSwitchCue3D('duel');
                 setPracticeMode('duel');
                 resetRecordingState();
               }}
@@ -571,6 +621,52 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
               <span className="material-symbols-outlined text-xs">swords</span>
               <span>Duel de Prononciation</span>
             </button>
+          </div>
+        </div>
+
+        {/* 3D Spatial Acoustic Environment Selector */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 px-3 py-2.5 rounded-2xl bg-[#111829] border border-[#232a3a]">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="w-7 h-7 rounded-lg bg-[#0a101f] border border-[#f2ca50]/30 flex items-center justify-center text-[#f2ca50] shrink-0">
+              <span className="material-symbols-outlined text-base">spatial_audio_off</span>
+            </span>
+            <div className="flex flex-col min-w-0">
+              <span className="text-[11px] font-mono font-bold text-[#dce2f8] flex items-center gap-1.5">
+                Acoustique Spatiale 3D
+                {isRecording && acousticRoom !== 'off' && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-emerald-500/15 border border-emerald-400/30 text-[9px] text-emerald-300 font-bold">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    Actif
+                  </span>
+                )}
+              </span>
+              <span className="text-[10px] text-[#94a3b8] truncate">
+                {STUDIO_ACOUSTIC_PRESETS[acousticRoom].description}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1 bg-[#0a101f] p-1 rounded-xl border border-white/5 w-full sm:w-auto justify-between sm:justify-end flex-wrap">
+            {(['library', 'booth', 'auditorium', 'off'] as StudioAcousticPreset[]).map((presetKey) => {
+              const info = STUDIO_ACOUSTIC_PRESETS[presetKey];
+              const isSelected = acousticRoom === presetKey;
+              return (
+                <button
+                  key={presetKey}
+                  type="button"
+                  onClick={() => handleSelectAcousticRoom(presetKey)}
+                  title={info.description}
+                  className={`px-2 py-1 rounded-lg text-[10px] font-mono font-semibold flex items-center gap-1 transition-all cursor-pointer ${
+                    isSelected
+                      ? 'bg-[#f2ca50]/20 text-[#f2ca50] border border-[#f2ca50]/40 shadow-sm'
+                      : 'text-[#8391ac] hover:text-[#dce2f8]'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-xs">{info.icon}</span>
+                  <span>{info.shortLabel}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -695,6 +791,7 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
               <button
                 type="button"
                 onClick={() => {
+                  playStudioModeSwitchCue3D('duel');
                   resetRecordingState();
                   setPracticeMode('duel');
                 }}
@@ -820,7 +917,10 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
             <div className="flex items-center justify-center p-1.5 rounded-2xl bg-[#151b2b] border border-[#232a3a] flex-wrap gap-1">
               <button
                 type="button"
-                onClick={() => setActiveTab('diagnostic')}
+                onClick={() => {
+                  playStudioModeSwitchCue3D('tab');
+                  setActiveTab('diagnostic');
+                }}
                 className={`flex-1 py-2 px-3 rounded-xl text-xs font-mono font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
                   activeTab === 'diagnostic'
                     ? 'bg-[#f2ca50] text-[#0c1322] shadow-md'
@@ -838,7 +938,10 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
 
               <button
                 type="button"
-                onClick={() => setActiveTab('waveform')}
+                onClick={() => {
+                  playStudioModeSwitchCue3D('tab');
+                  setActiveTab('waveform');
+                }}
                 className={`flex-1 py-2 px-3 rounded-xl text-xs font-mono font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
                   activeTab === 'waveform'
                     ? 'bg-[#f2ca50] text-[#0c1322] shadow-md'
@@ -856,7 +959,10 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
 
               <button
                 type="button"
-                onClick={() => setActiveTab('duel')}
+                onClick={() => {
+                  playStudioModeSwitchCue3D('duel');
+                  setActiveTab('duel');
+                }}
                 className={`flex-1 py-2 px-3 rounded-xl text-xs font-mono font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
                   activeTab === 'duel'
                     ? 'bg-gradient-to-r from-[#f2ca50] to-[#ffd700] text-[#0c1322] shadow-md'

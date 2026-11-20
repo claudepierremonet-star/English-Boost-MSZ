@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import type { CEFRLevel } from '../firebase/types';
+import { DIALOGUE_THEMES, type DialogueThemeId } from '../data/atelierDialoguesTypes';
+import { speakText } from '../services/speechService';
 
 interface PracticeViewProps {
   currentLevel: CEFRLevel;
@@ -8,6 +10,8 @@ interface PracticeViewProps {
   onOpenDictation: () => void;
   onOpenFlashcards: () => void;
   onOpenFlashcardsFocus?: () => void;
+  onOpenDialogueFlashcards?: () => void;
+  onOpenDialogues?: (theme?: DialogueThemeId | 'all') => void;
   onOpenQuiz: () => void;
   onOpenSpeaking: () => void;
   onOpenGames?: () => void;
@@ -20,11 +24,14 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
   onOpenDictation,
   onOpenFlashcards,
   onOpenFlashcardsFocus,
+  onOpenDialogueFlashcards,
+  onOpenDialogues,
   onOpenQuiz,
   onOpenSpeaking,
   onOpenGames,
   onOpenCityMap
 }) => {
+  const [miniCardFlipped, setMiniCardFlipped] = useState<boolean>(false);
   const levelDescriptions: Record<CEFRLevel, string> = {
     A1: 'A1 : Découverte et acquisition des structures élémentaires (6e / Cycle 3).',
     A2: 'A2 : Consolidation et communication usuelle en contexte quotidien (5e / 4e).',
@@ -54,7 +61,7 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
             >
               workspace_premium
             </span>
-            <span className="text-[#f2ca50] font-mono font-bold">4 / 4 DISPONIBLES</span>
+            <span className="text-[#f2ca50] font-mono font-bold">5 / 5 DISPONIBLES</span>
           </div>
         </div>
         <p className="text-xs text-[#d0c5af]/80 max-w-md leading-relaxed">
@@ -253,7 +260,70 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
         </p>
       </section>
 
-      {/* The 4 Core Engines List */}
+      {/* Featured Atelier 500 Dialogues Engine Card */}
+      {onOpenDialogues && (
+        <section className="relative rounded-2xl bg-gradient-to-br from-[#191f2f] via-[#151b2b] to-[#0c1322] p-5 border border-[#f2ca50]/50 shadow-xl overflow-hidden">
+          <div className="absolute -right-10 -top-10 w-44 h-44 rounded-full bg-[#f2ca50]/10 blur-2xl pointer-events-none" />
+          <div className="flex flex-wrap items-start justify-between gap-3 relative z-10">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-[#f2ca50] text-[#3c2f00] flex items-center justify-center shadow-md shrink-0">
+                <span className="material-symbols-outlined text-2xl">forum</span>
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#f2ca50]">
+                    Moteur 00 • Conversations Réelles
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-[#f2ca50]/15 border border-[#f2ca50]/40 text-[10px] font-mono font-bold text-[#f2ca50]">
+                    500 DIALOGUES
+                  </span>
+                </div>
+                <h2 className="font-serif text-lg sm:text-xl font-bold text-[#dce2f8] mt-0.5">
+                  Atelier des 500 Dialogues (Duo, Trio &amp; Groupe)
+                </h2>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => onOpenDialogues('all')}
+              className="px-4 py-2.5 rounded-xl bg-[#f2ca50] hover:bg-[#ffe088] text-[#3c2f00] font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-md cursor-pointer shrink-0 transition-colors"
+            >
+              <span>Ouvrir les 500 Dialogues</span>
+              <span className="material-symbols-outlined text-sm">arrow_forward</span>
+            </button>
+          </div>
+
+          <p className="text-xs text-[#d0c5af] mt-3 leading-relaxed relative z-10">
+            Apprenez à travers de vraies situations (l&apos;un demande, l&apos;autre répond) à 2 personnes, 3 personnes ou en groupe, de la 6e à la Terminale C1/C2, avec voix naturelles distinctes, repères IPA et jeu de rôle guidé.
+          </p>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-3 relative z-10">
+            {DIALOGUE_THEMES.map((theme) => (
+              <button
+                key={theme.id}
+                type="button"
+                onClick={() => onOpenDialogues(theme.id)}
+                className="p-2.5 rounded-xl bg-[#070e1d]/85 hover:bg-[#191f2f] border border-[#232a3a] hover:border-[#f2ca50]/60 text-left flex items-center gap-2 transition-all cursor-pointer group"
+              >
+                <span className="material-symbols-outlined text-base text-[#f2ca50] shrink-0">
+                  {theme.icon}
+                </span>
+                <div className="min-w-0">
+                  <span className="block text-xs font-bold text-[#dce2f8] group-hover:text-[#f2ca50] truncate">
+                    {theme.shortLabel}
+                  </span>
+                  <span className="block text-[10px] font-mono text-[#99907c]">
+                    Duo · Trio · Groupe
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* The Core Engines List */}
       <section className="flex flex-col gap-4">
         {/* ENGINE 1: Dictation Engine */}
         <div className="group relative rounded-2xl bg-[#191f2f] p-5 border border-[#4d4635]/40 shadow-xl overflow-hidden transition-all hover:border-[#f2ca50]/50">
@@ -359,36 +429,105 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
             Deck recto-verso dynamique : étymologie philologique, collocations C1/C2, phrases d’auteurs et auto-évaluation pondérée pour ancrer le lexique rare.
           </p>
 
-          {/* Miniature Flashcard Preview */}
-          <div className="mt-3 p-3 rounded-xl bg-[#070e1d]/90 flex items-center justify-between border border-[#4d4635]/30">
-            <div className="flex items-center gap-3">
-              <span className="w-7 h-7 rounded bg-[#4f471b] text-[#c2b57f] flex items-center justify-center font-bold text-xs font-serif">
-                IV
-              </span>
-              <div className="flex flex-col">
-                <span className="text-sm font-bold text-[#dce2f8]">Equivocal (adj.)</span>
-                <span className="text-xs text-[#d0c5af]/80 italic">
-                  « Open to more than one interpretation; deliberately ambiguous. »
-                </span>
-              </div>
+          {/* Interactive Ultra-Elegant Miniature Spaced Repetition Preview Card */}
+          <div className="relative mt-3 py-1">
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-3 top-2 bottom-0 rounded-xl bg-[#070e1d]/70 border border-[#f2ca50]/20 -rotate-1"
+            />
+            <div
+              onClick={() => setMiniCardFlipped((prev) => !prev)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setMiniCardFlipped((prev) => !prev);
+                }
+              }}
+              className="relative p-4 rounded-xl bg-gradient-to-br from-[#0e1628] via-[#0a1120] to-[#070e1d] border border-[#f2ca50]/50 hover:border-[#f2ca50] shadow-lg cursor-pointer transition-all overflow-hidden"
+            >
+              <span aria-hidden="true" className="pointer-events-none absolute top-1.5 left-1.5 w-2.5 h-2.5 border-t border-l border-[#f2ca50]/70" />
+              <span aria-hidden="true" className="pointer-events-none absolute top-1.5 right-1.5 w-2.5 h-2.5 border-t border-r border-[#f2ca50]/70" />
+              <span aria-hidden="true" className="pointer-events-none absolute bottom-1.5 left-1.5 w-2.5 h-2.5 border-b border-l border-[#f2ca50]/70" />
+              <span aria-hidden="true" className="pointer-events-none absolute bottom-1.5 right-1.5 w-2.5 h-2.5 border-b border-r border-[#f2ca50]/70" />
+
+              {!miniCardFlipped ? (
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="w-8 h-8 rounded-lg bg-[#f2ca50] text-[#3c2f00] flex items-center justify-center font-bold text-xs font-serif shrink-0 shadow">
+                      IV
+                    </span>
+                    <div className="flex flex-col min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-serif text-base font-bold text-[#f2ca50]">
+                          Equivocal
+                        </span>
+                        <span className="text-[11px] font-mono text-sky-300">/ɪˈkwɪv.ə.kəl/</span>
+                      </div>
+                      <span className="text-xs text-[#d0c5af] italic truncate">
+                        Toucher la carte pour révéler sens &amp; étymologie ↻
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      speakText('Equivocal', 'en-GB', 'practice-mini-preview', {
+                        naturalProsody: true
+                      });
+                    }}
+                    className="w-8 h-8 rounded-full bg-[#191f2f] border border-[#f2ca50]/45 text-[#f2ca50] flex items-center justify-center shrink-0 hover:bg-[#f2ca50] hover:text-[#3c2f00] transition-colors cursor-pointer"
+                    title="Écouter en voix naturelle"
+                  >
+                    <span className="material-symbols-outlined text-base">volume_up</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-3">
+                  <div className="space-y-0.5 min-w-0">
+                    <span className="text-[10px] font-mono uppercase text-emerald-300 font-bold">
+                      Verso · Sens &amp; Nuance
+                    </span>
+                    <p className="text-xs sm:text-sm font-semibold text-[#dce2f8]">
+                      « Équivoque, ambigu — susceptible de plusieurs interprétations. »
+                    </p>
+                    <p className="text-[11px] text-[#99907c] truncate">
+                      Racine latine : aequus (égal) + vox (voix) • Cliquer pour revenir
+                    </p>
+                  </div>
+                  <span className="material-symbols-outlined text-[#f2ca50] text-xl shrink-0">flip</span>
+                </div>
+              )}
             </div>
-            <span className="material-symbols-outlined text-[#99907c] text-xl">flip</span>
           </div>
 
           <div className="w-full bg-[#070e1d] h-1.5 rounded-full mt-4 overflow-hidden">
             <div className="bg-[#d4c78f] h-full rounded-full" style={{ width: '65%' }} />
           </div>
 
-          <div className="flex items-center justify-between mt-4 pt-1 border-t border-[#232a3a]">
+          <div className="flex flex-wrap items-center justify-between gap-2 mt-4 pt-2 border-t border-[#232a3a]">
             <span className="text-xs text-[#d4c78f] italic truncate">
               Intervalle optimal : Révision dans 3h
             </span>
-            <div className="flex items-center gap-2 shrink-0 ml-2">
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {onOpenDialogueFlashcards && (
+                <button
+                  type="button"
+                  onClick={onOpenDialogueFlashcards}
+                  className="px-3 py-2 rounded-xl bg-[#151f33] hover:bg-[#1c2c4d] text-[#f2ca50] border border-[#f2ca50]/40 font-semibold text-xs flex items-center gap-1 shadow-sm active:scale-95 transition-all cursor-pointer"
+                  title="Réviser les expressions issues des 500 dialogues"
+                >
+                  <span className="material-symbols-outlined text-sm">forum</span>
+                  <span>Cartes Dialogues</span>
+                </button>
+              )}
               {onOpenFlashcardsFocus && (
                 <button
                   type="button"
                   onClick={onOpenFlashcardsFocus}
-                  className="px-3 py-2 rounded-xl bg-[#151f33] hover:bg-[#1c2c4d] text-[#ffe082] border border-[#f2ca50]/40 font-semibold text-xs flex items-center gap-1 shadow-sm active:scale-95 transition-all"
+                  className="px-3 py-2 rounded-xl bg-[#151f33] hover:bg-[#1c2c4d] text-[#ffe082] border border-[#f2ca50]/40 font-semibold text-xs flex items-center gap-1 shadow-sm active:scale-95 transition-all cursor-pointer"
                   title="Ouvrir directement en Mode Focus Lecture"
                 >
                   <span className="material-symbols-outlined text-sm">center_focus_strong</span>
@@ -398,7 +537,7 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
               <button
                 type="button"
                 onClick={onOpenFlashcards}
-                className="px-4 py-2 rounded-xl bg-[#232a3a] text-[#dce2f8] hover:text-[#f2ca50] hover:bg-[#2e3545] font-semibold text-xs flex items-center gap-1 shadow-sm active:scale-95 transition-all"
+                className="px-4 py-2 rounded-xl bg-[#f2ca50] text-[#3c2f00] hover:bg-[#ffe088] font-bold text-xs flex items-center gap-1 shadow-sm active:scale-95 transition-all cursor-pointer"
               >
                 <span>Passer en Revue</span>
                 <span className="material-symbols-outlined text-sm">chevron_right</span>

@@ -60,6 +60,19 @@ export interface CityMapProgressionState {
   updatedAt: string;
 }
 
+export type ChartAnnotationCategory = 'milestone' | 'exam' | 'streak' | 'note';
+
+export interface ProgressChartAnnotation {
+  id: string;
+  granularity: 'weekly' | 'daily';
+  pointKey: string;
+  pointLabel: string;
+  text: string;
+  category: ChartAnnotationCategory;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export interface UserProfile {
   uid: string;
   displayName: string;
@@ -83,6 +96,7 @@ export interface UserProfile {
   }>;
   equippedCharacterId?: string;
   favoriteLessonIds?: string[];
+  chartAnnotations?: ProgressChartAnnotation[];
 }
 
 export interface LearningAttempt {

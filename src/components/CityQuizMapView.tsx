@@ -20,6 +20,13 @@ import type { SchoolGrade } from '../data/curriculum';
 import { CityLevelChaptersModal } from './CityLevelChaptersModal';
 import type { CityChapterCompletionResult } from '../utils/cityMapManager';
 import { LevelGroupNavigator } from './LevelGroupNavigator';
+import {
+  City3DMaquetteViewport,
+  LuxuryArchitecturalTerrainSvg,
+  LuxuryCompassDial3D,
+  LuxuryCornerBrackets,
+  LuxurySkyline3DSvg
+} from './CityMapLuxury3DKit';
 
 const CITY_NAV_PREFS_KEY = 'eb_msz_city_nav_prefs_v1';
 
@@ -34,59 +41,6 @@ interface MapPoint {
   xPct: number; // 0..100
   yPx: number;
 }
-
-/**
- * Fine architectural skyline silhouette for the top atlas masthead
- */
-const AtlasSkylineSvg: React.FC<{ accentHex: string }> = ({ accentHex }) => (
-  <svg
-    viewBox="0 0 800 88"
-    className="w-full h-16 sm:h-20 opacity-30 pointer-events-none select-none"
-    preserveAspectRatio="none"
-    aria-hidden="true"
-  >
-    <defs>
-      <linearGradient id="atlas-sky-grad" x1="0" y1="0" x2="1" y2="0">
-        <stop offset="0%" stopColor={accentHex} stopOpacity="0.1" />
-        <stop offset="50%" stopColor={accentHex} stopOpacity="0.6" />
-        <stop offset="100%" stopColor={accentHex} stopOpacity="0.1" />
-      </linearGradient>
-    </defs>
-    <path
-      d="M0 86 L34 86 L34 52 L60 52 L60 86 L78 86 L78 38 L94 22 L110 38 L110 86 L142 86 L142 54 L182 54 L182 86 L206 86 L206 28 L216 12 L226 28 L226 86 L264 86 L264 44 L310 44 L310 86 L340 86 L340 32 Q370 10 400 32 L400 86 L432 86 L432 48 L478 48 L478 86 L504 86 L504 20 L516 6 L528 20 L528 86 L572 86 L572 52 L620 52 L620 86 L648 86 L648 34 L674 18 L700 34 L700 86 L738 86 L738 56 L776 56 L776 86 L800 86 Z"
-      fill="none"
-      stroke="url(#atlas-sky-grad)"
-      strokeWidth="1.5"
-    />
-    <line x1="0" y1="86" x2="800" y2="86" stroke={accentHex} strokeOpacity="0.45" strokeWidth="1.5" />
-    <circle cx="216" cy="40" r="2.2" fill={accentHex} fillOpacity="0.7" />
-    <circle cx="370" cy="40" r="2.6" fill={accentHex} fillOpacity="0.7" />
-    <circle cx="516" cy="36" r="2.2" fill={accentHex} fillOpacity="0.7" />
-    <circle cx="674" cy="42" r="2.2" fill={accentHex} fillOpacity="0.7" />
-  </svg>
-);
-
-/**
- * Architectural Compass Rose for the cartographic corner
- */
-const CompassRoseSvg: React.FC<{ accentHex: string }> = ({ accentHex }) => (
-  <svg
-    viewBox="0 0 64 64"
-    className="w-12 h-12 sm:w-14 sm:h-14 opacity-45 pointer-events-none select-none"
-    aria-hidden="true"
-  >
-    <circle cx="32" cy="32" r="26" fill="none" stroke={accentHex} strokeWidth="0.9" strokeOpacity="0.45" strokeDasharray="2 3" />
-    <circle cx="32" cy="32" r="19" fill="none" stroke={accentHex} strokeWidth="0.7" strokeOpacity="0.35" />
-    <polygon points="32,4 36,28 32,24 28,28" fill={accentHex} fillOpacity="0.85" />
-    <polygon points="32,60 36,36 32,40 28,36" fill={accentHex} fillOpacity="0.35" />
-    <polygon points="60,32 36,36 40,32 36,28" fill={accentHex} fillOpacity="0.45" />
-    <polygon points="4,32 28,36 24,32 28,28" fill={accentHex} fillOpacity="0.45" />
-    <circle cx="32" cy="32" r="3" fill="#0c1322" stroke={accentHex} strokeWidth="1.2" />
-    <text x="32" y="12" textAnchor="middle" fontSize="6" fill={accentHex} fontFamily="monospace" fontWeight="700">
-      N
-    </text>
-  </svg>
-);
 
 /**
  * Compute deterministic, airy winding coordinates for a sector's levels (15-16 max nodes = zero crowding)
@@ -224,6 +178,7 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
   const [activeLevelModal, setActiveLevelModal] = useState<number | null>(null);
   const [lockedPromptLevel, setLockedPromptLevel] = useState<number | null>(null);
   const [hoveredLevel, setHoveredLevel] = useState<number | null>(null);
+  const [is3DView, setIs3DView] = useState<boolean>(true);
   const [isMobile, setIsMobile] = useState<boolean>(() =>
     typeof window !== 'undefined' ? window.innerWidth < 640 : false
   );
@@ -456,16 +411,28 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
     <LayoutGroup>
       <div className="flex flex-col w-full max-w-5xl mx-auto px-4 sm:px-6 pb-24 gap-5 select-none">
         {/* ATLAS ARCHITECTURAL HERO BANNER (600 NIVEAUX) */}
-        <section className="relative rounded-3xl bg-gradient-to-br from-[#191f2f] via-[#151b2b] to-[#0c1322] border border-[#f2ca50]/40 shadow-2xl overflow-hidden p-5 sm:p-7">
+        <section
+          className="relative rounded-3xl bg-gradient-to-br from-[#191f2f] via-[#121828] to-[#080d1a] border border-[#f2ca50]/45 overflow-hidden p-5 sm:p-8"
+          style={{
+            boxShadow:
+              '0 24px 55px -16px rgba(0, 0, 0, 0.78), inset 0 1px 0 rgba(255, 240, 185, 0.14)'
+          }}
+        >
+          <LuxuryCornerBrackets accentHex="#f2ca50" />
+          <div
+            className="pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 w-[520px] h-52 rounded-full opacity-25 blur-3xl"
+            style={{ background: 'radial-gradient(circle, #f2ca50 0%, transparent 70%)' }}
+            aria-hidden="true"
+          />
           <div className="absolute inset-x-0 bottom-0 pointer-events-none">
-            <AtlasSkylineSvg accentHex="#f2ca50" />
+            <LuxurySkyline3DSvg accentHex="#f2ca50" />
           </div>
 
           <div className="relative z-10 flex flex-col gap-5">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
               <div className="flex flex-col gap-1.5 max-w-2xl">
                 <div className="flex items-center gap-2 text-xs font-mono text-[#d4c78f] tabular-nums">
-                  <span className="text-[#f2ca50] font-semibold">Atlas Urbain</span>
+                  <span className="text-[#f2ca50] font-semibold">Atlas Architectural</span>
                   <span aria-hidden="true">·</span>
                   <span>{MAX_CITY_LEVEL} Niveaux</span>
                   <span aria-hidden="true">·</span>
@@ -772,20 +739,53 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
               </button>
             </div>
 
-            <div className="flex items-center gap-2 text-xs font-mono tabular-nums text-[#d4c78f]">
-              <span>Plage active :</span>
-              <strong className="text-[#f2ca50]">{activeBlock50Meta.rangeLabel}</strong>
-              <button
-                type="button"
-                onClick={() => {
-                  setNavMode('blocks_50');
-                  expandSingleBlock50(activeBlock50Meta.id);
-                }}
-                className="ml-1 px-2.5 py-1 rounded-lg bg-[#0c1322] border border-[#232a3a] text-[#dce2f8] hover:border-[#f2ca50]/50 hover:text-[#f2ca50] font-sans font-semibold cursor-pointer transition-colors"
-                title={`Ouvrir uniquement la plage active ${activeBlock50Meta.rangeLabel}`}
+            <div className="flex items-center gap-2 flex-wrap">
+              <div
+                className="inline-flex items-center gap-1 p-1 rounded-xl bg-[#0c1322] border border-[#232a3a]"
+                role="group"
+                aria-label="Perspective cartographique"
               >
-                Centrer
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setIs3DView(true)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 flex items-center gap-1 transition-colors cursor-pointer ${
+                    is3DView
+                      ? 'bg-[#f2ca50] text-[#3c2f00] font-bold shadow-sm'
+                      : 'text-[#d0c5af] hover:text-[#dce2f8]'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-sm">view_in_ar</span>
+                  <span>Diorama 3D</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIs3DView(false)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 flex items-center gap-1 transition-colors cursor-pointer ${
+                    !is3DView
+                      ? 'bg-[#f2ca50] text-[#3c2f00] font-bold shadow-sm'
+                      : 'text-[#d0c5af] hover:text-[#dce2f8]'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-sm">map</span>
+                  <span>Plan Zénithal</span>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 text-xs font-mono tabular-nums text-[#d4c78f]">
+                <span>Plage active :</span>
+                <strong className="text-[#f2ca50]">{activeBlock50Meta.rangeLabel}</strong>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNavMode('blocks_50');
+                    expandSingleBlock50(activeBlock50Meta.id);
+                  }}
+                  className="ml-1 px-2.5 py-1 rounded-lg bg-[#0c1322] border border-[#232a3a] text-[#dce2f8] hover:border-[#f2ca50]/50 hover:text-[#f2ca50] font-sans font-semibold cursor-pointer transition-colors whitespace-nowrap"
+                  title={`Ouvrir uniquement la plage active ${activeBlock50Meta.rangeLabel}`}
+                >
+                  Centrer
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1132,155 +1132,30 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
                         </div>
                       </div>
 
-                      {/* INTERACTIVE CARTOGRAPHIC MAP CANVAS (ONLY ACTIVE SECTOR'S 15-16 NODES) */}
-                      <div
-                        className="relative w-full overflow-hidden bg-[#0c1322]"
-                        style={{ height: `${canvasHeight}px` }}
+                      {/* INTERACTIVE 3D LUXURY ARCHITECTURAL MAQUETTE (ONLY ACTIVE SECTOR'S 15-16 NODES) */}
+                      <City3DMaquetteViewport
+                        is3DView={is3DView}
+                        isMobile={isMobile}
+                        canvasHeight={canvasHeight}
+                        accentHex={district.accentHex}
                       >
-                        {/* Architectural Blueprint Coordinate Grid */}
-                        <div
-                          className="absolute inset-0 pointer-events-none opacity-25"
-                          style={{
-                            backgroundImage:
-                              'linear-gradient(to right, rgba(212,199,143,0.12) 1px, transparent 1px), linear-gradient(to bottom, rgba(212,199,143,0.12) 1px, transparent 1px)',
-                            backgroundSize: '48px 48px'
-                          }}
-                          aria-hidden="true"
+                        <LuxuryArchitecturalTerrainSvg
+                          canvasHeight={canvasHeight}
+                          accentHex={district.accentHex}
+                          fullPathD={fullPathD}
+                          activePathD={activePathD}
+                          uid={`dist-${district.id}`}
                         />
 
-                        {/* River, City Parks & Boulevard SVG Layer */}
-                        <svg
-                          viewBox={`0 0 1000 ${canvasHeight}`}
-                          preserveAspectRatio="none"
-                          className="absolute inset-0 w-full h-full pointer-events-none"
-                          aria-hidden="true"
-                        >
-                          <rect
-                            x="58"
-                            y={canvasHeight * 0.16}
-                            width="115"
-                            height="64"
-                            rx="14"
-                            fill="#102824"
-                            fillOpacity="0.45"
-                            stroke="#34d399"
-                            strokeOpacity="0.16"
-                            strokeWidth="1"
-                            vectorEffect="non-scaling-stroke"
-                          />
-                          <rect
-                            x="810"
-                            y={canvasHeight * 0.56}
-                            width="126"
-                            height="70"
-                            rx="16"
-                            fill="#102824"
-                            fillOpacity="0.4"
-                            stroke="#34d399"
-                            strokeOpacity="0.15"
-                            strokeWidth="1"
-                            vectorEffect="non-scaling-stroke"
-                          />
-                          <rect
-                            x="415"
-                            y={canvasHeight * 0.42}
-                            width="170"
-                            height="52"
-                            rx="8"
-                            fill="#151b2b"
-                            fillOpacity="0.42"
-                            stroke="#d4c78f"
-                            strokeOpacity="0.1"
-                            strokeWidth="1"
-                            vectorEffect="non-scaling-stroke"
-                          />
-
-                          <path
-                            d={`M -30 ${canvasHeight * 0.28} C 260 ${canvasHeight * 0.19}, 420 ${
-                              canvasHeight * 0.48
-                            }, 680 ${canvasHeight * 0.35} S 940 ${canvasHeight * 0.26}, 1030 ${
-                              canvasHeight * 0.42
-                            }`}
-                            fill="none"
-                            stroke="#183254"
-                            strokeOpacity="0.65"
-                            strokeWidth="26"
-                            strokeLinecap="round"
-                            vectorEffect="non-scaling-stroke"
-                          />
-                          <path
-                            d={`M -30 ${canvasHeight * 0.28} C 260 ${canvasHeight * 0.19}, 420 ${
-                              canvasHeight * 0.48
-                            }, 680 ${canvasHeight * 0.35} S 940 ${canvasHeight * 0.26}, 1030 ${
-                              canvasHeight * 0.42
-                            }`}
-                            fill="none"
-                            stroke="#38bdf8"
-                            strokeOpacity="0.22"
-                            strokeWidth="1.5"
-                            strokeDasharray="8 10"
-                            vectorEffect="non-scaling-stroke"
-                          />
-
-                          {fullPathD && (
-                            <>
-                              <path
-                                d={fullPathD}
-                                fill="none"
-                                stroke="#1a2236"
-                                strokeWidth="22"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                vectorEffect="non-scaling-stroke"
-                              />
-                              <path
-                                d={fullPathD}
-                                fill="none"
-                                stroke="#2e374d"
-                                strokeWidth="14"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                vectorEffect="non-scaling-stroke"
-                              />
-                              <path
-                                d={fullPathD}
-                                fill="none"
-                                stroke="#99907c"
-                                strokeOpacity="0.32"
-                                strokeWidth="2"
-                                strokeDasharray="6 8"
-                                strokeLinecap="round"
-                                vectorEffect="non-scaling-stroke"
-                              />
-                            </>
-                          )}
-
-                          {activePathD && (
-                            <motion.path
-                              d={activePathD}
-                              fill="none"
-                              stroke={district.accentHex}
-                              strokeOpacity="0.88"
-                              strokeWidth="4"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              vectorEffect="non-scaling-stroke"
-                              initial={{ pathLength: 0.7 }}
-                              animate={{ pathLength: 1 }}
-                              transition={{ duration: 0.75, ease: 'easeOut' }}
-                            />
-                          )}
-                        </svg>
-
-                        {/* Compass Rose & Geographic Coordinate Margin Label */}
-                        <div className="absolute top-3 right-3 sm:top-4 sm:right-5 flex flex-col items-end gap-0.5 pointer-events-none">
-                          <CompassRoseSvg accentHex={district.accentHex} />
-                          <span className="text-[9px] font-mono tabular-nums text-[#99907c]/75">
-                            {district.classLabel.toUpperCase()} · {activeSector.startLevel}–{activeSector.endLevel}
+                        {/* 3D Horological Compass Dial & Geographic Margin Label */}
+                        <div className="absolute top-4 right-4 sm:top-5 sm:right-6 flex flex-col items-end gap-1 pointer-events-none z-20">
+                          <LuxuryCompassDial3D accentHex={district.accentHex} />
+                          <span className="text-[10px] font-mono tabular-nums text-[#d4c78f]/85 tracking-wider">
+                            {district.classLabel} · {activeSector.startLevel}–{activeSector.endLevel}
                           </span>
                         </div>
 
-                        {/* Positioned Landmark Medallions */}
+                        {/* Positioned 3D Sculpted Landmark Plinths */}
                         {sectorLevels.map((lvl, idx) => {
                           const pt = points[idx];
                           if (!pt) return null;
@@ -1303,17 +1178,31 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
                           const ringOffset = ringCircumference * (1 - chapterRatio);
                           const isThreeDigits = lvl.levelNumber >= 100;
 
+                          const coinShadow = isCurrentFrontier
+                            ? '0 6px 0 #8a6a14, 0 14px 26px rgba(242, 202, 80, 0.36)'
+                            : isConquered
+                            ? '0 6px 0 #0a4232, 0 12px 22px rgba(16, 185, 129, 0.25)'
+                            : isUnlocked
+                            ? '0 6px 0 #161d30, 0 12px 20px rgba(0, 0, 0, 0.65)'
+                            : '0 4px 0 #0c111d, 0 8px 14px rgba(0, 0, 0, 0.55)';
+
                           return (
                             <div
                               key={lvl.levelNumber}
                               className="absolute -translate-x-1/2 -translate-y-1/2 z-10 flex flex-col items-center"
-                              style={{ left: `${pt.xPct}%`, top: `${pt.yPx}px` }}
+                              style={{
+                                left: `${pt.xPct}%`,
+                                top: `${pt.yPx}px`,
+                                transform: is3DView ? 'translateZ(18px)' : undefined,
+                                transformStyle: is3DView ? 'preserve-3d' : undefined
+                              }}
                             >
                               {isCurrentFrontier && (
                                 <motion.div
                                   layoutId="city-active-explorer-beacon"
                                   transition={{ type: 'spring', stiffness: 220, damping: 24 }}
-                                  className="mb-1 px-2.5 py-0.5 rounded-md bg-[#f2ca50] text-[#3c2f00] text-[10px] font-mono font-bold whitespace-nowrap shadow-lg flex items-center gap-1 pointer-events-none"
+                                  className="mb-1.5 px-2.5 py-0.5 rounded-md bg-gradient-to-r from-[#d4af37] via-[#f2ca50] to-[#ffe699] text-[#3c2f00] text-[10px] font-mono font-bold whitespace-nowrap shadow-[0_6px_16px_rgba(242,202,80,0.45)] flex items-center gap-1 pointer-events-none"
+                                  style={is3DView ? { transform: 'translateZ(14px)' } : undefined}
                                 >
                                   <span className="material-symbols-outlined text-xs">navigation</span>
                                   <span>{isJustUnlockedNode ? 'Nouveau palier' : 'Étape active'}</span>
@@ -1328,7 +1217,7 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
                                 onClick={() => handleOpenLevel(lvl)}
                                 onMouseEnter={() => setHoveredLevel(lvl.levelNumber)}
                                 onFocus={() => setHoveredLevel(lvl.levelNumber)}
-                                whileHover={isUnlocked ? { scale: 1.07 } : { scale: 1.02 }}
+                                whileHover={isUnlocked ? { y: -4, scale: 1.06 } : { y: -2, scale: 1.02 }}
                                 whileTap={{ scale: 0.96 }}
                                 animate={
                                   isJustUnlockedNode
@@ -1337,7 +1226,7 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
                                     ? { scale: [1, 1.08, 1] }
                                     : { scale: 1 }
                                 }
-                                transition={{ type: 'spring', stiffness: 240, damping: 18 }}
+                                transition={{ type: 'spring', stiffness: 260, damping: 20 }}
                                 aria-label={`Niveau ${lvl.levelNumber} : ${lvl.landmarkTitle} (${
                                   isConquered
                                     ? 'Conquis'
@@ -1348,6 +1237,24 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
                                 className="group relative flex flex-col items-center cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] rounded-2xl p-1"
                               >
                                 <div className="relative w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center">
+                                  {/* Ground Ambient Occlusion Ring beneath Plinth */}
+                                  <span
+                                    className="absolute -bottom-1.5 inset-x-1.5 h-3.5 rounded-full bg-black/75 blur-[5px] pointer-events-none"
+                                    aria-hidden="true"
+                                  />
+
+                                  {/* Vertical Luxury Beacon Beam for Active Frontier */}
+                                  {isCurrentFrontier && (
+                                    <span
+                                      className="absolute -top-6 w-7 h-10 pointer-events-none opacity-65"
+                                      style={{
+                                        background:
+                                          'linear-gradient(to top, rgba(242,202,80,0.42), rgba(242,202,80,0))'
+                                      }}
+                                      aria-hidden="true"
+                                    />
+                                  )}
+
                                   <AnimatePresence>
                                     {isJustUnlockedNode && (
                                       <motion.span
@@ -1370,7 +1277,7 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
                                       cy="30"
                                       r={ringRadius}
                                       fill="none"
-                                      stroke={isUnlocked ? '#232a3a' : '#182032'}
+                                      stroke={isUnlocked ? '#27314b' : '#171f32'}
                                       strokeWidth="3.5"
                                     />
                                     {isUnlocked && (
@@ -1390,29 +1297,42 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
                                     )}
                                   </svg>
 
+                                  {/* 3D Extruded Medallion Plinth */}
                                   <div
-                                    className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center font-mono tabular-nums font-black border shadow-lg transition-colors ${
+                                    style={{ boxShadow: coinShadow }}
+                                    className={`relative w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center font-mono tabular-nums font-black border transition-transform duration-200 overflow-hidden ${
                                       isThreeDigits ? 'text-xs sm:text-sm' : 'text-sm sm:text-base'
                                     } ${
                                       isConquered
-                                        ? 'bg-[#102b27] border-emerald-400/75 text-emerald-300 group-hover:bg-emerald-950'
+                                        ? 'bg-gradient-to-br from-[#164a3e] to-[#0a261f] border-emerald-300/80 text-emerald-200'
                                         : isCurrentFrontier
-                                        ? 'bg-[#f2ca50] border-[#ffe088] text-[#3c2f00] shadow-[0_0_24px_rgba(242,202,80,0.45)]'
+                                        ? 'bg-gradient-to-br from-[#ffe89e] via-[#f2ca50] to-[#c7991e] border-[#fff6cf] text-[#3c2f00]'
                                         : isUnlocked
-                                        ? 'bg-[#191f2f] border-[#f2ca50]/55 text-[#f2ca50] group-hover:bg-[#232a3a]'
-                                        : 'bg-[#151b2b] border-[#232a3a] text-[#99907c]'
+                                        ? 'bg-gradient-to-br from-[#25304a] to-[#12192b] border-[#f2ca50]/65 text-[#f2ca50]'
+                                        : 'bg-gradient-to-br from-[#182032] to-[#0c111e] border-[#29334c] text-[#8d8572]'
                                     }`}
                                   >
-                                    {isUnlocked ? (
-                                      <span>{lvl.levelNumber}</span>
-                                    ) : (
-                                      <span className="material-symbols-outlined text-base">lock</span>
-                                    )}
+                                    {/* Specular Rim Sheen */}
+                                    <span
+                                      className="absolute inset-0 pointer-events-none"
+                                      style={{
+                                        background:
+                                          'linear-gradient(135deg, rgba(255,255,255,0.28) 0%, transparent 52%)'
+                                      }}
+                                      aria-hidden="true"
+                                    />
+                                    <span className="relative z-10">
+                                      {isUnlocked ? (
+                                        lvl.levelNumber
+                                      ) : (
+                                        <span className="material-symbols-outlined text-base">lock</span>
+                                      )}
+                                    </span>
                                   </div>
 
                                   {isConquered ? (
                                     <span
-                                      className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-emerald-500 text-[#071510] flex items-center justify-center shadow ring-2 ring-[#0c1322]"
+                                      className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-gradient-to-br from-emerald-300 to-emerald-600 text-[#052117] flex items-center justify-center shadow ring-2 ring-[#0b1222]"
                                       title="Niveau conquis (10/10)"
                                     >
                                       <span className="material-symbols-outlined text-[13px] font-bold">
@@ -1421,7 +1341,7 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
                                     </span>
                                   ) : lvl.isDistrictGate ? (
                                     <span
-                                      className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-[#232a3a] border border-[#f2ca50]/60 text-[#f2ca50] flex items-center justify-center shadow"
+                                      className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-[#192136] border border-[#f2ca50]/75 text-[#f2ca50] flex items-center justify-center shadow"
                                       title="Monument final du quartier"
                                     >
                                       <span className="material-symbols-outlined text-[12px]">
@@ -1431,19 +1351,23 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
                                   ) : null}
                                 </div>
 
-                                <div className="mt-1.5 px-2.5 py-1 rounded-lg bg-[#0c1322]/90 border border-[#232a3a] max-w-[128px] sm:max-w-[155px] text-center shadow-md group-hover:border-[#f2ca50]/50 transition-colors">
-                                  <div className="font-serif text-[11px] sm:text-xs font-bold text-[#dce2f8] group-hover:text-[#f2ca50] leading-tight truncate">
+                                {/* Sculpted Brushed-Obsidian Nameplate Plaque */}
+                                <div
+                                  className="mt-2 px-2.5 py-1.5 rounded-lg bg-[#080d19]/92 border border-[#2a344e] max-w-[132px] sm:max-w-[162px] text-center shadow-[0_8px_18px_rgba(0,0,0,0.75)] group-hover:border-[#f2ca50]/70 transition-colors backdrop-blur-md"
+                                  style={is3DView ? { transform: 'translateZ(8px)' } : undefined}
+                                >
+                                  <div className="font-serif text-[11px] sm:text-xs font-bold text-[#eef2ff] group-hover:text-[#f2ca50] leading-tight truncate">
                                     {lvl.landmarkTitle}
                                   </div>
                                   <div
                                     className={`text-[10px] font-mono tabular-nums mt-0.5 ${
                                       isConquered
-                                        ? 'text-emerald-400 font-semibold'
+                                        ? 'text-emerald-300 font-semibold'
                                         : isCurrentFrontier
                                         ? 'text-[#f2ca50] font-semibold'
                                         : isUnlocked
                                         ? 'text-[#d4c78f]'
-                                        : 'text-[#99907c]'
+                                        : 'text-[#8c8574]'
                                     }`}
                                   >
                                     {isConquered
@@ -1457,7 +1381,7 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
                             </div>
                           );
                         })}
-                      </div>
+                      </City3DMaquetteViewport>
 
                       {/* CARTOGRAPHIC WAYPOINT INSPECTOR FOOTER BAR */}
                       {focusedLevelInSector && (

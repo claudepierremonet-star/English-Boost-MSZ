@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import type { SchoolLesson, SchoolVocabularyItem } from '../data/schoolCurriculum';
 import { shuffleArray, shuffleSchoolQuizQuestions } from '../data/curriculum';
 import { GRAMMAR_6E_ITEMS } from '../data/grammar6eData';
@@ -14,6 +14,69 @@ import { completeSchoolLessonForCityProgress } from '../utils/cityMapManager';
 import { LessonDictionaryProvider, useLessonDictionary } from './LessonDictionaryContext';
 import { InteractiveHighlightText } from './InteractiveHighlightText';
 import { normalizeSelectionQuery } from '../services/dictionaryService';
+import {
+  speakText as speakNaturalText,
+  speakFrenchText,
+  playDialogueSequence,
+  stopSpeech,
+  subscribeToSpeechState,
+  type DialoguePlaybackTurn,
+  type AccentType
+} from '../services/speechService';
+
+const LESSON_AUTO_AUDIO_STORAGE_KEY = 'eb_msz_lesson_auto_audio_v1';
+
+function buildLessonDialogueTurns(
+  lines: SchoolLesson['dialogue']['lines'],
+  accent: AccentType,
+  lessonId: string
+): DialoguePlaybackTurn[] {
+  const femPool =
+    accent === 'en-GB'
+      ? ['uk-fem-1', 'uk-fem-2', 'uk-fem-3']
+      : ['us-fem-1', 'us-fem-2', 'us-fem-3'];
+  const malePool =
+    accent === 'en-GB'
+      ? ['uk-male-1', 'uk-male-3', 'uk-male-2']
+      : ['us-male-1', 'us-male-3', 'us-male-2'];
+  const femHintRegex =
+    /\b(audrey|emma|clara|sophie|chloe|sarah|alice|victoria|elena|marie|lucie|julia|olivia|hannah|grace|eva|a)\b/i;
+  const maleHintRegex =
+    /\b(arthur|julian|oliver|liam|lucas|noah|daniel|george|thomas|marc|antoine|leo|henri|gabriel|james|william|b)\b/i;
+
+  const speakerPersonaMap = new Map<string, string>();
+  let femCursor = 0;
+  let maleCursor = 0;
+  let altCursor = 0;
+
+  return lines.map((line, idx) => {
+    let personaId = speakerPersonaMap.get(line.speaker);
+    if (!personaId) {
+      const cleanSpeaker = line.speaker.replace(/[()]/g, ' ').trim();
+      if (maleHintRegex.test(cleanSpeaker)) {
+        personaId = malePool[maleCursor % malePool.length];
+        maleCursor += 1;
+      } else if (femHintRegex.test(cleanSpeaker)) {
+        personaId = femPool[femCursor % femPool.length];
+        femCursor += 1;
+      } else {
+        personaId =
+          altCursor % 2 === 0
+            ? femPool[femCursor++ % femPool.length]
+            : malePool[maleCursor++ % malePool.length];
+        altCursor += 1;
+      }
+      speakerPersonaMap.set(line.speaker, personaId);
+    }
+
+    return {
+      id: `auto-dialogue-${lessonId}-${idx}`,
+      en: line.en,
+      fr: line.fr,
+      personaId
+    };
+  });
+}
 
 interface LessonDetailModalProps {
   lesson: SchoolLesson | null;
@@ -46,7 +109,7 @@ const LessonSelectionBody: React.FC<{ children: React.ReactNode }> = ({ children
   const containerRef = React.useRef<HTMLDivElement | null>(null);
 
   const inspectCurrentSelection = React.useCallback(() => {
-    if (!dict || !containerRef.current || typeof window === 'undefined') return;
+    if (!dict || dict.shouldSuppressSelectionLookup() || !containerRef.current || typeof window === 'undefined') return;
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
 
@@ -83,6 +146,7 @@ const LessonSelectionBody: React.FC<{ children: React.ReactNode }> = ({ children
       // Wait for touch selection handles to settle before opening floating modal
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
+        if (!dict || dict.shouldSuppressSelectionLookup()) return;
         const sel = window.getSelection();
         if (sel && !sel.isCollapsed && containerRef.current && sel.anchorNode && containerRef.current.contains(sel.anchorNode)) {
           inspectCurrentSelection();
@@ -95,12 +159,13 @@ const LessonSelectionBody: React.FC<{ children: React.ReactNode }> = ({ children
       if (debounceTimer) clearTimeout(debounceTimer);
       document.removeEventListener('selectionchange', onSelectionChange);
     };
-  }, [inspectCurrentSelection]);
+  }, [dict, inspectCurrentSelection]);
 
   return (
     <div
       ref={containerRef}
-      onMouseUp={() => {
+      onMouseUp={(e) => {
+        if (e.detail >= 2 || dict?.shouldSuppressSelectionLookup()) return;
         setTimeout(inspectCurrentSelection, 20);
       }}
       className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5"
@@ -145,7 +210,17 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
   const [isPlayingAudio, setIsPlayingAudio] = useState<string | null>(null);
   const [showTranslations, setShowTranslations] = useState<boolean>(true);
   const [speechRate, setSpeechRate] = useState<number>(0.9);
-  const [voiceAccent, setVoiceAccent] = useState<'en-GB' | 'en-US'>('en-GB');
+  const [voiceAccent, setVoiceAccent] = useState<AccentType>('en-GB');
+  const [isAutoAudioEnabled, setIsAutoAudioEnabled] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem(LESSON_AUTO_AUDIO_STORAGE_KEY);
+      return saved === null ? true : saved === 'true';
+    } catch {
+      return true;
+    }
+  });
+  const [autoAudioStatusLabel, setAutoAudioStatusLabel] = useState<string | null>(null);
+  const [activeOverviewPhraseIndex, setActiveOverviewPhraseIndex] = useState<number | null>(null);
 
   // Flashcard mode inside vocab tab
   const [flashcardIndex, setFlashcardIndex] = useState<number>(0);
@@ -171,6 +246,50 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
   // Dialogue active playing line
   const [activeDialogueIndex, setActiveDialogueIndex] = useState<number | null>(null);
 
+  // Audio session management refs
+  const autoAudioCancelRef = useRef<(() => void) | null>(null);
+  const autoAudioTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const audioSessionTokenRef = useRef<number>(0);
+  const speechRateRef = useRef<number>(speechRate);
+  speechRateRef.current = speechRate;
+
+  const cancelAllLessonAudio = useCallback(() => {
+    audioSessionTokenRef.current += 1;
+    if (autoAudioTimerRef.current) {
+      clearTimeout(autoAudioTimerRef.current);
+      autoAudioTimerRef.current = null;
+    }
+    if (autoAudioCancelRef.current) {
+      const fn = autoAudioCancelRef.current;
+      autoAudioCancelRef.current = null;
+      try {
+        fn();
+      } catch {
+        stopSpeech();
+      }
+    } else {
+      stopSpeech();
+    }
+    setActiveDialogueIndex(null);
+    setActiveOverviewPhraseIndex(null);
+    setAutoAudioStatusLabel(null);
+    setIsPlayingAudio(null);
+  }, []);
+
+  // Keep local active audio state synchronized with global natural TTS engine
+  useEffect(() => {
+    const unsubscribe = subscribeToSpeechState((curId) => {
+      setIsPlayingAudio(curId);
+      if (curId && !curId.startsWith('auto-') && curId !== 'summary-audio') {
+        // User clicked a manual speaker button (DualSpeakerButton, etc.)
+        setActiveDialogueIndex(null);
+        setActiveOverviewPhraseIndex(null);
+        setAutoAudioStatusLabel(null);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
   useEffect(() => {
     if (lesson) {
       setActiveTab('overview');
@@ -184,6 +303,8 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
       setVocabShuffleNonce(0);
       setIsFlipped(false);
       setActiveDialogueIndex(null);
+      setActiveOverviewPhraseIndex(null);
+      setAutoAudioStatusLabel(null);
       setVocabSearchQuery('');
       setVocabFilterType('all');
 
@@ -243,48 +364,343 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lesson?.id, lesson?.vocabulary, vocabShuffleNonce]);
 
-  if (!isOpen || !lesson) return null;
+  const playOverviewNarration = useCallback(
+    (targetLesson: SchoolLesson, bilingualSummary: boolean) => {
+      cancelAllLessonAudio();
+      const mySession = audioSessionTokenRef.current;
+      const rateMult = speechRateRef.current / 0.9;
 
-  // Speech synthesis helper
-  const speakText = (text: string, id: string) => {
-    if (!('speechSynthesis' in window)) return;
-    window.speechSynthesis.cancel();
+      const startEnglishSequence = () => {
+        if (audioSessionTokenRef.current !== mySession) return;
+        const turns: DialoguePlaybackTurn[] = [
+          {
+            id: `auto-overview-title-${targetLesson.id}`,
+            en: targetLesson.title_en
+          },
+          ...targetLesson.model_phrases.map((phrase, idx) => ({
+            id: `auto-overview-phrase-${targetLesson.id}-${idx}`,
+            en: phrase.en,
+            fr: phrase.fr
+          })),
+          {
+            id: `auto-overview-grammar-${targetLesson.id}`,
+            en: targetLesson.grammar.example_en,
+            fr: targetLesson.grammar.example_fr
+          }
+        ];
 
-    setIsPlayingAudio(id);
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = voiceAccent;
-    utterance.rate = speechRate;
+        const cancelSeq = playDialogueSequence(turns, voiceAccent, {
+          includeFrench: bilingualSummary,
+          rateMultiplier: rateMult,
+          onTurnStart: (turnIdx) => {
+            if (audioSessionTokenRef.current !== mySession) return;
+            if (turnIdx === 0) {
+              setActiveOverviewPhraseIndex(null);
+              setAutoAudioStatusLabel(`Leçon : ${targetLesson.title_en}`);
+            } else if (turnIdx <= targetLesson.model_phrases.length) {
+              const phraseIdx = turnIdx - 1;
+              setActiveOverviewPhraseIndex(phraseIdx);
+              setAutoAudioStatusLabel(
+                `Phrase modèle ${phraseIdx + 1}/${targetLesson.model_phrases.length}`
+              );
+            } else {
+              setActiveOverviewPhraseIndex(null);
+              setAutoAudioStatusLabel('Exemple grammatical en contexte');
+            }
+          },
+          onComplete: () => {
+            if (audioSessionTokenRef.current !== mySession) return;
+            setActiveOverviewPhraseIndex(null);
+            setAutoAudioStatusLabel(null);
+          },
+          onError: () => {
+            if (audioSessionTokenRef.current !== mySession) return;
+            setActiveOverviewPhraseIndex(null);
+            setAutoAudioStatusLabel(null);
+          }
+        });
+        autoAudioCancelRef.current = cancelSeq;
+      };
 
-    // Pick appropriate voice if available
-    const voices = window.speechSynthesis.getVoices();
-    const voice = voices.find((v) => v.lang.startsWith(voiceAccent) || v.lang.startsWith('en'));
-    if (voice) {
-      utterance.voice = voice;
+      if (bilingualSummary) {
+        setAutoAudioStatusLabel('Synthèse pédagogique bilingue (FR / EN)');
+        const introFr = `${targetLesson.title}. ${targetLesson.learning_objective} Point de grammaire : ${targetLesson.grammar.title}. ${targetLesson.grammar.rule}`;
+        speakFrenchText(introFr, 'summary-audio', {
+          rateMultiplier: rateMult,
+          onEnd: () => {
+            if (audioSessionTokenRef.current !== mySession) return;
+            autoAudioTimerRef.current = setTimeout(startEnglishSequence, 250);
+          },
+          onError: () => {
+            if (audioSessionTokenRef.current !== mySession) return;
+            setAutoAudioStatusLabel(null);
+          }
+        });
+      } else {
+        startEnglishSequence();
+      }
+    },
+    [cancelAllLessonAudio, voiceAccent]
+  );
+
+  const playGrammarNarration = useCallback(
+    (targetLesson: SchoolLesson) => {
+      cancelAllLessonAudio();
+      const mySession = audioSessionTokenRef.current;
+      const rateMult = speechRateRef.current / 0.9;
+
+      setAutoAudioStatusLabel(`Grammaire : ${targetLesson.grammar.title}`);
+      const frText = `${targetLesson.grammar.title}. ${targetLesson.grammar.rule}`;
+      speakFrenchText(frText, `auto-grammar-fr-${targetLesson.id}`, {
+        rateMultiplier: rateMult,
+        onEnd: () => {
+          if (audioSessionTokenRef.current !== mySession) return;
+          setAutoAudioStatusLabel('Exemple grammatical (Anglais)');
+          autoAudioTimerRef.current = setTimeout(() => {
+            if (audioSessionTokenRef.current !== mySession) return;
+            speakNaturalText(
+              targetLesson.grammar.example_en,
+              voiceAccent,
+              `auto-grammar-en-${targetLesson.id}`,
+              {
+                rateMultiplier: rateMult,
+                naturalProsody: true,
+                onEnd: () => {
+                  if (audioSessionTokenRef.current !== mySession) return;
+                  setAutoAudioStatusLabel(null);
+                },
+                onError: () => {
+                  if (audioSessionTokenRef.current !== mySession) return;
+                  setAutoAudioStatusLabel(null);
+                }
+              }
+            );
+          }, 260);
+        },
+        onError: () => {
+          if (audioSessionTokenRef.current !== mySession) return;
+          setAutoAudioStatusLabel(null);
+        }
+      });
+    },
+    [cancelAllLessonAudio, voiceAccent]
+  );
+
+  const playDialogueNarration = useCallback(
+    (targetLesson: SchoolLesson) => {
+      cancelAllLessonAudio();
+      const mySession = audioSessionTokenRef.current;
+      const rateMult = speechRateRef.current / 0.9;
+      const turns = buildLessonDialogueTurns(
+        targetLesson.dialogue.lines,
+        voiceAccent,
+        targetLesson.id
+      );
+
+      const cancelSeq = playDialogueSequence(turns, voiceAccent, {
+        rateMultiplier: rateMult,
+        onTurnStart: (turnIdx) => {
+          if (audioSessionTokenRef.current !== mySession) return;
+          setActiveDialogueIndex(turnIdx);
+          const speakerName = targetLesson.dialogue.lines[turnIdx]?.speaker || `Réplique ${turnIdx + 1}`;
+          setAutoAudioStatusLabel(
+            `Dialogue (${turnIdx + 1}/${turns.length}) • ${speakerName}`
+          );
+        },
+        onComplete: () => {
+          if (audioSessionTokenRef.current !== mySession) return;
+          setActiveDialogueIndex(null);
+          setAutoAudioStatusLabel(null);
+        },
+        onError: () => {
+          if (audioSessionTokenRef.current !== mySession) return;
+          setActiveDialogueIndex(null);
+          setAutoAudioStatusLabel(null);
+        }
+      });
+      autoAudioCancelRef.current = cancelSeq;
+    },
+    [cancelAllLessonAudio, voiceAccent]
+  );
+
+  // Stop any audio cleanly when modal closes, unmounts, or Auto Audio is toggled OFF
+  useEffect(() => {
+    if (!isOpen || !lesson) {
+      cancelAllLessonAudio();
+    }
+  }, [isOpen, lesson, cancelAllLessonAudio]);
+
+  useEffect(() => {
+    return () => {
+      cancelAllLessonAudio();
+    };
+  }, [cancelAllLessonAudio]);
+
+  // Automatic section narration on modal open / tab switch / accent change
+  useEffect(() => {
+    if (!isOpen || !lesson) return;
+    if (!isAutoAudioEnabled) {
+      cancelAllLessonAudio();
+      return;
+    }
+    // Vocab flashcards have their own dedicated card/flip auto-audio effect; quiz & rhetoric stay silent
+    if (activeTab === 'vocab' || activeTab === 'quiz' || activeTab === 'rhetoric') {
+      if (activeTab !== 'vocab') {
+        cancelAllLessonAudio();
+      }
+      return;
     }
 
-    utterance.onend = () => {
-      setIsPlayingAudio(null);
-    };
-    utterance.onerror = () => {
-      setIsPlayingAudio(null);
-    };
+    cancelAllLessonAudio();
+    const mySession = audioSessionTokenRef.current;
 
-    window.speechSynthesis.speak(utterance);
+    autoAudioTimerRef.current = setTimeout(() => {
+      if (audioSessionTokenRef.current !== mySession) return;
+
+      if (activeTab === 'overview') {
+        playOverviewNarration(lesson, false);
+      } else if (activeTab === 'grammar') {
+        playGrammarNarration(lesson);
+      } else if (activeTab === 'dialogue') {
+        playDialogueNarration(lesson);
+      } else if (activeTab === 'dictation') {
+        setAutoAudioStatusLabel('Dictée vocale automatique');
+        speakNaturalText(
+          lesson.dictation.canonical,
+          voiceAccent,
+          `auto-dictation-${lesson.id}`,
+          {
+            rateMultiplier: speechRateRef.current / 0.9,
+            naturalProsody: true,
+            onEnd: () => {
+              if (audioSessionTokenRef.current !== mySession) return;
+              setAutoAudioStatusLabel(null);
+            },
+            onError: () => {
+              if (audioSessionTokenRef.current !== mySession) return;
+              setAutoAudioStatusLabel(null);
+            }
+          }
+        );
+      }
+    }, 260);
+
+    return () => {
+      if (autoAudioTimerRef.current) {
+        clearTimeout(autoAudioTimerRef.current);
+        autoAudioTimerRef.current = null;
+      }
+    };
+  }, [
+    isOpen,
+    lesson,
+    activeTab,
+    isAutoAudioEnabled,
+    voiceAccent,
+    cancelAllLessonAudio,
+    playOverviewNarration,
+    playGrammarNarration,
+    playDialogueNarration
+  ]);
+
+  // Automatic flashcard pronunciation in Vocab tab when changing or flipping cards
+  useEffect(() => {
+    if (!isOpen || !lesson || !isAutoAudioEnabled || activeTab !== 'vocab') return;
+    const card = flashcardDeck[flashcardIndex];
+    if (!card) return;
+
+    cancelAllLessonAudio();
+    const mySession = audioSessionTokenRef.current;
+
+    autoAudioTimerRef.current = setTimeout(() => {
+      if (audioSessionTokenRef.current !== mySession) return;
+      const rateMult = speechRateRef.current / 0.9;
+
+      if (!isFlipped) {
+        setAutoAudioStatusLabel(`Vocabulaire : « ${card.term} »`);
+        const turns: DialoguePlaybackTurn[] = [
+          { id: `auto-fc-term-${lesson.id}-${flashcardIndex}`, en: card.term },
+          ...(card.example_en
+            ? [{ id: `auto-fc-ex-${lesson.id}-${flashcardIndex}`, en: card.example_en }]
+            : [])
+        ];
+        const cancelSeq = playDialogueSequence(turns, voiceAccent, {
+          rateMultiplier: rateMult,
+          onTurnStart: (idx) => {
+            if (audioSessionTokenRef.current !== mySession) return;
+            setAutoAudioStatusLabel(
+              idx === 0 ? `Mot : « ${card.term} »` : `Exemple : « ${card.example_en} »`
+            );
+          },
+          onComplete: () => {
+            if (audioSessionTokenRef.current !== mySession) return;
+            setAutoAudioStatusLabel(null);
+          },
+          onError: () => {
+            if (audioSessionTokenRef.current !== mySession) return;
+            setAutoAudioStatusLabel(null);
+          }
+        });
+        autoAudioCancelRef.current = cancelSeq;
+      } else {
+        setAutoAudioStatusLabel(`Traduction : « ${card.translation_fr} »`);
+        speakFrenchText(card.translation_fr, `auto-fc-fr-${lesson.id}-${flashcardIndex}`, {
+          rateMultiplier: rateMult,
+          onEnd: () => {
+            if (audioSessionTokenRef.current !== mySession) return;
+            setAutoAudioStatusLabel(null);
+          },
+          onError: () => {
+            if (audioSessionTokenRef.current !== mySession) return;
+            setAutoAudioStatusLabel(null);
+          }
+        });
+      }
+    }, 220);
+
+    return () => {
+      if (autoAudioTimerRef.current) {
+        clearTimeout(autoAudioTimerRef.current);
+        autoAudioTimerRef.current = null;
+      }
+    };
+  }, [
+    isOpen,
+    lesson,
+    activeTab,
+    flashcardIndex,
+    isFlipped,
+    flashcardDeck,
+    isAutoAudioEnabled,
+    voiceAccent,
+    cancelAllLessonAudio
+  ]);
+
+  if (!isOpen || !lesson) return null;
+
+  const handleToggleAutoAudio = () => {
+    const next = !isAutoAudioEnabled;
+    setIsAutoAudioEnabled(next);
+    try {
+      localStorage.setItem(LESSON_AUTO_AUDIO_STORAGE_KEY, String(next));
+    } catch {
+      // ignore storage failure
+    }
+    if (!next) {
+      cancelAllLessonAudio();
+    }
   };
 
   const handleGenerateLessonSummaryAudio = () => {
-    if (!lesson || !('speechSynthesis' in window)) return;
-    if (isPlayingAudio === 'summary-audio') {
-      window.speechSynthesis.cancel();
-      setIsPlayingAudio(null);
+    if (!lesson) return;
+    if (
+      isPlayingAudio === 'summary-audio' ||
+      (isPlayingAudio && isPlayingAudio.startsWith('auto-overview'))
+    ) {
+      cancelAllLessonAudio();
       return;
     }
-    const topVocab = lesson.vocabulary
-      .slice(0, 4)
-      .map((v) => `${v.term}: ${v.translation_fr}`)
-      .join(', ');
-    const summaryText = `Lesson summary: ${lesson.title_en}. Objective: ${lesson.learning_objective}. Grammar point: ${lesson.grammar.title}. Rule: ${lesson.grammar.rule}. Key vocabulary: ${topVocab}.`;
-    speakText(summaryText, 'summary-audio');
+    playOverviewNarration(lesson, true);
   };
 
   const handleSelectQuizOption = (qId: string, optIdx: number) => {
@@ -368,36 +784,14 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
     }
   };
 
-  // Play dialogue step by step
+  // Play dialogue step by step with distinct natural speaker voices
   const handlePlayFullDialogue = () => {
-    if (!('speechSynthesis' in window)) return;
-    window.speechSynthesis.cancel();
-
-    let currentIndex = 0;
-    const playNextLine = () => {
-      if (currentIndex >= lesson.dialogue.lines.length) {
-        setActiveDialogueIndex(null);
-        return;
-      }
-
-      setActiveDialogueIndex(currentIndex);
-      const line = lesson.dialogue.lines[currentIndex];
-      const utterance = new SpeechSynthesisUtterance(line.en);
-      utterance.lang = voiceAccent;
-      utterance.rate = speechRate;
-
-      utterance.onend = () => {
-        currentIndex++;
-        setTimeout(playNextLine, 600);
-      };
-      utterance.onerror = () => {
-        setActiveDialogueIndex(null);
-      };
-
-      window.speechSynthesis.speak(utterance);
-    };
-
-    playNextLine();
+    if (!lesson) return;
+    if (activeDialogueIndex !== null) {
+      cancelAllLessonAudio();
+      return;
+    }
+    playDialogueNarration(lesson);
   };
 
   const tabsList: Array<{ id: LessonTab; label: string; icon: string }> = [
@@ -454,7 +848,38 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Auto-Audio Natural TTS Toggle */}
+              <button
+                type="button"
+                onClick={handleToggleAutoAudio}
+                className={`px-2.5 py-2 rounded-xl border text-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 ${
+                  isAutoAudioEnabled
+                    ? 'bg-[#f2ca50]/15 border-[#f2ca50]/60 text-[#f2ca50] shadow-sm shadow-[#f2ca50]/10'
+                    : 'bg-[#0c1322] border-[#232a3a] text-[#99907c] hover:text-[#dce2f8]'
+                }`}
+                title={
+                  isAutoAudioEnabled
+                    ? 'Lecture Audio Automatique activée (cliquez pour désactiver)'
+                    : 'Activer la Lecture Audio Automatique avec voix naturelle'
+                }
+                aria-pressed={isAutoAudioEnabled}
+              >
+                <span
+                  className={`material-symbols-outlined text-base ${
+                    isAutoAudioEnabled && autoAudioStatusLabel ? 'animate-pulse' : ''
+                  }`}
+                >
+                  {isAutoAudioEnabled ? 'record_voice_over' : 'voice_over_off'}
+                </span>
+                <span className="hidden md:inline text-[10px] font-mono uppercase font-bold">
+                  Auto Audio : {isAutoAudioEnabled ? 'ON' : 'OFF'}
+                </span>
+                <span className="md:hidden text-[10px] font-mono uppercase font-bold">
+                  {isAutoAudioEnabled ? 'Auto' : 'Muet'}
+                </span>
+              </button>
+
               {/* Audio Controls Dropdown & Accent */}
               <div className="hidden sm:flex items-center gap-1.5 p-1 rounded-xl bg-[#0c1322] border border-[#232a3a] text-xs">
                 <button
@@ -513,7 +938,10 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
 
               <button
                 type="button"
-                onClick={onClose}
+                onClick={() => {
+                  cancelAllLessonAudio();
+                  onClose();
+                }}
                 className="w-9 h-9 rounded-xl bg-[#232a3a] text-[#d0c5af] hover:text-[#f2ca50] flex items-center justify-center transition-colors"
               >
                 <span className="material-symbols-outlined text-lg">close</span>
@@ -545,11 +973,36 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
               );
             })}
           </div>
+          {/* LIVE NATURAL TTS PLAYER BAR (WHEN NARRATION IS ACTIVE) */}
+          {(autoAudioStatusLabel || isPlayingAudio) && (
+            <div className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-[#0c1322] border border-[#f2ca50]/45 text-xs shadow-sm animate-fadeIn">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="material-symbols-outlined text-base text-[#f2ca50] animate-pulse shrink-0">
+                  graphic_eq
+                </span>
+                <span className="font-mono text-[11px] font-semibold text-[#f2ca50] truncate">
+                  {autoAudioStatusLabel || 'Lecture audio naturelle en cours...'}
+                </span>
+                <span className="hidden sm:inline-flex px-1.5 py-0.5 rounded bg-[#232a3a] text-[10px] font-mono text-[#d4c78f] shrink-0">
+                  {voiceAccent === 'en-GB' ? '🇬🇧 UK' : '🇺🇸 US'} • {speechRate}x
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={cancelAllLessonAudio}
+                className="px-2.5 py-1 rounded-lg bg-[#232a3a] hover:bg-rose-500/20 text-[#dce2f8] hover:text-rose-300 border border-[#f2ca50]/30 hover:border-rose-400/50 text-[10px] font-mono font-bold uppercase flex items-center gap-1 shrink-0 transition-colors cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-xs">stop_circle</span>
+                <span>Arrêter</span>
+              </button>
+            </div>
+          )}
+
           {/* SUBTLE IN-CONTEXT DICTIONARY HINT */}
           <div className="flex items-center gap-2 text-[11px] text-[#d4c78f]/90 pt-0.5">
-            <span className="material-symbols-outlined text-sm text-[#f2ca50] shrink-0">auto_awesome</span>
+            <span className="material-symbols-outlined text-sm text-[#f2ca50] shrink-0">translate</span>
             <span>
-              Sélectionnez n&apos;importe quel mot ou phrase (ou pression longue / double-clic) pour afficher instantanément définition, étymologie et exemple bilingue via l&apos;API Google.
+              <strong>Double-cliquez</strong> sur n&apos;importe quel mot pour afficher son infobulle éphémère (traduction + phonétique IPA locale), ou <strong>pression longue / sélection</strong> pour le dictionnaire complet.
             </span>
           </div>
         </header>
@@ -573,22 +1026,45 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                 </p>
                 <div className="pt-2 border-t border-[#232a3a] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <span className="text-xs text-[#99907c]">
-                    Écouter la synthèse vocale complète de la leçon
+                    Écouter la synthèse vocale naturelle complète de la leçon (FR + EN)
                   </span>
-                  <button
-                    type="button"
-                    onClick={handleGenerateLessonSummaryAudio}
-                    className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-[#d4af37] via-[#f2ca50] to-[#cca639] text-[#3c2f00] font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-[#f2ca50]/15 hover:brightness-110 active:scale-95 transition-all cursor-pointer"
-                  >
-                    <span className="material-symbols-outlined text-sm">
-                      {isPlayingAudio === 'summary-audio' ? 'graphic_eq' : 'volume_up'}
-                    </span>
-                    <span>
-                      {isPlayingAudio === 'summary-audio'
-                        ? 'Lecture en cours...'
-                        : 'Générer résumé audio'}
-                    </span>
-                  </button>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isPlayingAudio && isPlayingAudio.startsWith('auto-overview')) {
+                          cancelAllLessonAudio();
+                        } else {
+                          playOverviewNarration(lesson, false);
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-[#232a3a] hover:bg-[#2e374b] text-[#f2ca50] border border-[#f2ca50]/35 font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-sm">
+                        {isPlayingAudio?.startsWith('auto-overview') ? 'stop_circle' : 'play_circle'}
+                      </span>
+                      <span>
+                        {isPlayingAudio?.startsWith('auto-overview')
+                          ? 'Stop Immersion EN'
+                          : 'Lire les phrases (EN)'}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleGenerateLessonSummaryAudio}
+                      className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-[#d4af37] via-[#f2ca50] to-[#cca639] text-[#3c2f00] font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-[#f2ca50]/15 hover:brightness-110 active:scale-95 transition-all cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-sm">
+                        {isPlayingAudio === 'summary-audio' ? 'graphic_eq' : 'volume_up'}
+                      </span>
+                      <span>
+                        {isPlayingAudio === 'summary-audio'
+                          ? 'Arrêter la synthèse'
+                          : 'Synthèse bilingue complète'}
+                      </span>
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -599,35 +1075,48 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                 </h3>
 
                 <div className="space-y-2.5">
-                  {lesson.model_phrases.map((phrase, idx) => (
-                    <div
-                      key={idx}
-                      className="p-3.5 rounded-xl bg-[#151b2b] border border-[#232a3a] hover:border-[#f2ca50]/30 transition-all flex items-start justify-between gap-3"
-                    >
-                      <div className="flex flex-col gap-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-mono text-[#f2ca50] font-bold px-1.5 py-0.2 rounded bg-[#f2ca50]/15">
-                            {phrase.focus}
-                          </span>
-                        </div>
-                        <p className="text-sm sm:text-base font-serif font-bold text-[#dce2f8] tracking-wide">
-                          <InteractiveHighlightText text={phrase.en} />
-                        </p>
-                        {showTranslations && (
-                          <p className="text-xs text-[#d0c5af]/80 italic">
-                            « {phrase.fr} »
+                  {lesson.model_phrases.map((phrase, idx) => {
+                    const isActivePhrase = activeOverviewPhraseIndex === idx;
+                    return (
+                      <div
+                        key={idx}
+                        className={`p-3.5 rounded-xl border transition-all flex items-start justify-between gap-3 ${
+                          isActivePhrase
+                            ? 'bg-[#232a3a] border-[#f2ca50] ring-1 ring-[#f2ca50]/70 shadow-lg shadow-[#f2ca50]/10'
+                            : 'bg-[#151b2b] border-[#232a3a] hover:border-[#f2ca50]/30'
+                        }`}
+                      >
+                        <div className="flex flex-col gap-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-mono text-[#f2ca50] font-bold px-1.5 py-0.2 rounded bg-[#f2ca50]/15">
+                              {phrase.focus}
+                            </span>
+                            {isActivePhrase && (
+                              <span className="text-[10px] font-mono font-bold text-emerald-400 flex items-center gap-1 animate-pulse">
+                                <span className="material-symbols-outlined text-xs">graphic_eq</span>
+                                En lecture
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm sm:text-base font-serif font-bold text-[#dce2f8] tracking-wide">
+                            <InteractiveHighlightText text={phrase.en} />
                           </p>
-                        )}
-                      </div>
+                          {showTranslations && (
+                            <p className="text-xs text-[#d0c5af]/80 italic">
+                              « {phrase.fr} »
+                            </p>
+                          )}
+                        </div>
 
-                      <DualSpeakerButton
-                        text={phrase.en}
-                        id={`phrase-${idx}`}
-                        explanation={phrase.fr}
-                        variant="pill"
-                      />
-                    </div>
-                  ))}
+                        <DualSpeakerButton
+                          text={phrase.en}
+                          id={`phrase-${idx}`}
+                          explanation={phrase.fr}
+                          variant="pill"
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -926,12 +1415,32 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
           {activeTab === 'grammar' && (
             <div className="space-y-4 animate-fadeIn">
               <div className="p-5 rounded-xl bg-[#151b2b] border border-[#f2ca50]/40 flex flex-col gap-3">
-                <div className="flex items-center justify-between border-b border-[#232a3a] pb-2">
+                <div className="flex items-center justify-between border-b border-[#232a3a] pb-2 gap-2 flex-wrap">
                   <span className="text-xs font-mono uppercase font-bold text-[#f2ca50] flex items-center gap-1.5">
                     <span className="material-symbols-outlined text-sm">menu_book</span>
                     Fiche Grammaticale de Niveau {lesson.class_label}
                   </span>
-                  <span className="text-xs text-[#d4c78f] font-mono">{lesson.cefr_level}</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isPlayingAudio?.startsWith('auto-grammar')) {
+                          cancelAllLessonAudio();
+                        } else {
+                          playGrammarNarration(lesson);
+                        }
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-[#232a3a] hover:bg-[#2e374b] text-[#f2ca50] border border-[#f2ca50]/30 text-[10px] font-mono font-bold uppercase flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-xs">
+                        {isPlayingAudio?.startsWith('auto-grammar') ? 'stop_circle' : 'volume_up'}
+                      </span>
+                      <span>
+                        {isPlayingAudio?.startsWith('auto-grammar') ? 'Arrêter' : 'Écouter la fiche'}
+                      </span>
+                    </button>
+                    <span className="text-xs text-[#d4c78f] font-mono">{lesson.cefr_level}</span>
+                  </div>
                 </div>
 
                 <h3 className="font-serif text-xl sm:text-2xl font-bold text-[#dce2f8]">
@@ -1048,10 +1557,16 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                   <button
                     type="button"
                     onClick={handlePlayFullDialogue}
-                    className="px-3.5 py-2 rounded-xl bg-[#f2ca50] text-[#3c2f00] font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-md hover:bg-[#ffe088] active:scale-95 transition-all shrink-0"
+                    className={`px-3.5 py-2 rounded-xl font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-md active:scale-95 transition-all shrink-0 cursor-pointer ${
+                      activeDialogueIndex !== null
+                        ? 'bg-rose-500/20 text-rose-300 border border-rose-400/60 hover:bg-rose-500/30'
+                        : 'bg-[#f2ca50] text-[#3c2f00] hover:bg-[#ffe088]'
+                    }`}
                   >
-                    <span className="material-symbols-outlined text-sm">play_arrow</span>
-                    Lecture Intégrale
+                    <span className="material-symbols-outlined text-sm">
+                      {activeDialogueIndex !== null ? 'stop_circle' : 'play_arrow'}
+                    </span>
+                    {activeDialogueIndex !== null ? 'Arrêter la lecture' : 'Lecture Intégrale'}
                   </button>
                 </div>
               </div>

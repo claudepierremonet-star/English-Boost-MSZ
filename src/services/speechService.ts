@@ -899,13 +899,78 @@ export function normalizeForAmericanAccent(text: string): string {
 }
 
 // ============================================================================
-// PHYSICAL VOICE BINDING & RESOLUTION
+// PHYSICAL VOICE BINDING & NEURAL/NATURAL QUALITY RESOLUTION
 // ============================================================================
-function findPhysicalVoiceForPersona(persona: VoicePersona): SpeechSynthesisVoice | null {
+function scorePhysicalVoiceQuality(
+  v: SpeechSynthesisVoice,
+  persona: VoicePersona,
+  avoidVoiceURIs?: Set<string>
+): number {
+  const nameLower = v.name.toLowerCase();
+  const langLower = v.lang.toLowerCase().replace('_', '-');
+  const targetLangLower = persona.language.toLowerCase();
+
+  let score = 0;
+
+  // Exact regional language match (en-GB vs en-US vs fr-FR)
+  if (langLower === targetLangLower) score += 90;
+  else if (langLower.startsWith(targetLangLower.slice(0, 2))) score += 30;
+
+  // Strongly prioritize Natural / Neural / Online / Enhanced / Google voices
+  if (nameLower.includes('natural')) score += 140;
+  if (nameLower.includes('neural') || nameLower.includes('wavenet')) score += 135;
+  if (nameLower.includes('online')) score += 95;
+  if (nameLower.includes('enhanced') || nameLower.includes('premium')) score += 90;
+  if (nameLower.includes('google')) score += 85;
+  if (nameLower.includes('microsoft')) score += 40;
+
+  // Penalize robotic / legacy synthetic voices
+  if (
+    nameLower.includes('espeak') ||
+    nameLower.includes('mbrola') ||
+    nameLower.includes('festival') ||
+    nameLower.includes('compact')
+  ) {
+    score -= 220;
+  }
+
+  // Match persona name patterns (with priority by order)
+  for (let i = 0; i < persona.preferredPhysicalPatterns.length; i++) {
+    const patternLower = persona.preferredPhysicalPatterns[i].toLowerCase();
+    if (nameLower.includes(patternLower)) {
+      score += 110 - i * 10;
+      break;
+    }
+  }
+
+  // Gender cues
+  const isMale = persona.gender === 'male';
+  const maleKeywords = ['male', 'guy', 'david', 'ryan', 'daniel', 'christopher', 'eric', 'tom', 'oliver', 'george', 'arthur', 'henri', 'thomas', 'paul', 'victor', 'alexandre', 'gabriel'];
+  const femaleKeywords = ['female', 'jenny', 'aria', 'samantha', 'ava', 'zoe', 'harper', 'sonia', 'serena', 'kate', 'victoria', 'eleanor', 'denise', 'amelie', 'juliette', 'camille', 'libby', 'maisie'];
+  if (isMale) {
+    if (maleKeywords.some((k) => nameLower.includes(k))) score += 45;
+    if (femaleKeywords.some((k) => nameLower.includes(k))) score -= 60;
+  } else {
+    if (femaleKeywords.some((k) => nameLower.includes(k))) score += 45;
+    if (maleKeywords.some((k) => nameLower.includes(k))) score -= 60;
+  }
+
+  // Encourage distinct voices for multi-speaker dialogue casts when requested
+  if (avoidVoiceURIs && avoidVoiceURIs.has(v.voiceURI)) {
+    score -= 55;
+  }
+
+  return score;
+}
+
+function findPhysicalVoiceForPersona(
+  persona: VoicePersona,
+  avoidVoiceURIs?: string[]
+): SpeechSynthesisVoice | null {
   const voices = loadVoices();
   if (!voices || voices.length === 0) return null;
 
-  if (persona.language === 'en-US' && customUsVoiceURI) {
+  if (persona.language === 'en-US' && customUsVoiceURI && !avoidVoiceURIs?.length) {
     const customMatch = voices.find((v) => v.voiceURI === customUsVoiceURI);
     if (customMatch) return customMatch;
   }
@@ -918,61 +983,90 @@ function findPhysicalVoiceForPersona(persona: VoicePersona): SpeechSynthesisVoic
     return voices[0] || null;
   }
 
-  // 1. Try exact or partial matches against prioritized physical patterns
-  for (const pattern of persona.preferredPhysicalPatterns) {
-    const patternLower = pattern.toLowerCase();
-    const match = langVoices.find((v) => v.name.toLowerCase().includes(patternLower));
-    if (match) return match;
+  const avoidSet = avoidVoiceURIs?.length ? new Set(avoidVoiceURIs) : undefined;
+  let bestVoice = langVoices[0];
+  let bestScore = -Infinity;
+
+  for (const voice of langVoices) {
+    const sc = scorePhysicalVoiceQuality(voice, persona, avoidSet);
+    if (sc > bestScore) {
+      bestScore = sc;
+      bestVoice = voice;
+    }
   }
 
-  // 2. Try gender matching within the language
-  const isMale = persona.gender === 'male';
-  const genderMatch = langVoices.find((v) => {
-    const nameLower = v.name.toLowerCase();
-    if (isMale) {
-      return (
-        nameLower.includes('male') ||
-        nameLower.includes('guy') ||
-        nameLower.includes('david') ||
-        nameLower.includes('ryan') ||
-        nameLower.includes('daniel') ||
-        nameLower.includes('henri') ||
-        nameLower.includes('thomas') ||
-        nameLower.includes('paul')
-      );
-    } else {
-      return (
-        nameLower.includes('female') ||
-        nameLower.includes('jenny') ||
-        nameLower.includes('aria') ||
-        nameLower.includes('samantha') ||
-        nameLower.includes('sonia') ||
-        nameLower.includes('serena') ||
-        nameLower.includes('denise') ||
-        nameLower.includes('amelie')
-      );
+  return bestVoice;
+}
+
+// ============================================================================
+// HUMAN PROSODY & PUNCTUATION CHUNKING ENGINE
+// ============================================================================
+interface ProsodyChunk {
+  text: string;
+  pitchDelta: number;
+  rateFactor: number;
+  pauseAfterMs: number;
+}
+
+function splitTextIntoProsodyChunks(text: string): ProsodyChunk[] {
+  // Split cleanly on sentence boundaries while keeping terminal punctuation
+  const rawParts = text
+    .split(/(?<=[.!?])\s+|\s*(?:—|;)\s*/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  if (rawParts.length === 0) return [];
+
+  return rawParts.map((part, idx) => {
+    const isLast = idx === rawParts.length - 1;
+    const isQuestion = part.endsWith('?');
+    const isExclamation = part.endsWith('!');
+    const hasComma = part.includes(',');
+
+    if (isQuestion) {
+      return {
+        text: part,
+        pitchDelta: 0.055,
+        rateFactor: 0.99,
+        pauseAfterMs: isLast ? 0 : 145
+      };
     }
+    if (isExclamation) {
+      return {
+        text: part,
+        pitchDelta: 0.035,
+        rateFactor: 1.02,
+        pauseAfterMs: isLast ? 0 : 120
+      };
+    }
+    return {
+      text: part,
+      pitchDelta: hasComma ? -0.01 : 0,
+      rateFactor: part.length > 75 ? 0.97 : 1.0,
+      pauseAfterMs: isLast ? 0 : 110
+    };
   });
-
-  if (genderMatch) return genderMatch;
-
-  // 3. Fallback to strict language match
-  const strictMatch = langVoices.find(
-    (v) => v.lang.toLowerCase().replace('_', '-') === persona.language.toLowerCase()
-  );
-  if (strictMatch) return strictMatch;
-
-  return langVoices[0];
 }
 
 // ============================================================================
 // CORE SPEECH FUNCTIONS
 // ============================================================================
+let activeRunToken = 0;
+let pendingChunkTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearPendingChunkTimer(): void {
+  if (pendingChunkTimer) {
+    clearTimeout(pendingChunkTimer);
+    pendingChunkTimer = null;
+  }
+}
 
 /**
- * Cancel currently playing audio
+ * Cancel currently playing audio (including chained prosody or dialogue sequences)
  */
 export function stopSpeech(): void {
+  activeRunToken += 1;
+  clearPendingChunkTimer();
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
     window.speechSynthesis.cancel();
   }
@@ -981,20 +1075,28 @@ export function stopSpeech(): void {
   notifyListeners();
 }
 
+export interface SpeakOptions {
+  rate?: number;
+  pitch?: number;
+  personaId?: string;
+  pitchOffset?: number;
+  rateMultiplier?: number;
+  avoidVoiceURIs?: string[];
+  naturalProsody?: boolean;
+  onStart?: () => void;
+  onEnd?: () => void;
+  onError?: () => void;
+}
+
 /**
  * Speak text in the specified accent (UK or US) using the user's chosen Voice Persona
+ * or an explicit character persona, with natural human prosody & inflection.
  */
 export function speakText(
   text: string,
   accent: AccentType,
   elementId: string,
-  options?: {
-    rate?: number;
-    pitch?: number;
-    onStart?: () => void;
-    onEnd?: () => void;
-    onError?: () => void;
-  }
+  options?: SpeakOptions
 ): void {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
     currentActiveId = elementId;
@@ -1006,7 +1108,7 @@ export function speakText(
       currentActiveAccent = null;
       notifyListeners();
       options?.onEnd?.();
-    }, 1500);
+    }, 1200);
     return;
   }
 
@@ -1016,37 +1118,165 @@ export function speakText(
     return;
   }
 
+  activeRunToken += 1;
+  const myToken = activeRunToken;
+  clearPendingChunkTimer();
   window.speechSynthesis.cancel();
 
   const cleanText = sanitizeTextForSpeech(text, accent);
-  if (!cleanText) return;
+  if (!cleanText) {
+    options?.onEnd?.();
+    return;
+  }
 
-  const persona = getSelectedVoicePersona(accent);
+  const persona =
+    (options?.personaId ? VOICE_PERSONAS.find((p) => p.id === options.personaId) : undefined) ||
+    getSelectedVoicePersona(accent);
+
+  const physicalVoice = findPhysicalVoiceForPersona(persona, options?.avoidVoiceURIs);
+  const baseRate = (options?.rate ?? persona.rate) * (options?.rateMultiplier ?? 1) * audioSpeedMultiplier;
+  const basePitch = (options?.pitch ?? persona.pitch) + (options?.pitchOffset ?? 0);
+
+  const chunks =
+    options?.naturalProsody !== false
+      ? splitTextIntoProsodyChunks(cleanText)
+      : [{ text: cleanText, pitchDelta: 0, rateFactor: 1, pauseAfterMs: 0 }];
+
+  if (chunks.length === 0) {
+    options?.onEnd?.();
+    return;
+  }
+
+  let hasStartedCallbackFired = false;
+
+  const speakChunkAt = (chunkIdx: number) => {
+    if (activeRunToken !== myToken) return;
+    if (chunkIdx >= chunks.length) {
+      if (currentActiveId === elementId && currentActiveAccent === accent) {
+        currentActiveId = null;
+        currentActiveAccent = null;
+        notifyListeners();
+      }
+      options?.onEnd?.();
+      return;
+    }
+
+    const chunk = chunks[chunkIdx];
+    const utterance = new SpeechSynthesisUtterance(chunk.text);
+    utterance.lang = accent;
+    utterance.rate = Math.max(0.68, Math.min(1.4, baseRate * chunk.rateFactor));
+    utterance.pitch = Math.max(0.65, Math.min(1.42, basePitch + chunk.pitchDelta));
+
+    if (physicalVoice) {
+      utterance.voice = physicalVoice;
+    }
+
+    utterance.onstart = () => {
+      if (activeRunToken !== myToken) return;
+      if (!hasStartedCallbackFired) {
+        hasStartedCallbackFired = true;
+        currentActiveId = elementId;
+        currentActiveAccent = accent;
+        notifyListeners();
+        options?.onStart?.();
+      }
+    };
+
+    utterance.onend = () => {
+      if (activeRunToken !== myToken) return;
+      if (chunkIdx + 1 < chunks.length) {
+        if (chunk.pauseAfterMs > 0) {
+          pendingChunkTimer = setTimeout(() => speakChunkAt(chunkIdx + 1), chunk.pauseAfterMs);
+        } else {
+          speakChunkAt(chunkIdx + 1);
+        }
+      } else {
+        if (currentActiveId === elementId && currentActiveAccent === accent) {
+          currentActiveId = null;
+          currentActiveAccent = null;
+          notifyListeners();
+        }
+        options?.onEnd?.();
+      }
+    };
+
+    utterance.onerror = (e) => {
+      if (activeRunToken !== myToken) return;
+      console.warn('Speech synthesis error:', e);
+      if (currentActiveId === elementId && currentActiveAccent === accent) {
+        currentActiveId = null;
+        currentActiveAccent = null;
+        notifyListeners();
+      }
+      options?.onError?.();
+    };
+
+    window.speechSynthesis.speak(utterance);
+  };
+
+  speakChunkAt(0);
+}
+
+/**
+ * Speak text in French (for bilingual translations, explanations, and phonetics)
+ * Uses the user's selected French Voice Persona (5 Female / 5 Male, Normal & Grave)
+ */
+export function speakFrenchText(
+  text: string,
+  elementId: string,
+  options?: SpeakOptions
+): void {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+    options?.onStart?.();
+    setTimeout(() => options?.onEnd?.(), 1200);
+    return;
+  }
+
+  if (currentActiveId === elementId && currentActiveAccent === null) {
+    stopSpeech();
+    return;
+  }
+
+  activeRunToken += 1;
+  const myToken = activeRunToken;
+  clearPendingChunkTimer();
+  window.speechSynthesis.cancel();
+
+  const cleanText = sanitizeTextForSpeech(text, 'fr-FR');
+  if (!cleanText) {
+    options?.onEnd?.();
+    return;
+  }
+
+  const persona =
+    (options?.personaId ? VOICE_PERSONAS.find((p) => p.id === options.personaId) : undefined) ||
+    getSelectedVoicePersona('fr-FR');
+
   const utterance = new SpeechSynthesisUtterance(cleanText);
+  utterance.lang = 'fr-FR';
 
-  utterance.lang = accent;
-
-  // Calibrate human pitch & rate according to persona and global speed multiplier
-  const effectiveRate = (options?.rate ?? persona.rate) * audioSpeedMultiplier;
-  const effectivePitch = options?.pitch ?? persona.pitch;
+  const effectiveRate = (options?.rate ?? persona.rate) * (options?.rateMultiplier ?? 1) * audioSpeedMultiplier;
+  const effectivePitch = (options?.pitch ?? persona.pitch) + (options?.pitchOffset ?? 0);
 
   utterance.rate = Math.max(0.7, Math.min(1.4, effectiveRate));
   utterance.pitch = Math.max(0.65, Math.min(1.4, effectivePitch));
 
-  const physicalVoice = findPhysicalVoiceForPersona(persona);
+  const physicalVoice = findPhysicalVoiceForPersona(persona, options?.avoidVoiceURIs);
   if (physicalVoice) {
     utterance.voice = physicalVoice;
   }
 
   utterance.onstart = () => {
+    if (activeRunToken !== myToken) return;
     currentActiveId = elementId;
-    currentActiveAccent = accent;
+    currentActiveAccent = null;
     notifyListeners();
     options?.onStart?.();
   };
 
   utterance.onend = () => {
-    if (currentActiveId === elementId && currentActiveAccent === accent) {
+    if (activeRunToken !== myToken) return;
+    if (currentActiveId === elementId) {
       currentActiveId = null;
       currentActiveAccent = null;
       notifyListeners();
@@ -1054,9 +1284,9 @@ export function speakText(
     options?.onEnd?.();
   };
 
-  utterance.onerror = (e) => {
-    console.warn('Speech synthesis error:', e);
-    if (currentActiveId === elementId && currentActiveAccent === accent) {
+  utterance.onerror = () => {
+    if (activeRunToken !== myToken) return;
+    if (currentActiveId === elementId) {
       currentActiveId = null;
       currentActiveAccent = null;
       notifyListeners();
@@ -1068,78 +1298,91 @@ export function speakText(
 }
 
 /**
- * Speak text in French (for bilingual translations, explanations, and phonetics)
- * Uses the user's selected French Voice Persona (5 Female / 5 Male, Normal & Grave)
+ * Play a full multi-speaker dialogue sequence turn-by-turn, assigning distinct
+ * human personas & subtle acoustic pitch differentiation per character.
  */
-export function speakFrenchText(
-  text: string,
-  elementId: string,
-  options?: {
-    rate?: number;
-    pitch?: number;
-    onStart?: () => void;
-    onEnd?: () => void;
+export interface DialoguePlaybackTurn {
+  id: string;
+  en: string;
+  fr?: string;
+  personaId?: string;
+  pitchOffset?: number;
+  rateMultiplier?: number;
+}
+
+export function playDialogueSequence(
+  turns: DialoguePlaybackTurn[],
+  accent: AccentType,
+  callbacks: {
+    onTurnStart?: (turnIndex: number) => void;
+    onComplete?: () => void;
     onError?: () => void;
+    includeFrench?: boolean;
+    rateMultiplier?: number;
   }
-): void {
-  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-    options?.onStart?.();
-    setTimeout(() => options?.onEnd?.(), 1500);
-    return;
+): () => void {
+  if (!turns || turns.length === 0) {
+    callbacks.onComplete?.();
+    return () => undefined;
   }
 
-  if (currentActiveId === elementId && currentActiveAccent === null) {
+  stopSpeech();
+  const sequenceToken = activeRunToken;
+  let cancelled = false;
+  let stepTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const cancelAll = () => {
+    cancelled = true;
+    if (stepTimer) {
+      clearTimeout(stepTimer);
+      stepTimer = null;
+    }
     stopSpeech();
-    return;
-  }
-
-  window.speechSynthesis.cancel();
-
-  const cleanText = sanitizeTextForSpeech(text, 'fr-FR');
-  if (!cleanText) return;
-
-  const persona = getSelectedVoicePersona('fr-FR');
-  const utterance = new SpeechSynthesisUtterance(cleanText);
-
-  utterance.lang = 'fr-FR';
-
-  const effectiveRate = (options?.rate ?? persona.rate) * audioSpeedMultiplier;
-  const effectivePitch = options?.pitch ?? persona.pitch;
-
-  utterance.rate = Math.max(0.7, Math.min(1.4, effectiveRate));
-  utterance.pitch = Math.max(0.65, Math.min(1.4, effectivePitch));
-
-  const physicalVoice = findPhysicalVoiceForPersona(persona);
-  if (physicalVoice) {
-    utterance.voice = physicalVoice;
-  }
-
-  utterance.onstart = () => {
-    currentActiveId = elementId;
-    currentActiveAccent = null;
-    notifyListeners();
-    options?.onStart?.();
   };
 
-  utterance.onend = () => {
-    if (currentActiveId === elementId) {
-      currentActiveId = null;
-      currentActiveAccent = null;
-      notifyListeners();
+  const playTurnAt = (idx: number) => {
+    if (cancelled || activeRunToken !== sequenceToken) return;
+    if (idx >= turns.length) {
+      callbacks.onComplete?.();
+      return;
     }
-    options?.onEnd?.();
+
+    const turn = turns[idx];
+    callbacks.onTurnStart?.(idx);
+
+    const advance = () => {
+      if (cancelled) return;
+      stepTimer = setTimeout(() => playTurnAt(idx + 1), 320);
+    };
+
+    speakText(turn.en, accent, turn.id, {
+      personaId: turn.personaId,
+      pitchOffset: turn.pitchOffset,
+      rateMultiplier: (turn.rateMultiplier ?? 1) * (callbacks.rateMultiplier ?? 1),
+      naturalProsody: true,
+      onEnd: () => {
+        if (cancelled) return;
+        if (callbacks.includeFrench && turn.fr) {
+          stepTimer = setTimeout(() => {
+            if (cancelled) return;
+            speakFrenchText(turn.fr!, `${turn.id}-fr`, {
+              rateMultiplier: callbacks.rateMultiplier ?? 1,
+              onEnd: advance,
+              onError: advance
+            });
+          }, 220);
+        } else {
+          advance();
+        }
+      },
+      onError: () => {
+        if (!cancelled) callbacks.onError?.();
+      }
+    });
   };
 
-  utterance.onerror = () => {
-    if (currentActiveId === elementId) {
-      currentActiveId = null;
-      currentActiveAccent = null;
-      notifyListeners();
-    }
-    options?.onError?.();
-  };
-
-  window.speechSynthesis.speak(utterance);
+  playTurnAt(0);
+  return cancelAll;
 }
 
 /**
@@ -1151,14 +1394,17 @@ export function previewVoicePersona(personaId: string, onEnd?: () => void): void
 
   if (persona.language === 'fr-FR') {
     speakFrenchText(persona.sampleSentence, `preview-${personaId}`, {
+      personaId,
       pitch: persona.pitch,
       rate: persona.rate,
       onEnd
     });
   } else {
     speakText(persona.sampleSentence, persona.language as AccentType, `preview-${personaId}`, {
+      personaId,
       pitch: persona.pitch,
       rate: persona.rate,
+      naturalProsody: true,
       onEnd
     });
   }

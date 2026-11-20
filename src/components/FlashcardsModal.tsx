@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { FLASHCARD_ITEMS, shuffleArray, type FlashcardItem } from '../data/curriculum';
 import { THEMES_500, GRADES_500 } from '../data/spacedRepetition500';
+import { DIALOGUE_SM2_CARDS } from '../data/atelierDialogues500';
 import { saveFlashcardProgress } from '../firebase/client';
 import type { CEFRLevel } from '../firebase/types';
 import confetti from 'canvas-confetti';
@@ -14,26 +15,63 @@ import {
   setAutoPlayOnFlip,
   getAutoPlayOnDisplay,
   setAutoPlayOnDisplay,
-  peekNextAlternatingAccent,
+  getSelectedVoicePersona,
+  subscribeToSpeechState,
   speakText,
   speakFrenchText
 } from '../services/speechService';
 import { getWordLinguisticDetails } from '../utils/flashcardDetailsHelper';
 import { recordFlashcardError } from '../utils/errorJournal';
 
+export type FlashcardDeckMode = 'vocab' | 'dialogues' | 'pinned';
+
 interface FlashcardsModalProps {
   currentLevel: CEFRLevel;
   onClose: () => void;
   onCardReviewed?: () => void;
   initialFocusMode?: boolean;
+  initialDeckMode?: FlashcardDeckMode;
 }
+
+const PINNED_SM2_STORAGE_KEY = 'eb_msz_atelier_pinned_sm2_cards_v1';
+
+function buildDialogueFlashcardItems(): FlashcardItem[] {
+  return DIALOGUE_SM2_CARDS.map((kc, idx) => ({
+    id: kc.id,
+    term: kc.term,
+    phonetic: kc.ipa,
+    category: 'Expression de Dialogue',
+    level: (['A1', 'A2', 'B1', 'B2', 'C1', 'C2'].includes(kc.level) ? kc.level : 'B1') as CEFRLevel,
+    gradeLevel: 'Atelier',
+    gradeLabel: `Dialogue #${kc.dialogueNumber}`,
+    theme: 'dialogues',
+    themeLabel: kc.themeLabel,
+    frenchDef: kc.frenchDef,
+    englishDef: kc.englishContext,
+    etymology: kc.tipFr,
+    pressExcerpt: kc.englishContext,
+    pressSource: `Atelier Conversationnel • #${kc.dialogueNumber}`,
+    collocations: [kc.term],
+    nuanceComparisons: [
+      {
+        word: kc.term,
+        distinction: kc.tipFr
+      }
+    ],
+    index: idx + 1
+  } as unknown as FlashcardItem));
+}
+
+const DIALOGUE_FLASHCARD_ITEMS: FlashcardItem[] = buildDialogueFlashcardItems();
 
 export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
   currentLevel,
   onClose,
   onCardReviewed,
-  initialFocusMode = false
+  initialFocusMode = false,
+  initialDeckMode = 'vocab'
 }) => {
+  const [deckMode, setDeckMode] = useState<FlashcardDeckMode>(initialDeckMode);
   const [selectedGrade, setSelectedGrade] = useState<string>('all');
   const [selectedTheme, setSelectedTheme] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -56,6 +94,8 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
   const [showFilterBar, setShowFilterBar] = useState<boolean>(true);
   const [showJumper, setShowJumper] = useState<boolean>(false);
   const [shuffledOrder, setShuffledOrder] = useState<number[] | null>(null);
+  const [activeAudioAccent, setActiveAudioAccent] = useState<string | null>(null);
+  const [reviewedTodayCount, setReviewedTodayCount] = useState<number>(0);
 
   // Touch gesture & scrolling tracking to prevent accidental flips when reading or scrolling
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
@@ -65,8 +105,14 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
   const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    return subscribeToSpeechState((activeId, activeAccent) => {
+      setActiveAudioAccent(activeId ? activeAccent || 'fr' : null);
+    });
+  }, []);
+
+  useEffect(() => {
     setShuffledOrder(null);
-  }, [selectedGrade, selectedTheme, searchQuery]);
+  }, [deckMode, selectedGrade, selectedTheme, searchQuery]);
 
   useEffect(() => {
     return () => {
@@ -75,14 +121,34 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
     };
   }, []);
 
-  // Filter 500 cards dynamically
+  const pinnedIdsSet = useMemo(() => {
+    try {
+      const raw = localStorage.getItem(PINNED_SM2_STORAGE_KEY);
+      return raw ? new Set<string>(JSON.parse(raw)) : new Set<string>();
+    } catch {
+      return new Set<string>();
+    }
+  }, [deckMode]);
+
+  const activeDeckSource = useMemo(() => {
+    if (deckMode === 'dialogues') return DIALOGUE_FLASHCARD_ITEMS;
+    if (deckMode === 'pinned') {
+      const pinned = DIALOGUE_FLASHCARD_ITEMS.filter((c) => pinnedIdsSet.has(c.id));
+      return pinned.length > 0 ? pinned : DIALOGUE_FLASHCARD_ITEMS.slice(0, 12);
+    }
+    return FLASHCARD_ITEMS;
+  }, [deckMode, pinnedIdsSet]);
+
+  // Filter active deck dynamically
   const filteredCards = useMemo(() => {
-    let list = FLASHCARD_ITEMS.filter((item) => {
-      if (selectedGrade !== 'all' && item.gradeLevel !== selectedGrade) {
-        return false;
-      }
-      if (selectedTheme !== 'all' && item.theme !== selectedTheme) {
-        return false;
+    const list = activeDeckSource.filter((item) => {
+      if (deckMode === 'vocab') {
+        if (selectedGrade !== 'all' && item.gradeLevel !== selectedGrade) {
+          return false;
+        }
+        if (selectedTheme !== 'all' && item.theme !== selectedTheme) {
+          return false;
+        }
       }
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
@@ -101,11 +167,13 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
     }
 
     return list;
-  }, [selectedGrade, selectedTheme, searchQuery, shuffledOrder]);
+  }, [activeDeckSource, deckMode, selectedGrade, selectedTheme, searchQuery, shuffledOrder]);
 
   // Keep cardIndex valid
   const safeIndex = filteredCards.length > 0 ? Math.min(cardIndex, filteredCards.length - 1) : 0;
-  const card: FlashcardItem | undefined = filteredCards[safeIndex] || FLASHCARD_ITEMS[0];
+  const card: FlashcardItem | undefined = filteredCards[safeIndex] || activeDeckSource[0];
+  const activeUkPersona = getSelectedVoicePersona('en-GB');
+  const activeUsPersona = getSelectedVoicePersona('en-US');
 
   // Derive detailed pedagogical linguistics for current card
   const linguisticDetails = useMemo(() => {
@@ -372,6 +440,7 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
       state: quality === 'easy' ? 'mastered' : 'review'
     });
 
+    setReviewedTodayCount((c) => c + 1);
     onCardReviewed?.();
 
     // Advance smoothly
@@ -581,10 +650,71 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
             </div>
           )}
 
-          {/* Collapsible Filter Bar: School Grades + Themes + Search */}
+          {/* Collapsible Filter Bar: Deck Switcher + School Grades + Themes + Search */}
           {showFilterBar && (
             <div className="flex flex-col gap-2 pt-1 border-t border-[#1e2538] animate-fadeIn">
-              {/* Row 1: School Grade Levels Tabs */}
+              {/* Row 0: Elegant Deck Collection Switcher */}
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-[#070e1d] border border-[#f2ca50]/30 overflow-x-auto no-scrollbar">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeckMode('vocab');
+                      setCardIndex(0);
+                      setIsFlipped(false);
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold whitespace-nowrap transition-all cursor-pointer ${
+                      deckMode === 'vocab'
+                        ? 'bg-[#f2ca50] text-[#3c2f00] shadow-sm'
+                        : 'text-[#d0c5af] hover:text-[#dce2f8]'
+                    }`}
+                  >
+                    Lexique 500 Mots
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeckMode('dialogues');
+                      setCardIndex(0);
+                      setIsFlipped(false);
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold whitespace-nowrap transition-all cursor-pointer ${
+                      deckMode === 'dialogues'
+                        ? 'bg-[#f2ca50] text-[#3c2f00] shadow-sm'
+                        : 'text-[#d0c5af] hover:text-[#dce2f8]'
+                    }`}
+                  >
+                    Dialogues Atelier ({DIALOGUE_FLASHCARD_ITEMS.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeckMode('pinned');
+                      setCardIndex(0);
+                      setIsFlipped(false);
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold whitespace-nowrap transition-all cursor-pointer ${
+                      deckMode === 'pinned'
+                        ? 'bg-[#f2ca50] text-[#3c2f00] shadow-sm'
+                        : 'text-[#d0c5af] hover:text-[#dce2f8]'
+                    }`}
+                  >
+                    Mes Épingles ({pinnedIdsSet.size})
+                  </button>
+                </div>
+
+                <div className="hidden sm:flex items-center gap-2 text-[10px] font-mono text-[#d4c78f]">
+                  <span>Voix : 🇬🇧 {activeUkPersona.name} &bull; 🇺🇸 {activeUsPersona.name}</span>
+                  {reviewedTodayCount > 0 && (
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-400/30 font-bold">
+                      +{reviewedTodayCount} révisée{reviewedTodayCount > 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Row 1: School Grade Levels Tabs (shown in Vocab 500 mode) */}
+              {deckMode === 'vocab' && (
               <div className="flex items-center gap-1 overflow-x-auto py-0.5 no-scrollbar">
                 <span className="text-[10px] font-mono uppercase text-[#99907c] shrink-0 mr-1 font-bold">
                   Niveau :
@@ -630,6 +760,7 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
                   );
                 })}
               </div>
+              )}
 
               {/* Row 2: Themes & Search */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
@@ -818,17 +949,27 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
               </div>
             )}
 
-            {/* 3D Flippable Flashcard with hardware-accelerated fluid transforms */}
+            {/* 3D Flippable Archival Manuscript Flashcard Stack */}
             {card && (
               <div
-                style={{ perspective: '1600px' }}
-                className="w-full touch-pan-y"
+                style={{ perspective: '1700px' }}
+                className="relative w-full touch-pan-y py-1"
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
               >
+                {/* Layered Physical Card Stack Depth Underlays */}
                 <div
-                  className={`w-full rounded-2xl relative shadow-2xl transition-transform duration-500 ease-out ${
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-x-3 top-3 bottom-0 rounded-2xl bg-[#111726]/70 border border-[#f2ca50]/15 -rotate-1 shadow-xl"
+                />
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-x-2 top-2 bottom-1 rounded-2xl bg-[#151c2d]/85 border border-[#f2ca50]/25 rotate-[0.8deg] shadow-xl"
+                />
+
+                <div
+                  className={`w-full rounded-2xl relative shadow-[0_26px_65px_-16px_rgba(0,0,0,0.85)] transition-transform duration-500 ease-out ${
                     isFlipped ? '[transform:rotateY(180deg)]' : ''
                   } ${isFocusMode ? 'min-h-[480px] sm:min-h-[530px]' : 'min-h-[450px] sm:min-h-[490px]'}`}
                   style={{ transformStyle: 'preserve-3d', WebkitTransformStyle: 'preserve-3d' }}
@@ -842,8 +983,8 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
                       isFlipped ? 'pointer-events-none opacity-0' : 'pointer-events-auto opacity-100 z-10'
                     } ${
                       isFocusMode
-                        ? 'bg-gradient-to-br from-[#0c1426] via-[#101930] to-[#0a101f] border-[#f2ca50]/60 ring-1 ring-[#f2ca50]/40 shadow-[0_20px_60px_rgba(242,202,80,0.18)]'
-                        : 'bg-[#191f2f] border-[#f2ca50]/40 hover:border-[#f2ca50]/70'
+                        ? 'bg-gradient-to-br from-[#0c1426] via-[#101930] to-[#0a101f] border-[#f2ca50]/65 ring-1 ring-[#f2ca50]/40 shadow-[0_20px_60px_rgba(242,202,80,0.2)]'
+                        : 'bg-gradient-to-br from-[#1b2234] via-[#171d2c] to-[#111725] border-[#f2ca50]/50 hover:border-[#f2ca50]/85'
                     }`}
                     style={{
                       backfaceVisibility: 'hidden',
@@ -851,9 +992,21 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
                       transform: 'translate3d(0,0,0)'
                     }}
                   >
-                    {/* Glowing Filament & Ambient Aura */}
-                    <div className="absolute top-0 left-0 right-0 h-[2.5px] bg-gradient-to-r from-transparent via-[#f2ca50] via-yellow-200 to-transparent shadow-[0_0_14px_#f2ca50]" />
-                    <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-[#f2ca50]/15 via-transparent to-transparent pointer-events-none" />
+                    {/* Fine Ornamental Brass Corner Filigrees */}
+                    <span aria-hidden="true" className="pointer-events-none absolute top-2.5 left-2.5 w-4 h-4 border-t-2 border-l-2 border-[#f2ca50]/60 rounded-tl-md" />
+                    <span aria-hidden="true" className="pointer-events-none absolute top-2.5 right-2.5 w-4 h-4 border-t-2 border-r-2 border-[#f2ca50]/60 rounded-tr-md" />
+                    <span aria-hidden="true" className="pointer-events-none absolute bottom-2.5 left-2.5 w-4 h-4 border-b-2 border-l-2 border-[#f2ca50]/60 rounded-bl-md" />
+                    <span aria-hidden="true" className="pointer-events-none absolute bottom-2.5 right-2.5 w-4 h-4 border-b-2 border-r-2 border-[#f2ca50]/60 rounded-br-md" />
+
+                    {/* Glowing Gold Top Foil Filament & Ambient Aura */}
+                    <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-[#f2ca50] via-yellow-100 to-transparent shadow-[0_0_16px_#f2ca50]" />
+                    <div className="absolute top-0 right-0 w-56 h-56 bg-gradient-to-br from-[#f2ca50]/14 via-transparent to-transparent pointer-events-none" />
+                    {activeAudioAccent && (
+                      <div className="absolute top-3.5 left-1/2 -translate-x-1/2 flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#f2ca50]/15 border border-[#f2ca50]/40 text-[10px] font-mono text-[#f2ca50] animate-pulse z-20">
+                        <span className="material-symbols-outlined text-xs">graphic_eq</span>
+                        <span>Voix Naturelle Active</span>
+                      </div>
+                    )}
 
                     {/* Top Meta Badges: Grade + Part of Speech + Theme */}
                     <div className="flex items-center justify-between relative z-10 flex-wrap gap-2">

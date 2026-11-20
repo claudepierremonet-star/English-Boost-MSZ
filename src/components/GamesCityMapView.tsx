@@ -1,6 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import type { ArcadeProgressionState, MiniGameMeta } from '../data/twentyGamesData';
+import {
+  City3DMaquetteViewport,
+  LuxuryArchitecturalTerrainSvg,
+  LuxuryCompassDial3D,
+  LuxuryCornerBrackets
+} from './CityMapLuxury3DKit';
 
 interface GamesDistrict {
   id: 'all' | 'q1' | 'q2' | 'q3' | 'q4';
@@ -137,50 +143,6 @@ function buildBoulevardPath(points: MapPoint[], isMobile: boolean): string {
   return d;
 }
 
-const CompassRoseSvg: React.FC<{ accentHex: string }> = ({ accentHex }) => (
-  <svg
-    viewBox="0 0 64 64"
-    className="w-11 h-11 sm:w-12 sm:h-12 opacity-45 pointer-events-none select-none"
-    aria-hidden="true"
-  >
-    <circle
-      cx="32"
-      cy="32"
-      r="25"
-      fill="none"
-      stroke={accentHex}
-      strokeWidth="0.9"
-      strokeOpacity="0.45"
-      strokeDasharray="2 3"
-    />
-    <circle
-      cx="32"
-      cy="32"
-      r="18"
-      fill="none"
-      stroke={accentHex}
-      strokeWidth="0.7"
-      strokeOpacity="0.35"
-    />
-    <polygon points="32,4 36,28 32,24 28,28" fill={accentHex} fillOpacity="0.85" />
-    <polygon points="32,60 36,36 32,40 28,36" fill={accentHex} fillOpacity="0.35" />
-    <polygon points="60,32 36,36 40,32 36,28" fill={accentHex} fillOpacity="0.45" />
-    <polygon points="4,32 28,36 24,32 28,28" fill={accentHex} fillOpacity="0.45" />
-    <circle cx="32" cy="32" r="3" fill="#0c1322" stroke={accentHex} strokeWidth="1.2" />
-    <text
-      x="32"
-      y="12"
-      textAnchor="middle"
-      fontSize="6"
-      fill={accentHex}
-      fontFamily="monospace"
-      fontWeight="700"
-    >
-      N
-    </text>
-  </svg>
-);
-
 interface GamesCityMapViewProps {
   games: MiniGameMeta[];
   progression: ArcadeProgressionState;
@@ -203,6 +165,7 @@ export const GamesCityMapView: React.FC<GamesCityMapViewProps> = ({
   const shouldReduceMotion = useReducedMotion();
 
   const [selectedDistrictId, setSelectedDistrictId] = useState<GamesDistrict['id']>('all');
+  const [is3DView, setIs3DView] = useState<boolean>(true);
   const [isMobile, setIsMobile] = useState<boolean>(() =>
     typeof window !== 'undefined' ? window.innerWidth < 640 : false
   );
@@ -319,17 +282,50 @@ export const GamesCityMapView: React.FC<GamesCityMapViewProps> = ({
             </span>
           </div>
 
-          {frontierGame && (
-            <button
-              type="button"
-              onClick={handleCenterOnFrontier}
-              className="px-3 py-1.5 rounded-xl bg-[#0c1322] hover:bg-[#191f2f] border border-[#f2ca50]/45 text-xs font-mono font-semibold text-[#f2ca50] flex items-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap shrink-0"
-              title={`Centrer sur votre étape actuelle : Jeu #${frontierGame.number}`}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div
+              className="inline-flex items-center gap-1 p-1 rounded-xl bg-[#0c1322] border border-[#232a3a]"
+              role="group"
+              aria-label="Perspective cartographique"
             >
-              <span className="material-symbols-outlined text-sm">my_location</span>
-              <span>Étape #{String(frontierGame.number).padStart(2, '0')}</span>
-            </button>
-          )}
+              <button
+                type="button"
+                onClick={() => setIs3DView(true)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 flex items-center gap-1 transition-colors cursor-pointer ${
+                  is3DView
+                    ? 'bg-[#f2ca50] text-[#3c2f00] font-bold shadow-sm'
+                    : 'text-[#d0c5af] hover:text-[#dce2f8]'
+                }`}
+              >
+                <span className="material-symbols-outlined text-sm">view_in_ar</span>
+                <span>Diorama 3D</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIs3DView(false)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 flex items-center gap-1 transition-colors cursor-pointer ${
+                  !is3DView
+                    ? 'bg-[#f2ca50] text-[#3c2f00] font-bold shadow-sm'
+                    : 'text-[#d0c5af] hover:text-[#dce2f8]'
+                }`}
+              >
+                <span className="material-symbols-outlined text-sm">map</span>
+                <span>Plan Zénithal</span>
+              </button>
+            </div>
+
+            {frontierGame && (
+              <button
+                type="button"
+                onClick={handleCenterOnFrontier}
+                className="px-3 py-1.5 rounded-xl bg-[#0c1322] hover:bg-[#191f2f] border border-[#f2ca50]/45 text-xs font-mono font-semibold text-[#f2ca50] flex items-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap shrink-0"
+                title={`Centrer sur votre étape actuelle : Jeu #${frontierGame.number}`}
+              >
+                <span className="material-symbols-outlined text-sm">my_location</span>
+                <span>Étape #{String(frontierGame.number).padStart(2, '0')}</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Quartiers Filter Bar */}
@@ -395,8 +391,9 @@ export const GamesCityMapView: React.FC<GamesCityMapViewProps> = ({
             exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
             transition={{ duration: 0.2 }}
             aria-label="Monument ludique sélectionné"
-            className="p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-[#151b2b] via-[#12192b] to-[#0c1322] border border-[#f2ca50]/45 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
+            className="relative p-4 sm:p-6 rounded-3xl bg-gradient-to-br from-[#151b2b] via-[#12192b] to-[#080d1a] border border-[#f2ca50]/45 shadow-[0_20px_48px_-14px_rgba(0,0,0,0.75)] flex flex-col md:flex-row items-start md:items-center justify-between gap-4 overflow-hidden"
           >
+            <LuxuryCornerBrackets accentHex={inspectedDistrict.accentHex} />
             <div className="flex items-start gap-3.5 min-w-0">
               <div
                 className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center shrink-0 border shadow-md ${
@@ -517,154 +514,27 @@ export const GamesCityMapView: React.FC<GamesCityMapViewProps> = ({
             <span className="hidden sm:inline text-[11px] font-mono text-[#99907c]">
               Cliquer pour inspecter · 2e clic pour jouer
             </span>
-            <CompassRoseSvg accentHex={activeDistrictMeta.accentHex} />
+            <LuxuryCompassDial3D accentHex={activeDistrictMeta.accentHex} />
           </div>
         </header>
 
-        {/* Interactive Blueprint Winding Canvas */}
-        <div
-          className="relative w-full overflow-hidden bg-[#0c1322]"
-          style={{ height: `${canvasHeight}px` }}
+        {/* Interactive 3D Luxury Maquette Winding Canvas */}
+        <City3DMaquetteViewport
+          is3DView={is3DView}
+          isMobile={isMobile}
+          canvasHeight={canvasHeight}
+          accentHex={activeDistrictMeta.accentHex}
         >
-          {/* Blueprint Grid */}
-          <div
-            className="absolute inset-0 pointer-events-none opacity-25"
-            style={{
-              backgroundImage:
-                'linear-gradient(to right, rgba(212,199,143,0.12) 1px, transparent 1px), linear-gradient(to bottom, rgba(212,199,143,0.12) 1px, transparent 1px)',
-              backgroundSize: '48px 48px'
-            }}
-            aria-hidden="true"
+          <LuxuryArchitecturalTerrainSvg
+            canvasHeight={canvasHeight}
+            accentHex={activeDistrictMeta.accentHex}
+            fullPathD={fullPathD}
+            activePathD={activePathD}
+            shouldReduceMotion={Boolean(shouldReduceMotion)}
+            uid="games-atlas"
           />
 
-          {/* SVG River, Parks & Boulevard Layer */}
-          <svg
-            viewBox={`0 0 1000 ${canvasHeight}`}
-            preserveAspectRatio="none"
-            className="absolute inset-0 w-full h-full pointer-events-none"
-            aria-hidden="true"
-          >
-            {/* Ornamental Urban Parks */}
-            <rect
-              x="54"
-              y={canvasHeight * 0.14}
-              width="120"
-              height="68"
-              rx="16"
-              fill="#102824"
-              fillOpacity="0.45"
-              stroke="#34d399"
-              strokeOpacity="0.16"
-              strokeWidth="1"
-              vectorEffect="non-scaling-stroke"
-            />
-            <rect
-              x="812"
-              y={canvasHeight * 0.48}
-              width="130"
-              height="74"
-              rx="18"
-              fill="#102824"
-              fillOpacity="0.42"
-              stroke="#34d399"
-              strokeOpacity="0.16"
-              strokeWidth="1"
-              vectorEffect="non-scaling-stroke"
-            />
-            <rect
-              x="76"
-              y={canvasHeight * 0.78}
-              width="136"
-              height="62"
-              rx="14"
-              fill="#151b2b"
-              fillOpacity="0.45"
-              stroke="#d4c78f"
-              strokeOpacity="0.14"
-              strokeWidth="1"
-              vectorEffect="non-scaling-stroke"
-            />
-
-            {/* Winding Thames-inspired Waterway */}
-            <path
-              d={`M -30 ${canvasHeight * 0.34} C 260 ${canvasHeight * 0.24}, 420 ${
-                canvasHeight * 0.52
-              }, 690 ${canvasHeight * 0.39} S 940 ${canvasHeight * 0.28}, 1030 ${
-                canvasHeight * 0.44
-              }`}
-              fill="none"
-              stroke="#183254"
-              strokeOpacity="0.62"
-              strokeWidth="26"
-              strokeLinecap="round"
-              vectorEffect="non-scaling-stroke"
-            />
-            <path
-              d={`M -30 ${canvasHeight * 0.34} C 260 ${canvasHeight * 0.24}, 420 ${
-                canvasHeight * 0.52
-              }, 690 ${canvasHeight * 0.39} S 940 ${canvasHeight * 0.28}, 1030 ${
-                canvasHeight * 0.44
-              }`}
-              fill="none"
-              stroke="#38bdf8"
-              strokeOpacity="0.22"
-              strokeWidth="1.5"
-              strokeDasharray="8 10"
-              vectorEffect="non-scaling-stroke"
-            />
-
-            {/* Base Paved Boulevard */}
-            {fullPathD && (
-              <>
-                <path
-                  d={fullPathD}
-                  fill="none"
-                  stroke="#1a2236"
-                  strokeWidth="22"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  vectorEffect="non-scaling-stroke"
-                />
-                <path
-                  d={fullPathD}
-                  fill="none"
-                  stroke="#2e374d"
-                  strokeWidth="14"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  vectorEffect="non-scaling-stroke"
-                />
-                <path
-                  d={fullPathD}
-                  fill="none"
-                  stroke="#99907c"
-                  strokeOpacity="0.32"
-                  strokeWidth="2"
-                  strokeDasharray="6 8"
-                  strokeLinecap="round"
-                  vectorEffect="non-scaling-stroke"
-                />
-              </>
-            )}
-
-            {/* Golden Illuminated Unlocked Route */}
-            {activePathD && (
-              <motion.path
-                d={activePathD}
-                fill="none"
-                stroke="#f2ca50"
-                strokeWidth="4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                vectorEffect="non-scaling-stroke"
-                initial={shouldReduceMotion ? { pathLength: 1 } : { pathLength: 0 }}
-                animate={{ pathLength: 1 }}
-                transition={{ duration: 0.9, ease: 'easeOut' }}
-              />
-            )}
-          </svg>
-
-          {/* Positioned Interactive Game Monument Nodes */}
+          {/* Positioned 3D Sculpted Game Monument Plinths */}
           {visibleGames.map((game, idx) => {
             const pt = points[idx];
             if (!pt) return null;
@@ -675,32 +545,43 @@ export const GamesCityMapView: React.FC<GamesCityMapViewProps> = ({
             const isSelected = inspectedGame?.id === game.id;
             const dist = getDistrictForGameNumber(game.number);
 
+            const plinthShadow = isSelected
+              ? '0 7px 0 #8a6a14, 0 16px 30px rgba(242, 202, 80, 0.42)'
+              : isCompleted
+              ? '0 6px 0 #0a4232, 0 14px 24px rgba(16, 185, 129, 0.28)'
+              : unlocked
+              ? '0 6px 0 #161d30, 0 14px 22px rgba(0, 0, 0, 0.7)'
+              : '0 4px 0 #0c111d, 0 8px 14px rgba(0, 0, 0, 0.55)';
+
             return (
               <div
                 key={game.id}
                 style={{
                   left: `${pt.xPct}%`,
-                  top: `${pt.yPx}px`
+                  top: `${pt.yPx}px`,
+                  transform: is3DView ? 'translateZ(18px)' : undefined,
+                  transformStyle: is3DView ? 'preserve-3d' : undefined
                 }}
                 className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10 w-[138px] sm:w-[172px]"
               >
-                {/* Monument Medallion Button */}
+                {/* Monument 3D Medallion Plinth Button */}
                 <motion.button
                   ref={(el) => {
                     nodeRefs.current[game.id] = el;
                   }}
                   type="button"
                   onClick={() => handleNodeInteraction(game)}
-                  whileHover={shouldReduceMotion ? undefined : { y: -4, scale: 1.05 }}
+                  whileHover={shouldReduceMotion ? undefined : { y: -5, scale: 1.06 }}
                   whileTap={shouldReduceMotion ? undefined : { scale: 0.96 }}
-                  className={`relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center border-2 transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] ${
+                  style={{ boxShadow: plinthShadow }}
+                  className={`relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center border-2 transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] overflow-visible ${
                     isSelected
-                      ? 'bg-[#1b243b] border-[#f2ca50] text-[#f2ca50] shadow-[0_0_24px_rgba(242,202,80,0.45)] ring-2 ring-[#f2ca50]/35'
+                      ? 'bg-gradient-to-br from-[#2b3754] to-[#12192b] border-[#f2ca50] text-[#f2ca50] ring-2 ring-[#f2ca50]/35'
                       : isCompleted
-                      ? 'bg-[#0f2922] border-emerald-400 text-emerald-300 shadow-[0_6px_18px_rgba(16,185,129,0.22)]'
+                      ? 'bg-gradient-to-br from-[#164a3e] to-[#0a261f] border-emerald-400 text-emerald-300'
                       : unlocked
-                      ? 'bg-[#151b2b] border-[#f2ca50]/55 text-[#f2ca50] shadow-lg hover:border-[#f2ca50]'
-                      : 'bg-[#0e131f] border-[#262e42] text-[#7a8296] opacity-85 hover:opacity-100'
+                      ? 'bg-gradient-to-br from-[#232e48] to-[#101728] border-[#f2ca50]/60 text-[#f2ca50] hover:border-[#f2ca50]'
+                      : 'bg-gradient-to-br from-[#151c2d] to-[#0b101b] border-[#262e42] text-[#7a8296] opacity-90 hover:opacity-100'
                   }`}
                   title={
                     unlocked
@@ -708,15 +589,37 @@ export const GamesCityMapView: React.FC<GamesCityMapViewProps> = ({
                       : `Verrouillé — Requis : Niv. ${game.requiredLevel} (Actuel : ${playerLevel})`
                   }
                 >
-                  {/* Number Pill Corner */}
+                  {/* Vertical Beacon Beam when Selected or Frontier */}
+                  {(isSelected || isFrontier) && unlocked && (
+                    <span
+                      className="absolute -top-6 w-8 h-9 pointer-events-none opacity-60"
+                      style={{
+                        background:
+                          'linear-gradient(to top, rgba(242,202,80,0.4), rgba(242,202,80,0))'
+                      }}
+                      aria-hidden="true"
+                    />
+                  )}
+
+                  {/* Specular Top-Left Rim Sheen */}
                   <span
-                    className={`absolute -top-2 -left-2 px-1.5 py-0.5 rounded-md text-[10px] font-mono tabular-nums font-bold border ${
+                    className="absolute inset-0 rounded-2xl pointer-events-none"
+                    style={{
+                      background:
+                        'linear-gradient(135deg, rgba(255,255,255,0.22) 0%, transparent 52%)'
+                    }}
+                    aria-hidden="true"
+                  />
+
+                  {/* Number Corner */}
+                  <span
+                    className={`absolute -top-2 -left-2 px-1.5 py-0.5 rounded-md text-[10px] font-mono tabular-nums font-bold border shadow ${
                       isSelected || isFrontier
                         ? 'bg-[#f2ca50] text-[#3c2f00] border-[#ffe088]'
                         : isCompleted
                         ? 'bg-emerald-500 text-[#052e1e] border-emerald-300'
                         : unlocked
-                        ? 'bg-[#0c1322] text-[#f2ca50] border-[#f2ca50]/45'
+                        ? 'bg-[#090e1a] text-[#f2ca50] border-[#f2ca50]/45'
                         : 'bg-[#151b2b] text-[#99907c] border-[#2c3448]'
                     }`}
                   >
@@ -726,7 +629,7 @@ export const GamesCityMapView: React.FC<GamesCityMapViewProps> = ({
                   {/* Status Corner Icon */}
                   {isCompleted ? (
                     <span
-                      className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-emerald-500 text-[#052e1e] flex items-center justify-center shadow"
+                      className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-gradient-to-br from-emerald-300 to-emerald-600 text-[#052e1e] flex items-center justify-center shadow"
                       title="Validé"
                     >
                       <span className="material-symbols-outlined text-[13px] font-bold">check</span>
@@ -740,7 +643,7 @@ export const GamesCityMapView: React.FC<GamesCityMapViewProps> = ({
                     </span>
                   ) : isFrontier ? (
                     <span
-                      className="absolute -top-2 -right-2 px-1.5 py-0.5 rounded-full bg-[#f2ca50] text-[#3c2f00] text-[9px] font-mono font-black shadow"
+                      className="absolute -top-2 -right-2 px-1.5 py-0.5 rounded-full bg-gradient-to-r from-[#d4af37] to-[#ffe088] text-[#3c2f00] text-[9px] font-mono font-black shadow"
                       title="Prochaine étape à relever"
                     >
                       ACTIF
@@ -748,26 +651,27 @@ export const GamesCityMapView: React.FC<GamesCityMapViewProps> = ({
                   ) : null}
 
                   <span
-                    className="material-symbols-outlined text-2xl sm:text-[28px]"
+                    className="relative z-10 material-symbols-outlined text-2xl sm:text-[28px]"
                     style={unlocked ? { color: isCompleted ? '#34d399' : dist.accentHex } : undefined}
                   >
                     {unlocked ? game.icon : 'lock'}
                   </span>
                 </motion.button>
 
-                {/* Monument Label & Quick Play Action */}
+                {/* Sculpted Brushed-Obsidian Plaque & Quick Play Action */}
                 <div
-                  className={`mt-2 px-2.5 py-1.5 rounded-xl border text-center w-full backdrop-blur-sm transition-colors ${
+                  className={`mt-2.5 px-2.5 py-1.5 rounded-xl border text-center w-full backdrop-blur-md shadow-[0_8px_18px_rgba(0,0,0,0.75)] transition-colors ${
                     isSelected
-                      ? 'bg-[#151b2b]/95 border-[#f2ca50]/70 shadow-md'
+                      ? 'bg-[#080d19]/95 border-[#f2ca50]/75'
                       : unlocked
-                      ? 'bg-[#0c1322]/90 border-[#232a3a]'
-                      : 'bg-[#0c1322]/75 border-[#1c2232]'
+                      ? 'bg-[#080d19]/90 border-[#2a344e]'
+                      : 'bg-[#080d19]/75 border-[#1c2232]'
                   }`}
+                  style={is3DView ? { transform: 'translateZ(8px)' } : undefined}
                 >
                   <p
                     className={`font-serif font-bold text-[11px] sm:text-xs leading-tight truncate ${
-                      unlocked ? 'text-[#dce2f8]' : 'text-[#99907c]'
+                      unlocked ? 'text-[#eef2ff]' : 'text-[#99907c]'
                     }`}
                   >
                     {game.title}
@@ -778,7 +682,7 @@ export const GamesCityMapView: React.FC<GamesCityMapViewProps> = ({
                       <button
                         type="button"
                         onClick={() => onSelectGame(game)}
-                        className="px-2.5 py-0.5 rounded-md bg-[#f2ca50] hover:bg-[#ffe088] text-[#3c2f00] font-bold uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-colors"
+                        className="px-2.5 py-0.5 rounded-md bg-gradient-to-r from-[#d4af37] to-[#f2ca50] hover:from-[#f2ca50] hover:to-[#ffe088] text-[#3c2f00] font-bold uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-colors"
                       >
                         <span>Jouer</span>
                         <span className="material-symbols-outlined text-[12px]">play_arrow</span>
@@ -791,7 +695,7 @@ export const GamesCityMapView: React.FC<GamesCityMapViewProps> = ({
                         <span aria-hidden="true" className="text-[#99907c]">
                           ·
                         </span>
-                        <span className="text-[#d0c5af]/80 truncate">{game.difficulty}</span>
+                        <span className="text-[#d0c5af]/85 truncate">{game.difficulty}</span>
                       </>
                     )}
                   </div>
@@ -799,7 +703,7 @@ export const GamesCityMapView: React.FC<GamesCityMapViewProps> = ({
               </div>
             );
           })}
-        </div>
+        </City3DMaquetteViewport>
       </section>
     </div>
   );

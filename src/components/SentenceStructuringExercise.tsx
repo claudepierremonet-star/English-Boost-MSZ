@@ -5,6 +5,7 @@ import confetti from 'canvas-confetti';
 import { DualSpeakerButton } from './DualSpeakerButton';
 import { speakText, stopSpeech } from '../services/speechService';
 import { playSelectCue, playDeselectCue, playCorrectCue, playIncorrectCue } from '../utils/soundEffects';
+import { InteractiveHighlightText } from './InteractiveHighlightText';
 
 interface SentenceStructuringExerciseProps {
   item: Grammar6eItem;
@@ -205,8 +206,8 @@ export const SentenceStructuringExercise: React.FC<SentenceStructuringExercisePr
         {/* Example in context */}
         <div className="flex items-center justify-between gap-3 p-2 rounded-lg bg-[#151b2b] border border-[#232a3a]">
           <div className="flex flex-col min-w-0">
-            <span className="text-xs font-serif font-bold text-[#dce2f8] truncate">
-              « {item.example_en} »
+            <span className="text-xs font-serif font-bold text-[#dce2f8]">
+              « <InteractiveHighlightText text={item.example_en} /> »
             </span>
             <span className="text-[11px] text-[#99907c] italic truncate">
               {item.example_fr}
@@ -376,7 +377,7 @@ export const SentenceStructuringExercise: React.FC<SentenceStructuringExercisePr
             {!isCorrect && (
               <div className="pt-1 flex items-center justify-between gap-2">
                 <span className="text-xs sm:text-sm text-[#d4c78f]">
-                  Solution attendue : <strong className="text-sm sm:text-base">« {targetSentenceClean} »</strong>
+                  Solution attendue : <strong className="text-sm sm:text-base">« <InteractiveHighlightText text={targetSentenceClean} /> »</strong>
                 </span>
                 <button
                   type="button"

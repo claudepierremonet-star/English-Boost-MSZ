@@ -10,6 +10,16 @@ import {
 } from '../utils/pronunciationDuelEngine';
 import { speakText, stopSpeech } from '../services/speechService';
 import { awardMszCoins } from '../utils/mszCoinsManager';
+import {
+  playStudioAccentCue3D,
+  playStudioCountdownTick3D,
+  playStudioModeSwitchCue3D,
+  playStudioRecordStopCue3D,
+  playStudioValidationCue3D,
+  startStudioAcousticAmbiance,
+  stopStudioAcousticAmbiance,
+  updateStudioAmbianceReactiveVolume
+} from '../utils/studio3dAudio';
 
 export interface PronunciationDuelArenaProps {
   targetText: string;
@@ -98,6 +108,7 @@ export const PronunciationDuelArena: React.FC<PronunciationDuelArenaProps> = ({
   }, []);
 
   const cleanupAudioSession = useCallback(() => {
+    stopStudioAcousticAmbiance();
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     if (nativeSimAnimRef.current) cancelAnimationFrame(nativeSimAnimRef.current);
     if (duelTimerRef.current) clearInterval(duelTimerRef.current);
@@ -140,6 +151,7 @@ export const PronunciationDuelArena: React.FC<PronunciationDuelArenaProps> = ({
     setMicErrorMessage(null);
     setIsCountingDown(true);
     setCountdownValue(3);
+    playStudioCountdownTick3D(3);
 
     let remaining = 3;
     if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
@@ -150,9 +162,11 @@ export const PronunciationDuelArena: React.FC<PronunciationDuelArenaProps> = ({
         countdownTimerRef.current = null;
         setCountdownValue(0);
         setIsCountingDown(false);
+        playStudioCountdownTick3D(0);
         startActiveDuelSession();
       } else {
         setCountdownValue(remaining);
+        playStudioCountdownTick3D(remaining === 2 ? 2 : 1);
       }
     }, 1000);
   };
@@ -200,6 +214,7 @@ export const PronunciationDuelArena: React.FC<PronunciationDuelArenaProps> = ({
       recorder.start();
 
       setIsDuelActive(true);
+      startStudioAcousticAmbiance();
 
       // Duel seconds stopwatch
       duelTimerRef.current = setInterval(() => {
@@ -219,6 +234,9 @@ export const PronunciationDuelArena: React.FC<PronunciationDuelArenaProps> = ({
         // Extract structured spectral frame
         const frame = extractSpectralFrame(freqBuffer, timeBuffer, audioCtx.sampleRate);
         setLiveUserFrame(frame);
+
+        // Duck 3D acoustic bed gently when user is speaking
+        updateStudioAmbianceReactiveVolume(frame.isSilent ? 0 : Math.min(1, frame.rmsVolume * 2.5));
 
         // Compare in real-time with native reference model
         const score = compareLiveSpectrumToNative(frame, nativeTemplate);
@@ -305,10 +323,13 @@ export const PronunciationDuelArena: React.FC<PronunciationDuelArenaProps> = ({
           userAudioUrl: audioUrl
         });
 
+        playStudioValidationCue3D(finalScore);
         onDuelCompleted?.(finalScore);
       };
 
       mediaRecorderRef.current.stop();
+    } else {
+      playStudioRecordStopCue3D();
     }
 
     setIsDuelActive(false);
@@ -489,7 +510,10 @@ export const PronunciationDuelArena: React.FC<PronunciationDuelArenaProps> = ({
           <div className="flex items-center gap-1.5 bg-[#090e1a] p-1 rounded-xl border border-white/5">
             <button
               type="button"
-              onClick={() => onAccentChange?.('en-GB')}
+              onClick={() => {
+                playStudioAccentCue3D('en-GB');
+                onAccentChange?.('en-GB');
+              }}
               disabled={isDuelActive}
               className={`px-3 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 transition-all cursor-pointer ${
                 targetAccent === 'en-GB'
@@ -502,7 +526,10 @@ export const PronunciationDuelArena: React.FC<PronunciationDuelArenaProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => onAccentChange?.('en-US')}
+              onClick={() => {
+                playStudioAccentCue3D('en-US');
+                onAccentChange?.('en-US');
+              }}
               disabled={isDuelActive}
               className={`px-3 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 transition-all cursor-pointer ${
                 targetAccent === 'en-US'
@@ -555,7 +582,10 @@ export const PronunciationDuelArena: React.FC<PronunciationDuelArenaProps> = ({
             <span className="hidden sm:inline">Affichage :</span>
             <button
               type="button"
-              onClick={() => setVisualMode('mirror')}
+              onClick={() => {
+                playStudioModeSwitchCue3D('tab');
+                setVisualMode('mirror');
+              }}
               className={`px-2 py-0.5 rounded-md ${
                 visualMode === 'mirror'
                   ? 'bg-[#f2ca50]/20 text-[#ffd700] font-bold border border-[#f2ca50]/40'
@@ -566,7 +596,10 @@ export const PronunciationDuelArena: React.FC<PronunciationDuelArenaProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => setVisualMode('superimposed')}
+              onClick={() => {
+                playStudioModeSwitchCue3D('tab');
+                setVisualMode('superimposed');
+              }}
               className={`px-2 py-0.5 rounded-md ${
                 visualMode === 'superimposed'
                   ? 'bg-[#f2ca50]/20 text-[#ffd700] font-bold border border-[#f2ca50]/40'

@@ -24,6 +24,8 @@ import { MszShopModal } from './MszShopModal';
 import { STUDY_FOLIOS } from '../data/curriculum';
 import { speakText, stopSpeech } from '../services/speechService';
 import { calculateLevel } from '../utils/levelUtils';
+import { exportProgressReportPdf } from '../utils/progressPdfExporter';
+import { AppNoticeModal } from './AppNoticeModal';
 
 interface CustomTooltipProps {
   active?: boolean;
@@ -234,6 +236,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [selectedTarget, setSelectedTarget] = useState<number>(user.stats.studyMinutesTarget || 30);
   const [chartMetric, setChartMetric] = useState<'xp' | 'score'>('xp');
   const [isShopModalOpen, setIsShopModalOpen] = useState<boolean>(false);
+  const [isNoticeOpen, setIsNoticeOpen] = useState<boolean>(false);
 
   const {
     isOnline,
@@ -255,6 +258,25 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [playingFolioId, setPlayingFolioId] = useState<string | null>(null);
   const [folioAccents, setFolioAccents] = useState<Record<string, 'en-GB' | 'en-US'>>({});
+  const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
+  const [pdfExportedLabel, setPdfExportedLabel] = useState<string | null>(null);
+
+  const handleExportProgressPdf = async () => {
+    if (isExportingPdf) return;
+    setIsExportingPdf(true);
+    setPdfExportedLabel(null);
+    try {
+      const res = await exportProgressReportPdf({ user });
+      setPdfExportedLabel(`PDF prêt (${res.pagesCount} p.)`);
+      setTimeout(() => setPdfExportedLabel(null), 3500);
+    } catch (err) {
+      console.error('Erreur export PDF Dashboard:', err);
+      setPdfExportedLabel('Erreur export');
+      setTimeout(() => setPdfExportedLabel(null), 3500);
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
 
   const handlePlayFolioAudio = (folio: (typeof STUDY_FOLIOS)[0]) => {
     if (playingFolioId === folio.id) {
@@ -363,28 +385,55 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </p>
           </div>
 
-          {/* Flame Streak Counter with Gentle Spring Entrance */}
-          <motion.div
-            initial={shouldReduceMotion ? { opacity: 1 } : { scale: 0.85, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.14, type: 'spring', stiffness: 220, damping: 18 }}
-            className="flex flex-col items-center justify-center px-3.5 py-2 rounded-xl bg-[#070e1d]/90 border border-[#4d4635]/40 shadow-inner shrink-0"
-          >
-            <div className="flex items-center gap-1 text-[#f2ca50]">
-              <span
-                className="material-symbols-outlined text-xl"
-                style={{ fontVariationSettings: "'FILL' 1" }}
-              >
-                local_fire_department
+          {/* Notice Guide + Quick PDF Report Export + Streak Counter */}
+          <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsNoticeOpen(true)}
+              className="min-h-[40px] px-3.5 py-2 rounded-xl bg-[#070e1d]/90 border border-[#f2ca50]/50 hover:border-[#f2ca50] hover:bg-[#f2ca50]/15 text-[#f2ca50] text-xs font-mono font-bold transition-all flex items-center gap-1.5 shadow-inner whitespace-nowrap shrink-0 cursor-pointer"
+              title="Ouvrir la notice visuelle complète de l'application"
+            >
+              <span className="material-symbols-outlined text-base">menu_book</span>
+              <span>Notice</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleExportProgressPdf}
+              disabled={isExportingPdf}
+              className="min-h-[40px] px-3 py-2 rounded-xl bg-[#070e1d]/90 border border-[#f2ca50]/35 hover:border-[#f2ca50] hover:bg-[#f2ca50]/15 text-[#f2ca50] text-xs font-mono font-bold transition-all flex items-center gap-1.5 shadow-inner disabled:opacity-50 whitespace-nowrap shrink-0 cursor-pointer"
+              title="Exporter vos statistiques et progrès en rapport PDF"
+            >
+              <span className={`material-symbols-outlined text-base ${isExportingPdf ? 'animate-spin' : ''}`}>
+                {isExportingPdf ? 'sync' : 'picture_as_pdf'}
               </span>
-              <span className="text-lg font-bold font-mono tabular-nums tracking-tight">
-                {animatedStreak}
+              <span className="hidden sm:inline">
+                {isExportingPdf ? 'Export...' : pdfExportedLabel || 'Rapport PDF'}
               </span>
-            </div>
-            <span className="text-[9px] text-[#d0c5af] uppercase tracking-wider font-semibold">
-              Jours
-            </span>
-          </motion.div>
+            </button>
+
+            <motion.div
+              initial={shouldReduceMotion ? { opacity: 1 } : { scale: 0.85, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.14, type: 'spring', stiffness: 220, damping: 18 }}
+              className="flex flex-col items-center justify-center px-3.5 py-2 rounded-xl bg-[#070e1d]/90 border border-[#4d4635]/40 shadow-inner shrink-0"
+            >
+              <div className="flex items-center gap-1 text-[#f2ca50]">
+                <span
+                  className="material-symbols-outlined text-xl"
+                  style={{ fontVariationSettings: "'FILL' 1" }}
+                >
+                  local_fire_department
+                </span>
+                <span className="text-lg font-bold font-mono tabular-nums tracking-tight">
+                  {animatedStreak}
+                </span>
+              </div>
+              <span className="text-[9px] text-[#d0c5af] uppercase tracking-wider font-semibold">
+                Jours
+              </span>
+            </motion.div>
+          </div>
         </div>
 
         {/* Quick Stats Metric Cards with Hover and Staggered Sub-entry */}
@@ -1622,6 +1671,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         onClose={() => setIsShopModalOpen(false)}
         userLevel={calculateLevel(user.stats?.totalXp ?? 0)}
         onProfileUpdated={onOpenProfile}
+      />
+
+      {/* Interactive Visual & Step-by-Step App Notice Modal */}
+      <AppNoticeModal
+        isOpen={isNoticeOpen}
+        onClose={() => setIsNoticeOpen(false)}
       />
     </motion.div>
   );
