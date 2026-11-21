@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import type { UserProfile, CEFRLevel, AcademicBadge } from '../firebase/types';
+import React, { useState, useEffect, useRef } from 'react';
+import type { UserProfile, CEFRLevel, AcademicBadge, SchoolGrade } from '../firebase/types';
 import { signInWithGoogle, signOutUser, isFirebaseConfigured, auth, isUserSignedInWithGoogle } from '../firebase/client';
 import { useAppTheme, type AppTheme, type FloralBorderWidth } from '../theme/ThemeContext';
+import { SCHOOL_GRADES_META, inferGradeFromCefr } from '../services/adaptiveEngine';
 import { BadgesSection } from './BadgesSection';
 import { LinguisticRadarSection } from './LinguisticRadarSection';
 import { computeUserBadges } from '../data/badges';
@@ -27,6 +28,9 @@ import {
 } from '../services/speechService';
 import appIconImg from '../assets/images/app_icon_msz_1792789129742.jpg';
 import { calculateLevel } from '../utils/levelUtils';
+import { useSyncStatus } from '../offline/useSyncStatus';
+import type { ManualSyncResult } from '../offline/syncManager';
+import { playSelectCue } from '../utils/soundEffects';
 
 interface ProfileModalProps {
   user: UserProfile;
@@ -44,6 +48,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   onOpenInstallModal
 }) => {
   const [selectedLevel, setSelectedLevel] = useState<CEFRLevel>(user.level);
+  const [selectedGrade, setSelectedGrade] = useState<SchoolGrade>(
+    user.schoolGrade || inferGradeFromCefr(user.level)
+  );
   const [selectedPace, setSelectedPace] = useState<number>(user.stats.studyMinutesTarget || 30);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState<boolean>(false);
   const [isSigningIn, setIsSigningIn] = useState<boolean>(false);
@@ -68,6 +75,25 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   const [errorCount, setErrorCount] = useState<number>(() => {
     return getErrorJournal().filter((i) => !i.resolved).length;
   });
+  const {
+    isOnline,
+    isSyncing,
+    autoSyncEnabled,
+    pendingCount,
+    lastSyncTime,
+    syncError,
+    syncNow,
+    setAutoSyncEnabled
+  } = useSyncStatus();
+  const [manualSyncFeedback, setManualSyncFeedback] = useState<ManualSyncResult | null>(null);
+  const [syncSwitchEngaged, setSyncSwitchEngaged] = useState<boolean>(false);
+  const syncSwitchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (syncSwitchTimerRef.current) clearTimeout(syncSwitchTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     const updateCounts = () => {
@@ -146,6 +172,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
     onUpdateUser({ level: lvl });
   };
 
+  const handleGradeSelect = (grade: SchoolGrade, targetCefr: CEFRLevel) => {
+    setSelectedGrade(grade);
+    setSelectedLevel(targetCefr);
+    onUpdateUser({ schoolGrade: grade, level: targetCefr });
+  };
+
   const handlePaceSelect = (mins: number) => {
     setSelectedPace(mins);
     onUpdateUser({
@@ -171,6 +203,38 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   const handleSignOut = async () => {
     await signOutUser();
     onClose();
+  };
+
+  const handleManualFirestoreSync = async () => {
+    if (!isOnline || isSyncing) return;
+    playSelectCue();
+    if (syncSwitchTimerRef.current) clearTimeout(syncSwitchTimerRef.current);
+    setSyncSwitchEngaged(true);
+    setManualSyncFeedback(null);
+    const result = await syncNow();
+    setManualSyncFeedback(result);
+    if (result.status === 'success' && result.syncedProfile) {
+      onUpdateUser({});
+    }
+    syncSwitchTimerRef.current = setTimeout(() => {
+      setSyncSwitchEngaged(false);
+    }, 1800);
+  };
+
+  const formatSyncTimestamp = (iso: string | null): string => {
+    if (!iso) return 'Jamais synchronisé';
+    try {
+      const dt = new Date(iso);
+      return new Intl.DateTimeFormat('fr-FR', {
+        day: '2-digit',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      }).format(dt);
+    } catch {
+      return iso;
+    }
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -648,29 +712,44 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           )}
         </div>
 
-        {/* Authentication Zone */}
+        {/* Authentication & Firestore Persistence Control Zone */}
         <div className="p-5 rounded-2xl bg-[#151b2b] border border-[#f2ca50]/30 shadow-xl flex flex-col gap-3.5">
-          <div className="flex items-center justify-between text-xs">
+          <div className="flex items-center justify-between text-xs gap-2 flex-wrap">
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span
+                className={`w-2.5 h-2.5 rounded-full ${
+                  isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+                }`}
+              />
               <span className="text-[10px] text-[#f2ca50] uppercase font-bold tracking-wider">
                 Firebase Firestore & Google Auth
               </span>
             </div>
-            <span className="text-xs text-emerald-300 font-mono font-semibold">
-              Projet feisty-cipher-2tn3v
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${
+                  isOnline
+                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-400/30'
+                    : 'bg-amber-500/15 text-amber-300 border-amber-400/30'
+                }`}
+              >
+                {isOnline ? 'En ligne' : 'Hors-ligne'}
+              </span>
+              <span className="text-[11px] text-[#d4c78f] font-mono font-semibold hidden sm:inline">
+                Projet feisty-cipher-2tn3v
+              </span>
+            </div>
           </div>
 
           {auth?.currentUser && !auth.currentUser.isAnonymous ? (
             <div className="p-3.5 rounded-xl bg-[#0c1322] border border-emerald-500/40 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <span className="material-symbols-outlined text-emerald-400 text-lg">verified_user</span>
-                <div className="flex flex-col">
-                  <span className="text-xs font-bold text-[#dce2f8]">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="material-symbols-outlined text-emerald-400 text-lg shrink-0">verified_user</span>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs font-bold text-[#dce2f8] truncate">
                     {auth.currentUser.displayName || 'Érudit Authentifié'}
                   </span>
-                  <span className="text-[11px] font-mono text-[#d0c5af]">
+                  <span className="text-[11px] font-mono text-[#d0c5af] truncate">
                     {auth.currentUser.email}
                   </span>
                 </div>
@@ -678,7 +757,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               <button
                 type="button"
                 onClick={handleSignOut}
-                className="px-3 py-1.5 rounded-lg bg-[#232a3a] hover:bg-rose-950/60 border border-rose-500/30 text-rose-300 text-xs font-semibold transition-colors cursor-pointer"
+                className="px-3 py-1.5 rounded-lg bg-[#232a3a] hover:bg-rose-950/60 border border-rose-500/30 text-rose-300 text-xs font-semibold transition-colors cursor-pointer shrink-0"
               >
                 Déconnexion
               </button>
@@ -707,6 +786,189 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               </div>
             </>
           )}
+
+          {/* User-Controlled Immediate Firestore Sync & Persistence Agency */}
+          <div className="mt-1 pt-3.5 border-t border-[#232a3a] flex flex-col gap-3">
+            {/* 1. Manual Immediate Firestore Sync Toggle */}
+            <div
+              className={`p-3.5 rounded-xl border transition-all flex items-center justify-between gap-3 ${
+                isOnline
+                  ? 'bg-[#0c1322] border-[#f2ca50]/35'
+                  : 'bg-[#0c1322]/60 border-[#2e3b55] opacity-75'
+              }`}
+            >
+              <div className="flex items-start gap-2.5 min-w-0">
+                <span
+                  className={`material-symbols-outlined text-lg mt-0.5 shrink-0 ${
+                    isSyncing
+                      ? 'text-[#f2ca50] animate-spin'
+                      : isOnline
+                      ? 'text-[#f2ca50]'
+                      : 'text-[#8391ac]'
+                  }`}
+                >
+                  {isSyncing ? 'sync' : isOnline ? 'cloud_sync' : 'cloud_off'}
+                </span>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs font-bold text-[#dce2f8]">
+                    Synchronisation Firestore immédiate
+                  </span>
+                  <span className="text-[11px] text-[#d0c5af] leading-snug">
+                    {!isOnline
+                      ? 'Connexion Internet requise pour déclencher la synchronisation.'
+                      : isSyncing
+                      ? 'Synchronisation bidirectionnelle avec Cloud Firestore en cours...'
+                      : 'Activez pour pousser et réconcilier immédiatement vos données locales avec Cloud Firestore.'}
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                role="switch"
+                aria-checked={isSyncing || syncSwitchEngaged}
+                aria-label="Déclencher une synchronisation Firestore immédiate"
+                disabled={!isOnline || isSyncing}
+                onClick={handleManualFirestoreSync}
+                title={
+                  !isOnline
+                    ? 'Disponible uniquement lorsque vous êtes en ligne'
+                    : 'Déclencher immédiatement la synchronisation Cloud Firestore'
+                }
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors border ${
+                  !isOnline
+                    ? 'bg-[#191f2f] border-[#2e3b55] cursor-not-allowed opacity-50'
+                    : isSyncing || syncSwitchEngaged
+                    ? 'bg-[#f2ca50] border-[#f2ca50] cursor-wait shadow-[0_0_12px_rgba(242,202,80,0.45)]'
+                    : 'bg-[#232a3a] hover:border-[#f2ca50]/70 border-[#4d4635] cursor-pointer'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full transition-transform ${
+                    isSyncing || syncSwitchEngaged
+                      ? 'translate-x-6 bg-[#0c1322]'
+                      : 'translate-x-1 bg-[#f2ca50]'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* 2. Auto-Sync Background Preference Toggle */}
+            <div className="p-3 rounded-xl bg-[#0c1322]/75 border border-[#232a3a] flex items-center justify-between gap-3">
+              <div className="flex items-start gap-2.5 min-w-0">
+                <span className="material-symbols-outlined text-base text-[#d4c78f] mt-0.5 shrink-0">
+                  autorenew
+                </span>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs font-semibold text-[#dce2f8]">
+                    Synchronisation automatique en arrière-plan
+                  </span>
+                  <span className="text-[11px] text-[#99907c] leading-snug">
+                    {autoSyncEnabled
+                      ? 'Active : synchronisation automatique à la reconnexion et toutes les 45 s.'
+                      : 'Manuelle uniquement : vous gardez le contrôle exclusif des envois vers Firestore.'}
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                role="switch"
+                aria-checked={autoSyncEnabled}
+                aria-label="Activer ou désactiver la synchronisation automatique en arrière-plan"
+                onClick={() => {
+                  playSelectCue();
+                  setAutoSyncEnabled(!autoSyncEnabled);
+                }}
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors cursor-pointer border ${
+                  autoSyncEnabled ? 'bg-[#f2ca50] border-[#f2ca50]' : 'bg-[#232a3a] border-[#4d4635]'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-[#0c1322] transition-transform ${
+                    autoSyncEnabled ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Live Sync Telemetry & Feedback */}
+            <div className="flex items-center justify-between gap-2 text-[11px] font-mono text-[#99907c] px-1 flex-wrap">
+              <span className="flex items-center gap-1">
+                <span className="material-symbols-outlined text-xs text-[#f2ca50]">schedule</span>
+                <span>Dernière synchro : <strong className="text-[#dce2f8]">{formatSyncTimestamp(lastSyncTime)}</strong></span>
+              </span>
+              <span
+                className={`px-2 py-0.5 rounded-md border ${
+                  pendingCount > 0
+                    ? 'bg-amber-500/15 text-amber-300 border-amber-400/30 font-bold'
+                    : 'bg-[#121929] text-[#d4c78f] border-[#232a3a]'
+                }`}
+              >
+                {pendingCount > 0
+                  ? `${pendingCount} élément(s) en file locale`
+                  : 'File locale synchronisée'}
+              </span>
+            </div>
+
+            {manualSyncFeedback && (
+              <div
+                className={`p-2.5 rounded-xl border text-xs flex items-center gap-2 ${
+                  manualSyncFeedback.status === 'success'
+                    ? 'bg-emerald-500/15 border-emerald-400/40 text-emerald-200'
+                    : manualSyncFeedback.status === 'unauthenticated'
+                    ? 'bg-amber-500/15 border-amber-400/40 text-amber-200'
+                    : 'bg-rose-500/15 border-rose-400/40 text-rose-200'
+                }`}
+              >
+                <span className="material-symbols-outlined text-sm shrink-0">
+                  {manualSyncFeedback.status === 'success'
+                    ? 'cloud_done'
+                    : manualSyncFeedback.status === 'unauthenticated'
+                    ? 'account_circle'
+                    : 'error'}
+                </span>
+                <span>{manualSyncFeedback.message}</span>
+              </div>
+            )}
+
+            {syncError && !manualSyncFeedback && (
+              <div className="p-2.5 rounded-xl bg-rose-500/15 border border-rose-400/40 text-rose-200 text-xs flex items-center gap-2">
+                <span className="material-symbols-outlined text-sm shrink-0">warning</span>
+                <span>{syncError}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* School Grade Selector (Collège 6e-3e & Lycée 2nde-Tle) */}
+        <div className="p-5 rounded-2xl bg-[#191f2f] border border-[#4d4635]/40 shadow-xl flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-[#f2ca50] font-bold uppercase tracking-wider">
+              Classe Scolaire (Collège &amp; Lycée)
+            </span>
+            <span className="text-xs text-[#d4c78f] font-mono">
+              {selectedGrade === 'terminale' ? 'Terminale' : selectedGrade}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
+            {SCHOOL_GRADES_META.map((g) => (
+              <button
+                key={g.id}
+                type="button"
+                onClick={() => handleGradeSelect(g.id, g.targetCefr)}
+                className={`py-2.5 rounded-xl flex flex-col items-center justify-center border font-mono transition-all cursor-pointer ${
+                  selectedGrade === g.id
+                    ? 'bg-[#f2ca50] text-[#3c2f00] border-[#f2ca50] font-bold shadow-md'
+                    : 'bg-[#232a3a] text-[#dce2f8] border-[#4d4635]/30 hover:bg-[#2e3545]'
+                }`}
+              >
+                <span className="text-xs font-bold">{g.shortLabel}</span>
+                <span className="text-[9px] opacity-80">{g.targetCefr}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* CEFR Level Selector */}
@@ -718,13 +980,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
             <span className="text-xs text-[#d4c78f] font-mono">{selectedLevel} Sélectionné</span>
           </div>
 
-          <div className="grid grid-cols-4 gap-2">
-            {(['B1', 'B2', 'C1', 'C2'] as CEFRLevel[]).map((lvl) => (
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+            {(['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as CEFRLevel[]).map((lvl) => (
               <button
                 key={lvl}
                 type="button"
                 onClick={() => handleLevelSelect(lvl)}
-                className={`py-3 rounded-xl flex flex-col items-center justify-center border font-mono transition-all ${
+                className={`py-3 rounded-xl flex flex-col items-center justify-center border font-mono transition-all cursor-pointer ${
                   selectedLevel === lvl
                     ? 'bg-[#f2ca50] text-[#3c2f00] border-[#f2ca50] font-bold shadow-md'
                     : 'bg-[#232a3a] text-[#dce2f8] border-[#4d4635]/30 hover:bg-[#2e3545]'
@@ -910,7 +1172,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 Préférences et progression sauvegardées
               </span>
               <span className="text-xs text-[#99907c]">
-                Votre compte est synchronisé avec Cloud Firestore & IndexedDB
+                {!isOnline
+                  ? `Mode hors-ligne actif • ${pendingCount} modification(s) sur IndexedDB`
+                  : isUserSignedInWithGoogle()
+                  ? `Connecté à Cloud Firestore & IndexedDB • ${formatSyncTimestamp(lastSyncTime)}`
+                  : 'Enregistré localement (IndexedDB) • Connectez Google pour la synchro Cloud'}
               </span>
             </div>
           </div>

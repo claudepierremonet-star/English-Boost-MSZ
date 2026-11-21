@@ -20,8 +20,10 @@ import {
   speakText,
   speakFrenchText
 } from '../services/speechService';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { getWordLinguisticDetails } from '../utils/flashcardDetailsHelper';
 import { recordFlashcardError } from '../utils/errorJournal';
+import { playSelectCue } from '../utils/soundEffects';
 
 export type FlashcardDeckMode = 'vocab' | 'dialogues' | 'pinned';
 
@@ -96,6 +98,15 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
   const [shuffledOrder, setShuffledOrder] = useState<number[] | null>(null);
   const [activeAudioAccent, setActiveAudioAccent] = useState<string | null>(null);
   const [reviewedTodayCount, setReviewedTodayCount] = useState<number>(0);
+  const [slideDirection, setSlideDirection] = useState<1 | -1>(1);
+  const [tiltState, setTiltState] = useState<{
+    rx: number;
+    ry: number;
+    gx: number;
+    gy: number;
+    hovering: boolean;
+  }>({ rx: 0, ry: 0, gx: 50, gy: 50, hovering: false });
+  const shouldReduceMotion = useReducedMotion();
 
   // Touch gesture & scrolling tracking to prevent accidental flips when reading or scrolling
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
@@ -211,7 +222,33 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
     setIsFlipped(false);
   };
 
+  const resetTilt = useCallback(() => {
+    setTiltState({ rx: 0, ry: 0, gx: 50, gy: 50, hovering: false });
+  }, []);
+
+  const handleCardPointerMove = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (isFlipped || shouldReduceMotion) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      const px = (e.clientX - rect.left) / rect.width;
+      const py = (e.clientY - rect.top) / rect.height;
+      const clampedX = Math.max(0, Math.min(1, px));
+      const clampedY = Math.max(0, Math.min(1, py));
+      setTiltState({
+        rx: (0.5 - clampedY) * 6,
+        ry: (clampedX - 0.5) * 7,
+        gx: Math.round(clampedX * 100),
+        gy: Math.round(clampedY * 100),
+        hovering: true
+      });
+    },
+    [isFlipped, shouldReduceMotion]
+  );
+
   const handleFlip = useCallback(() => {
+    playSelectCue();
+    resetTilt();
     setIsFlipped((prev) => {
       const next = !prev;
       // Immersion auditive: joue la prononciation dès que la carte se retourne
@@ -223,23 +260,27 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
       }
       return next;
     });
-  }, [isAutoPlayOnFlip, card?.term, card?.id, card?.frenchDef]);
+  }, [isAutoPlayOnFlip, card?.term, card?.id, card?.frenchDef, resetTilt]);
 
   const handleNextCard = useCallback(() => {
+    setSlideDirection(1);
+    resetTilt();
     setIsFlipped(false);
     if (versoScrollRef.current) {
       versoScrollRef.current.scrollTop = 0;
     }
     setCardIndex((prev) => (filteredCards.length > 0 ? (prev < filteredCards.length - 1 ? prev + 1 : 0) : 0));
-  }, [filteredCards.length]);
+  }, [filteredCards.length, resetTilt]);
 
   const handlePrevCard = useCallback(() => {
+    setSlideDirection(-1);
+    resetTilt();
     setIsFlipped(false);
     if (versoScrollRef.current) {
       versoScrollRef.current.scrollTop = 0;
     }
     setCardIndex((prev) => (filteredCards.length > 0 ? (prev > 0 ? prev - 1 : filteredCards.length - 1) : 0));
-  }, [filteredCards.length]);
+  }, [filteredCards.length, resetTilt]);
 
   const toggleBookmark = (cardId: string) => {
     setBookmarkedIds((prev) => {
@@ -446,6 +487,8 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
     // Advance smoothly
     if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
     advanceTimerRef.current = setTimeout(() => {
+      setSlideDirection(1);
+      resetTilt();
       setIsFlipped(false);
       if (versoScrollRef.current) {
         versoScrollRef.current.scrollTop = 0;
@@ -952,61 +995,135 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
             {/* 3D Flippable Archival Manuscript Flashcard Stack */}
             {card && (
               <div
-                style={{ perspective: '1700px' }}
+                style={{ perspective: '1800px' }}
                 className="relative w-full touch-pan-y py-1"
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
+                onMouseMove={handleCardPointerMove}
+                onMouseLeave={resetTilt}
               >
                 {/* Layered Physical Card Stack Depth Underlays */}
-                <div
+                <motion.div
                   aria-hidden="true"
-                  className="pointer-events-none absolute inset-x-3 top-3 bottom-0 rounded-2xl bg-[#111726]/70 border border-[#f2ca50]/15 -rotate-1 shadow-xl"
+                  animate={{
+                    rotate: isFlipped ? -1.8 : -1,
+                    scale: isFlipped ? 0.985 : 0.995
+                  }}
+                  transition={{ type: 'spring', stiffness: 220, damping: 24 }}
+                  className="pointer-events-none absolute inset-x-3 top-3 bottom-0 rounded-2xl bg-[#111726]/75 border border-[#f2ca50]/15 shadow-xl"
                 />
-                <div
+                <motion.div
                   aria-hidden="true"
-                  className="pointer-events-none absolute inset-x-2 top-2 bottom-1 rounded-2xl bg-[#151c2d]/85 border border-[#f2ca50]/25 rotate-[0.8deg] shadow-xl"
+                  animate={{
+                    rotate: isFlipped ? 1.4 : 0.8,
+                    scale: isFlipped ? 0.992 : 1
+                  }}
+                  transition={{ type: 'spring', stiffness: 220, damping: 24 }}
+                  className="pointer-events-none absolute inset-x-2 top-2 bottom-1 rounded-2xl bg-[#151c2d]/85 border border-[#f2ca50]/25 shadow-xl"
                 />
 
-                <div
-                  className={`w-full rounded-2xl relative shadow-[0_26px_65px_-16px_rgba(0,0,0,0.85)] transition-transform duration-500 ease-out ${
-                    isFlipped ? '[transform:rotateY(180deg)]' : ''
-                  } ${isFocusMode ? 'min-h-[480px] sm:min-h-[530px]' : 'min-h-[450px] sm:min-h-[490px]'}`}
-                  style={{ transformStyle: 'preserve-3d', WebkitTransformStyle: 'preserve-3d' }}
-                >
-                  {/* ========================================================
-                      RECTO (FRONT) FACE
-                      ======================================================== */}
-                  <div
-                    onClick={handleCardClick}
-                    className={`absolute inset-0 w-full h-full rounded-2xl p-5 sm:p-7 flex flex-col justify-between border overflow-hidden shadow-2xl transition-all duration-300 cursor-pointer ${
-                      isFlipped ? 'pointer-events-none opacity-0' : 'pointer-events-auto opacity-100 z-10'
-                    } ${
-                      isFocusMode
-                        ? 'bg-gradient-to-br from-[#0c1426] via-[#101930] to-[#0a101f] border-[#f2ca50]/65 ring-1 ring-[#f2ca50]/40 shadow-[0_20px_60px_rgba(242,202,80,0.2)]'
-                        : 'bg-gradient-to-br from-[#1b2234] via-[#171d2c] to-[#111725] border-[#f2ca50]/50 hover:border-[#f2ca50]/85'
-                    }`}
-                    style={{
-                      backfaceVisibility: 'hidden',
-                      WebkitBackfaceVisibility: 'hidden',
-                      transform: 'translate3d(0,0,0)'
+                <AnimatePresence mode="wait" custom={slideDirection} initial={false}>
+                  <motion.div
+                    key={`${deckMode}-${card.id}-${safeIndex}`}
+                    custom={slideDirection}
+                    variants={{
+                      enter: (dir: number) =>
+                        shouldReduceMotion
+                          ? { opacity: 0 }
+                          : { opacity: 0, x: dir * 42, scale: 0.97, rotateZ: dir * 1.1 },
+                      center: { opacity: 1, x: 0, scale: 1, rotateZ: 0 },
+                      exit: (dir: number) =>
+                        shouldReduceMotion
+                          ? { opacity: 0 }
+                          : { opacity: 0, x: -dir * 42, scale: 0.97, rotateZ: -dir * 1.1 }
                     }}
+                    initial="enter"
+                    animate="center"
+                    exit="exit"
+                    transition={
+                      shouldReduceMotion
+                        ? { duration: 0.14 }
+                        : { type: 'spring', stiffness: 320, damping: 28, mass: 0.8 }
+                    }
+                    style={{ perspective: '1800px' }}
+                    className="w-full"
                   >
-                    {/* Fine Ornamental Brass Corner Filigrees */}
-                    <span aria-hidden="true" className="pointer-events-none absolute top-2.5 left-2.5 w-4 h-4 border-t-2 border-l-2 border-[#f2ca50]/60 rounded-tl-md" />
-                    <span aria-hidden="true" className="pointer-events-none absolute top-2.5 right-2.5 w-4 h-4 border-t-2 border-r-2 border-[#f2ca50]/60 rounded-tr-md" />
-                    <span aria-hidden="true" className="pointer-events-none absolute bottom-2.5 left-2.5 w-4 h-4 border-b-2 border-l-2 border-[#f2ca50]/60 rounded-bl-md" />
-                    <span aria-hidden="true" className="pointer-events-none absolute bottom-2.5 right-2.5 w-4 h-4 border-b-2 border-r-2 border-[#f2ca50]/60 rounded-br-md" />
+                    <motion.div
+                      animate={{
+                        rotateY:
+                          (isFlipped ? 180 : 0) +
+                          (!isFlipped && tiltState.hovering && !shouldReduceMotion ? tiltState.ry : 0),
+                        rotateX: !isFlipped && tiltState.hovering && !shouldReduceMotion ? tiltState.rx : 0,
+                        scale: 1
+                      }}
+                      whileTap={!isFlipped && !shouldReduceMotion ? { scale: 0.985 } : undefined}
+                      transition={
+                        shouldReduceMotion
+                          ? { duration: 0.15 }
+                          : tiltState.hovering && !isFlipped
+                          ? { type: 'spring', stiffness: 360, damping: 30, mass: 0.6 }
+                          : {
+                              rotateY: { type: 'spring', stiffness: 250, damping: 23, mass: 0.88 },
+                              rotateX: { type: 'spring', stiffness: 280, damping: 26 },
+                              scale: { duration: 0.2 }
+                            }
+                      }
+                      className={`w-full rounded-2xl relative ${
+                        isFlipped
+                          ? 'shadow-[0_32px_75px_-18px_rgba(242,202,80,0.22),0_26px_65px_-16px_rgba(0,0,0,0.9)]'
+                          : 'shadow-[0_26px_65px_-16px_rgba(0,0,0,0.85)]'
+                      } ${isFocusMode ? 'min-h-[480px] sm:min-h-[530px]' : 'min-h-[450px] sm:min-h-[490px]'}`}
+                      style={{
+                        transformStyle: 'preserve-3d',
+                        WebkitTransformStyle: 'preserve-3d',
+                        willChange: 'transform'
+                      }}
+                    >
+                      {/* ========================================================
+                          RECTO (FRONT) FACE
+                          ======================================================== */}
+                      <div
+                        onClick={handleCardClick}
+                        aria-hidden={isFlipped}
+                        className={`absolute inset-0 w-full h-full rounded-2xl p-5 sm:p-7 flex flex-col justify-between border overflow-hidden shadow-2xl transition-colors duration-200 cursor-pointer ${
+                          isFlipped ? 'pointer-events-none z-0' : 'pointer-events-auto z-10'
+                        } ${
+                          isFocusMode
+                            ? 'bg-gradient-to-br from-[#0c1426] via-[#101930] to-[#0a101f] border-[#f2ca50]/65 ring-1 ring-[#f2ca50]/40 shadow-[0_20px_60px_rgba(242,202,80,0.2)]'
+                            : 'bg-gradient-to-br from-[#1b2234] via-[#171d2c] to-[#111725] border-[#f2ca50]/50 hover:border-[#f2ca50]/85'
+                        }`}
+                        style={{
+                          backfaceVisibility: 'hidden',
+                          WebkitBackfaceVisibility: 'hidden',
+                          transform: 'rotateY(0deg) translateZ(1px)'
+                        }}
+                      >
+                        {/* Dynamic Champagne-Gold Specular Sheen on Pointer Tilt */}
+                        <div
+                          aria-hidden="true"
+                          className="pointer-events-none absolute inset-0 transition-opacity duration-300"
+                          style={{
+                            opacity: tiltState.hovering && !isFlipped ? 1 : 0.35,
+                            background: `radial-gradient(circle at ${tiltState.gx}% ${tiltState.gy}%, rgba(242,202,80,0.18), rgba(255,224,130,0.04) 38%, transparent 70%)`
+                          }}
+                        />
 
-                    {/* Glowing Gold Top Foil Filament & Ambient Aura */}
-                    <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-[#f2ca50] via-yellow-100 to-transparent shadow-[0_0_16px_#f2ca50]" />
-                    <div className="absolute top-0 right-0 w-56 h-56 bg-gradient-to-br from-[#f2ca50]/14 via-transparent to-transparent pointer-events-none" />
-                    {activeAudioAccent && (
-                      <div className="absolute top-3.5 left-1/2 -translate-x-1/2 flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#f2ca50]/15 border border-[#f2ca50]/40 text-[10px] font-mono text-[#f2ca50] animate-pulse z-20">
-                        <span className="material-symbols-outlined text-xs">graphic_eq</span>
-                        <span>Voix Naturelle Active</span>
-                      </div>
-                    )}
+                        {/* Fine Ornamental Brass Corner Filigrees */}
+                        <span aria-hidden="true" className="pointer-events-none absolute top-2.5 left-2.5 w-4 h-4 border-t-2 border-l-2 border-[#f2ca50]/60 rounded-tl-md" />
+                        <span aria-hidden="true" className="pointer-events-none absolute top-2.5 right-2.5 w-4 h-4 border-t-2 border-r-2 border-[#f2ca50]/60 rounded-tr-md" />
+                        <span aria-hidden="true" className="pointer-events-none absolute bottom-2.5 left-2.5 w-4 h-4 border-b-2 border-l-2 border-[#f2ca50]/60 rounded-bl-md" />
+                        <span aria-hidden="true" className="pointer-events-none absolute bottom-2.5 right-2.5 w-4 h-4 border-b-2 border-r-2 border-[#f2ca50]/60 rounded-br-md" />
+
+                        {/* Glowing Gold Top Foil Filament & Ambient Aura */}
+                        <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-[#f2ca50] via-yellow-100 to-transparent shadow-[0_0_16px_#f2ca50]" />
+                        <div className="absolute top-0 right-0 w-56 h-56 bg-gradient-to-br from-[#f2ca50]/14 via-transparent to-transparent pointer-events-none" />
+                        {activeAudioAccent && (
+                          <div className="absolute top-3.5 left-1/2 -translate-x-1/2 flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#f2ca50]/15 border border-[#f2ca50]/40 text-[10px] font-mono text-[#f2ca50] animate-pulse z-20">
+                            <span className="material-symbols-outlined text-xs">graphic_eq</span>
+                            <span>Voix Naturelle Active</span>
+                          </div>
+                        )}
 
                     {/* Top Meta Badges: Grade + Part of Speech + Theme */}
                     <div className="flex items-center justify-between relative z-10 flex-wrap gap-2">
@@ -1115,19 +1232,26 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
                       VERSO (BACK) FACE
                       ======================================================== */}
                   <div
-                    className={`w-full rounded-2xl p-5 sm:p-7 flex flex-col justify-between border shadow-2xl transition-all duration-300 [transform:rotateY(180deg)] ${
-                      isFlipped ? 'pointer-events-auto opacity-100 z-10' : 'pointer-events-none opacity-0 z-0'
+                    aria-hidden={!isFlipped}
+                    className={`w-full rounded-2xl p-5 sm:p-7 flex flex-col justify-between border shadow-2xl relative overflow-hidden transition-colors duration-200 ${
+                      isFlipped ? 'pointer-events-auto z-10' : 'pointer-events-none z-0'
                     } ${
                       isFocusMode
                         ? 'min-h-[480px] sm:min-h-[530px] bg-gradient-to-br from-[#0c1426] via-[#101930] to-[#0a101f] border-[#f2ca50]/60 ring-1 ring-[#f2ca50]/40'
-                        : 'min-h-[450px] sm:min-h-[490px] bg-[#191f2f] border-[#f2ca50]/40'
+                        : 'min-h-[450px] sm:min-h-[490px] bg-gradient-to-br from-[#191f2f] via-[#161c2c] to-[#111726] border-[#f2ca50]/45'
                     }`}
                     style={{
                       backfaceVisibility: 'hidden',
                       WebkitBackfaceVisibility: 'hidden',
-                      transform: 'rotateY(180deg) translate3d(0,0,0)'
+                      transform: 'rotateY(180deg) translateZ(1px)'
                     }}
                   >
+                    {/* Top Champagne-Gold Accent Line & Subtle Corner Brass */}
+                    <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#f2ca50]/80 to-transparent pointer-events-none" />
+                    <span aria-hidden="true" className="pointer-events-none absolute top-2.5 left-2.5 w-3.5 h-3.5 border-t border-l border-[#f2ca50]/45 rounded-tl-md" />
+                    <span aria-hidden="true" className="pointer-events-none absolute top-2.5 right-2.5 w-3.5 h-3.5 border-t border-r border-[#f2ca50]/45 rounded-tr-md" />
+                    <span aria-hidden="true" className="pointer-events-none absolute bottom-2.5 left-2.5 w-3.5 h-3.5 border-b border-l border-[#f2ca50]/45 rounded-bl-md" />
+                    <span aria-hidden="true" className="pointer-events-none absolute bottom-2.5 right-2.5 w-3.5 h-3.5 border-b border-r border-[#f2ca50]/45 rounded-br-md" />
                     {/* Verso Scrollable Body: Scrolling here never triggers accidental flipping */}
                     <div
                       ref={versoScrollRef}
@@ -1354,7 +1478,9 @@ export const FlashcardsModal: React.FC<FlashcardsModalProps> = ({
                       </button>
                     </div>
                   </div>
-                </div>
+                    </motion.div>
+                  </motion.div>
+                </AnimatePresence>
               </div>
             )}
 

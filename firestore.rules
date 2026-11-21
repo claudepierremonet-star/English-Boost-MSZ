@@ -11,7 +11,62 @@ service cloud.firestore {
     }
 
     function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidCefrLevel(lvl) {
+      return lvl in ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+    }
+
+    function isValidGrade(g) {
+      return g in ['6e', '5e', '4e', '3e', '2nde', '1re', 'terminale'];
+    }
+
+    function isValidUserPayload(data) {
+      return data.keys().hasAll(['uid', 'level']) &&
+        data.uid == request.auth.uid &&
+        isValidCefrLevel(data.level) &&
+        (!('schoolGrade' in data) || isValidGrade(data.schoolGrade)) &&
+        (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 120)) &&
+        (!('favoriteLessonIds' in data) || (data.favoriteLessonIds is list && data.favoriteLessonIds.size() <= 200)) &&
+        (!('chartAnnotations' in data) || (data.chartAnnotations is list && data.chartAnnotations.size() <= 60)) &&
+        (!('tutorSavedNotes' in data) || (data.tutorSavedNotes is list && data.tutorSavedNotes.size() <= 40)) &&
+        (!('tutorWeaknesses' in data) || (data.tutorWeaknesses is list && data.tutorWeaknesses.size() <= 30));
+    }
+
+    function isValidAttemptPayload(data) {
+      return data.keys().hasAll(['attemptId', 'score', 'completedAt']) &&
+        data.attemptId is string && data.attemptId.size() <= 128 &&
+        data.score is number && data.score >= 0 && data.score <= 100 &&
+        data.completedAt is string && data.completedAt.size() <= 64 &&
+        (!('title' in data) || (data.title is string && data.title.size() <= 200)) &&
+        (!('moduleType' in data) || data.moduleType in [
+          'dictation', 'flashcard', 'quiz', 'speaking', 'daily_challenge',
+          'grammar', 'reading', 'writing', 'escape_room', 'listening_cinema',
+          'grammar_battle', 'tutor', 'dialogue', 'city_map', 'arcade'
+        ]);
+    }
+
+    function isValidFlashcardPayload(data) {
+      return data.keys().hasAll(['cardId', 'repetitions', 'easeFactor']) &&
+        data.cardId is string && data.cardId.size() <= 128 &&
+        data.repetitions is number && data.repetitions >= 0 && data.repetitions <= 500 &&
+        data.easeFactor is number && data.easeFactor >= 1.0 && data.easeFactor <= 5.0;
+    }
+
+    function isValidTutorSessionPayload(data) {
+      return data.keys().hasAll(['sessionId', 'mode', 'turnsCount', 'fluencyScore', 'completedAt']) &&
+        data.sessionId is string && data.sessionId.size() <= 128 &&
+        data.mode in [
+          'free_conversation', 'school_english', 'everyday_english',
+          'travel_english', 'restaurant_english', 'job_interview',
+          'debate_argumentation', 'exam_preparation', 'storytelling'
+        ] &&
+        data.turnsCount is number && data.turnsCount >= 0 && data.turnsCount <= 500 &&
+        data.fluencyScore is number && data.fluencyScore >= 0 && data.fluencyScore <= 100 &&
+        data.completedAt is string && data.completedAt.size() <= 64 &&
+        (!('strengths' in data) || (data.strengths is list && data.strengths.size() <= 10)) &&
+        (!('weaknessesIdentified' in data) || (data.weaknessesIdentified is list && data.weaknessesIdentified.size() <= 15));
     }
 
     // Default deny catch-all
@@ -19,28 +74,45 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Connection test document
+    // Connection verification document
     match /test/{docId} {
       allow read: if true;
       allow write: if false;
     }
 
-    // User profile document & isolated subcollections
-    // Public profile reading allowed for signed-in scholars to power the weekly leaderboard
+    // Scholar profile document & isolated subcollections
     match /users/{userId} {
       allow read: if isSignedIn();
-      allow create: if isOwner(userId) && isValidId(userId);
-      allow update: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidId(userId) && isValidUserPayload(request.resource.data);
+      allow update: if isOwner(userId) && isValidId(userId) &&
+        (!('uid' in request.resource.data) || request.resource.data.uid == userId) &&
+        (!('level' in request.resource.data) || isValidCefrLevel(request.resource.data.level)) &&
+        (!('schoolGrade' in request.resource.data) || isValidGrade(request.resource.data.schoolGrade)) &&
+        (!('favoriteLessonIds' in request.resource.data) || (request.resource.data.favoriteLessonIds is list && request.resource.data.favoriteLessonIds.size() <= 200)) &&
+        (!('chartAnnotations' in request.resource.data) || (request.resource.data.chartAnnotations is list && request.resource.data.chartAnnotations.size() <= 60)) &&
+        (!('tutorSavedNotes' in request.resource.data) || (request.resource.data.tutorSavedNotes is list && request.resource.data.tutorSavedNotes.size() <= 40)) &&
+        (!('tutorWeaknesses' in request.resource.data) || (request.resource.data.tutorWeaknesses is list && request.resource.data.tutorWeaknesses.size() <= 30));
       allow delete: if isOwner(userId);
 
-      // User private learning attempts subcollection
+      // Private learning attempts subcollection
       match /attempts/{attemptId} {
-        allow read, write: if isOwner(userId);
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidAttemptPayload(request.resource.data);
+        allow delete: if isOwner(userId);
       }
 
-      // User private flashcard progress subcollection
+      // Private SM-2 flashcard progress subcollection
       match /flashcardProgress/{cardId} {
-        allow read, write: if isOwner(userId);
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidFlashcardPayload(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      // Private AI English Tutor sessions subcollection
+      match /tutorSessions/{sessionId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidId(sessionId) && isValidTutorSessionPayload(request.resource.data);
+        allow delete: if isOwner(userId);
       }
     }
   }

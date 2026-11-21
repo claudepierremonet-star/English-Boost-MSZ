@@ -35,12 +35,20 @@ import type {
   LearningAttempt,
   FlashcardProgress,
   CEFRLevel,
+  SchoolGrade,
+  TutorSavedNote,
+  TutorCorrectionItem,
+  TutorWeaknessRecord,
+  TutorSessionSummary,
+  DailyMissionCategory,
   LeaderboardEntry,
   LeagueTier,
   CityMapProgressionState,
   ProgressChartAnnotation,
   ChartAnnotationCategory
 } from './types';
+import { recordDailyMissionActivity } from '../utils/dailyMissionsManager';
+import { inferGradeFromCefr } from '../services/adaptiveEngine';
 import firebaseAppletConfig from '../../firebase-applet-config.json';
 
 // Read config from provisioned JSON with environment variable fallback
@@ -99,7 +107,8 @@ import {
   markAttemptsAsSyncedInIndexedDB,
   enqueueSyncOperation,
   saveProfileToIndexedDB,
-  saveFlashcardToIndexedDB
+  saveFlashcardToIndexedDB,
+  getAllFlashcardsFromIndexedDB
 } from '../offline/indexedDb';
 
 export { auth, db, storage };
@@ -158,6 +167,7 @@ const LOCAL_CARDS_KEY = 'eb_msz_cards_progress';
 export const LOCAL_FAVORITES_KEY = 'eb_msz_favorite_lessons';
 export const LOCAL_CITY_MAP_KEY = 'eb_msz_city_map_progression_v1';
 export const LOCAL_CHART_ANNOTATIONS_KEY = 'eb_msz_chart_annotations_v1';
+export const LOCAL_TUTOR_SESSIONS_KEY = 'eb_msz_tutor_sessions_v1';
 
 export const DEFAULT_CITY_MAP_PROGRESSION: CityMapProgressionState = {
   unlockedLevel: 1,
@@ -874,6 +884,14 @@ export function subscribeToAuthState(callback: (profile: UserProfile | null) => 
               (mergedCityMap.seenAnswerHashes?.length || 0) > remoteSeenA;
             data.cityMapProgression = mergedCityMap;
 
+            const mergedTutorWeaknesses = mergeTutorWeaknesses(
+              currentLocal.tutorWeaknesses,
+              data.tutorWeaknesses
+            );
+            const weaknessesNeedSync =
+              mergedTutorWeaknesses.length > (data.tutorWeaknesses?.length || 0);
+            data.tutorWeaknesses = mergedTutorWeaknesses;
+
             saveLocalUserProfile(data);
             saveProfileToIndexedDB(data).catch(console.warn);
 
@@ -884,7 +902,8 @@ export function subscribeToAuthState(callback: (profile: UserProfile | null) => 
               mergedFavs.length > firestoreFavs.length ||
               localBalance > firestoreBalance ||
               annotationsNeedSync ||
-              cityNeedsSync;
+              cityNeedsSync ||
+              weaknessesNeedSync;
 
             if (needsSync) {
               setDoc(
@@ -897,7 +916,8 @@ export function subscribeToAuthState(callback: (profile: UserProfile | null) => 
                   mszCoinsBalance: data.mszCoinsBalance,
                   equippedCharacterId: data.equippedCharacterId,
                   favoriteLessonIds: data.favoriteLessonIds,
-                  chartAnnotations: data.chartAnnotations
+                  chartAnnotations: data.chartAnnotations,
+                  tutorWeaknesses: data.tutorWeaknesses
                 },
                 { merge: true }
               ).catch(console.warn);
@@ -937,7 +957,8 @@ export async function updateUserProfile(profile: Partial<UserProfile>): Promise<
   saveLocalUserProfile(updated);
   saveProfileToIndexedDB(updated).catch(console.warn);
 
-  if (navigator.onLine && isFirebaseConfigured && db && auth?.currentUser) {
+  const hasUpdates = Object.keys(profile).length > 0;
+  if (hasUpdates && navigator.onLine && isFirebaseConfigured && db && auth?.currentUser) {
     const userPath = `users/${auth.currentUser.uid}`;
     try {
       const userRef = doc(db, 'users', auth.currentUser.uid);
@@ -950,7 +971,7 @@ export async function updateUserProfile(profile: Partial<UserProfile>): Promise<
       console.warn('Firestore update error, queuing sync:', e);
       await enqueueSyncOperation('UPDATE_PROFILE', profile, auth.currentUser.uid);
     }
-  } else if (!navigator.onLine) {
+  } else if (hasUpdates && !navigator.onLine) {
     await enqueueSyncOperation('UPDATE_PROFILE', profile, auth?.currentUser?.uid);
   }
 
@@ -981,14 +1002,46 @@ export async function recordAttempt(attempt: Omit<LearningAttempt, 'attemptId' |
     console.error('Local attempt save error', e);
   }
 
-  // 3. Update user stats locally and in IndexedDB
+  // 3. Update user stats & daily missions locally and in IndexedDB
   const profile = getLocalUserProfile();
   profile.stats.weeklyXp += 50;
   profile.stats.totalXp += 50;
   profile.stats.completedModules = Math.min(profile.stats.totalModules, profile.stats.completedModules + 1);
   profile.stats.masteryPercentage = Math.round((profile.stats.completedModules / profile.stats.totalModules) * 100);
+
+  // Trigger adaptive Daily Missions telemetry according to moduleType
+  const missionCatsMap: Record<LearningAttempt['moduleType'], DailyMissionCategory[]> = {
+    flashcard: ['vocabulary'],
+    dictation: ['listening'],
+    listening_cinema: ['listening'],
+    grammar: ['grammar'],
+    grammar_battle: ['grammar'],
+    quiz: ['grammar'],
+    escape_room: ['reading'],
+    reading: ['reading'],
+    writing: ['tutor'],
+    tutor: ['tutor'],
+    speaking: ['speaking'],
+    dialogue: ['speaking'],
+    daily_challenge: ['vocabulary', 'reading'],
+    city_map: ['grammar'],
+    arcade: ['vocabulary']
+  };
+  const catsToAdvance = missionCatsMap[newAttempt.moduleType] || ['reading'];
+  const nextDailyState = recordDailyMissionActivity(
+    catsToAdvance,
+    1,
+    profile.schoolGrade || inferGradeFromCefr(profile.level || 'B1'),
+    profile.level || 'B1',
+    profile.adaptiveProfile?.weakestSkills?.[0] || 'grammar'
+  );
+  profile.dailyMissions = nextDailyState;
+
   saveLocalUserProfile(profile);
   saveProfileToIndexedDB(profile).catch(console.warn);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('eb_attempts_updated', { detail: newAttempt }));
+  }
 
   // 4. If online & Cloud Firestore available, push to Firestore
   if (navigator.onLine && isFirebaseConfigured && db && auth?.currentUser) {
@@ -1030,6 +1083,20 @@ export async function saveFlashcardProgress(progress: FlashcardProgress): Promis
     console.error('Local card save error', e);
   }
 
+  // Advance vocabulary daily mission cleanly
+  try {
+    const prof = getLocalUserProfile();
+    recordDailyMissionActivity(
+      'vocabulary',
+      1,
+      prof.schoolGrade || inferGradeFromCefr(prof.level || 'B1'),
+      prof.level || 'B1',
+      prof.adaptiveProfile?.weakestSkills?.[0] || 'grammar'
+    );
+  } catch {
+    // ignore
+  }
+
   // 3. Firestore sync or queue
   if (navigator.onLine && isFirebaseConfigured && db && auth?.currentUser) {
     try {
@@ -1042,6 +1109,329 @@ export async function saveFlashcardProgress(progress: FlashcardProgress): Promis
   } else {
     await enqueueSyncOperation('FLASHCARD_PROGRESS', progress, auth?.currentUser?.uid);
   }
+}
+
+/**
+ * Retrieve all stored flashcard SM-2 progress entries from IndexedDB + localStorage fallback
+ */
+export async function getStoredFlashcardProgressList(): Promise<FlashcardProgress[]> {
+  const byId = new Map<string, FlashcardProgress>();
+  try {
+    const raw = localStorage.getItem(LOCAL_CARDS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Record<string, FlashcardProgress>;
+      Object.values(parsed || {}).forEach((item) => {
+        if (item?.cardId) byId.set(item.cardId, item);
+      });
+    }
+  } catch {
+    // ignore
+  }
+  try {
+    const idbCards = await getAllFlashcardsFromIndexedDB();
+    idbCards.forEach((item) => {
+      if (item?.cardId) byId.set(item.cardId, item);
+    });
+  } catch {
+    // ignore
+  }
+  return Array.from(byId.values());
+}
+
+/**
+ * Validate and persist an AI Tutor note / drill summary in profile + localStorage
+ */
+export async function saveValidatedTutorNote(input: {
+  title: string;
+  category: TutorSavedNote['category'];
+  contentEn: string;
+  explanationFr: string;
+  cefrLevel: CEFRLevel;
+  schoolGrade: SchoolGrade;
+}): Promise<TutorSavedNote[]> {
+  const title = (input.title || '').trim().slice(0, 120);
+  const contentEn = (input.contentEn || '').trim().slice(0, 1200);
+  const explanationFr = (input.explanationFr || '').trim().slice(0, 1200);
+  if (!title || !contentEn || !explanationFr) {
+    throw new Error('Contenu éducatif invalide ou incomplet avant sauvegarde.');
+  }
+
+  const profile = getLocalUserProfile();
+  const existing = Array.isArray(profile.tutorSavedNotes) ? profile.tutorSavedNotes : [];
+  const created: TutorSavedNote = {
+    id: `tutor_note_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    title,
+    category: input.category,
+    contentEn,
+    explanationFr,
+    cefrLevel: input.cefrLevel,
+    schoolGrade: input.schoolGrade,
+    createdAt: new Date().toISOString()
+  };
+  const nextNotes = [created, ...existing].slice(0, 40);
+  await updateUserProfile({ tutorSavedNotes: nextNotes });
+  return nextNotes;
+}
+
+const VALID_TUTOR_MISTAKE_CATEGORIES = new Set<TutorWeaknessRecord['category']>([
+  'grammar',
+  'vocabulary',
+  'structure',
+  'unnatural',
+  'pronunciation'
+]);
+
+function buildWeaknessPatternKey(category: string, corrected: string, ruleSummary: string): string {
+  const basis = `${category}_${(corrected || ruleSummary || 'general').toLowerCase()}`
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  return (basis || `${category}_item`).slice(0, 64);
+}
+
+export function mergeTutorWeaknesses(
+  localList?: TutorWeaknessRecord[] | null,
+  remoteList?: TutorWeaknessRecord[] | null
+): TutorWeaknessRecord[] {
+  const byKey = new Map<string, TutorWeaknessRecord>();
+  const ingest = (items?: TutorWeaknessRecord[] | null) => {
+    if (!Array.isArray(items)) return;
+    for (const raw of items) {
+      if (!raw || typeof raw !== 'object') continue;
+      const category = VALID_TUTOR_MISTAKE_CATEGORIES.has(raw.category) ? raw.category : 'grammar';
+      const patternKey = (raw.patternKey || buildWeaknessPatternKey(category, raw.correctedForm, raw.ruleSummary)).slice(0, 64);
+      const existing = byKey.get(patternKey);
+      if (!existing) {
+        byKey.set(patternKey, {
+          id: (raw.id || `tw_${patternKey}`).slice(0, 80),
+          category,
+          patternKey,
+          originalSample: String(raw.originalSample || '').slice(0, 180),
+          correctedForm: String(raw.correctedForm || '').slice(0, 180),
+          ruleSummary: String(raw.ruleSummary || '').slice(0, 240),
+          additionalExample: String(raw.additionalExample || '').slice(0, 220),
+          occurrences: Math.max(1, Math.min(999, Number(raw.occurrences) || 1)),
+          lastSeenAt: typeof raw.lastSeenAt === 'string' ? raw.lastSeenAt : new Date().toISOString()
+        });
+      } else {
+        const useRaw = (raw.lastSeenAt || '') >= (existing.lastSeenAt || '');
+        byKey.set(patternKey, {
+          ...existing,
+          originalSample: useRaw && raw.originalSample ? String(raw.originalSample).slice(0, 180) : existing.originalSample,
+          correctedForm: useRaw && raw.correctedForm ? String(raw.correctedForm).slice(0, 180) : existing.correctedForm,
+          ruleSummary: useRaw && raw.ruleSummary ? String(raw.ruleSummary).slice(0, 240) : existing.ruleSummary,
+          additionalExample: useRaw && raw.additionalExample ? String(raw.additionalExample).slice(0, 220) : existing.additionalExample,
+          occurrences: Math.max(existing.occurrences, Number(raw.occurrences) || 1),
+          lastSeenAt: useRaw ? String(raw.lastSeenAt) : existing.lastSeenAt
+        });
+      }
+    }
+  };
+  ingest(remoteList);
+  ingest(localList);
+  return Array.from(byKey.values())
+    .sort((a, b) => (b.occurrences !== a.occurrences ? b.occurrences - a.occurrences : b.lastSeenAt.localeCompare(a.lastSeenAt)))
+    .slice(0, 30);
+}
+
+/**
+ * Record AI Tutor corrections into the student's persistent recurring-weaknesses profile.
+ */
+export async function recordTutorWeaknesses(corrections: TutorCorrectionItem[]): Promise<TutorWeaknessRecord[]> {
+  const profile = getLocalUserProfile();
+  const current = Array.isArray(profile.tutorWeaknesses) ? [...profile.tutorWeaknesses] : [];
+  if (!Array.isArray(corrections) || corrections.length === 0) {
+    return current;
+  }
+
+  const nowIso = new Date().toISOString();
+  const byKey = new Map<string, TutorWeaknessRecord>();
+  current.forEach((item) => {
+    if (item?.patternKey) byKey.set(item.patternKey, item);
+  });
+
+  for (const c of corrections) {
+    if (!c || !c.original || !c.corrected) continue;
+    const category = VALID_TUTOR_MISTAKE_CATEGORIES.has(c.category) ? c.category : 'grammar';
+    const patternKey = buildWeaknessPatternKey(category, c.corrected, c.explanation);
+    const existing = byKey.get(patternKey);
+    if (existing) {
+      byKey.set(patternKey, {
+        ...existing,
+        originalSample: c.original.trim().slice(0, 180),
+        correctedForm: c.corrected.trim().slice(0, 180),
+        ruleSummary: (c.explanation || existing.ruleSummary).trim().slice(0, 240),
+        additionalExample: (c.additionalExample || existing.additionalExample).trim().slice(0, 220),
+        occurrences: Math.min(999, (existing.occurrences || 1) + 1),
+        lastSeenAt: nowIso
+      });
+    } else {
+      byKey.set(patternKey, {
+        id: `tw_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+        category,
+        patternKey,
+        originalSample: c.original.trim().slice(0, 180),
+        correctedForm: c.corrected.trim().slice(0, 180),
+        ruleSummary: (c.explanation || '').trim().slice(0, 240),
+        additionalExample: (c.additionalExample || '').trim().slice(0, 220),
+        occurrences: 1,
+        lastSeenAt: nowIso
+      });
+    }
+  }
+
+  const nextWeaknesses = Array.from(byKey.values())
+    .sort((a, b) => (b.occurrences !== a.occurrences ? b.occurrences - a.occurrences : b.lastSeenAt.localeCompare(a.lastSeenAt)))
+    .slice(0, 30);
+
+  await updateUserProfile({ tutorWeaknesses: nextWeaknesses });
+  return nextWeaknesses;
+}
+
+/**
+ * Save a completed AI English Tutor session summary to Cloud Firestore (users/{uid}/tutorSessions/{sessionId}),
+ * persist local offline cache, update recurring weaknesses, and record a unified learning attempt.
+ */
+export async function saveTutorSessionAndWeaknesses(
+  session: TutorSessionSummary,
+  corrections: TutorCorrectionItem[] = []
+): Promise<TutorSessionSummary> {
+  const cleanSession: TutorSessionSummary = {
+    sessionId: (session.sessionId || `tutorsess_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`)
+      .replace(/[^a-zA-Z0-9_-]/g, '_')
+      .slice(0, 120),
+    mode: session.mode,
+    modeLabel: String(session.modeLabel || session.mode).slice(0, 80),
+    schoolGrade: session.schoolGrade,
+    cefrLevel: session.cefrLevel,
+    turnsCount: Math.max(0, Math.min(500, Math.round(session.turnsCount || 0))),
+    mistakesCount: Math.max(0, Math.min(500, Math.round(session.mistakesCount || 0))),
+    fluencyScore: Math.max(0, Math.min(100, Math.round(session.fluencyScore || 0))),
+    strengths: Array.isArray(session.strengths) ? session.strengths.slice(0, 10).map((s) => String(s).slice(0, 200)) : [],
+    weaknessesIdentified: Array.isArray(session.weaknessesIdentified)
+      ? session.weaknessesIdentified.slice(0, 15).map((w) => ({
+          category: VALID_TUTOR_MISTAKE_CATEGORIES.has(w.category) ? w.category : 'grammar',
+          label: String(w.label || '').slice(0, 120),
+          tip: String(w.tip || '').slice(0, 220)
+        }))
+      : [],
+    recommendedFocus: String(session.recommendedFocus || '').slice(0, 220),
+    encouragementEn: String(session.encouragementEn || '').slice(0, 400),
+    summaryFr: String(session.summaryFr || '').slice(0, 600),
+    nextPracticePrompt: String(session.nextPracticePrompt || '').slice(0, 240),
+    xpEarned: Math.max(0, Math.min(500, Math.round(session.xpEarned || 0))),
+    durationSeconds: Math.max(0, Math.min(7200, Math.round(session.durationSeconds || 60))),
+    completedAt: session.completedAt || new Date().toISOString()
+  };
+
+  // 1. Persist locally for instant/offline access
+  try {
+    const raw = localStorage.getItem(LOCAL_TUTOR_SESSIONS_KEY);
+    const list: TutorSessionSummary[] = raw ? JSON.parse(raw) : [];
+    const filtered = Array.isArray(list) ? list.filter((s) => s.sessionId !== cleanSession.sessionId) : [];
+    localStorage.setItem(LOCAL_TUTOR_SESSIONS_KEY, JSON.stringify([cleanSession, ...filtered].slice(0, 30)));
+  } catch (e) {
+    console.warn('Error saving tutor session locally:', e);
+  }
+
+  // 2. Merge any final corrections into persistent weaknesses
+  if (corrections.length > 0) {
+    await recordTutorWeaknesses(corrections);
+  }
+
+  // 3. Persist to Cloud Firestore users/{uid}/tutorSessions/{sessionId}
+  if (navigator.onLine && isFirebaseConfigured && db && auth?.currentUser) {
+    const uid = auth.currentUser.uid;
+    const sessionPath = `users/${uid}/tutorSessions/${cleanSession.sessionId}`;
+    try {
+      await setDoc(doc(db, 'users', uid, 'tutorSessions', cleanSession.sessionId), stripUndefinedDeep(cleanSession), {
+        merge: true
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('Missing or insufficient permissions')) {
+        handleFirestoreError(err, OperationType.WRITE, sessionPath);
+      }
+      console.warn('Firestore tutorSession write warning:', err);
+    }
+  }
+
+  // 4. Record unified learning attempt for Adaptive Engine + 7-Day Chart + Daily Missions
+  await recordAttempt({
+    moduleId: `tutor-session-${cleanSession.mode}`,
+    moduleType: 'tutor',
+    title: `AI Tutor · ${cleanSession.modeLabel} (${cleanSession.cefrLevel})`,
+    level: cleanSession.cefrLevel,
+    score: cleanSession.fluencyScore,
+    durationSeconds: cleanSession.durationSeconds,
+    details: {
+      mode: cleanSession.mode,
+      turnsCount: cleanSession.turnsCount,
+      mistakesCount: cleanSession.mistakesCount
+    }
+  });
+
+  return cleanSession;
+}
+
+/**
+ * Retrieve past AI English Tutor sessions & recurring weaknesses from Firestore (with local fallback).
+ */
+export async function getTutorSessionsAndWeaknesses(
+  userId?: string
+): Promise<{ sessions: TutorSessionSummary[]; weaknesses: TutorWeaknessRecord[]; source: 'firestore' | 'local' }> {
+  const targetUid = userId || auth?.currentUser?.uid;
+  const localProfile = getLocalUserProfile();
+  let localSessions: TutorSessionSummary[] = [];
+  try {
+    const raw = localStorage.getItem(LOCAL_TUTOR_SESSIONS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) localSessions = parsed;
+    }
+  } catch {
+    // ignore
+  }
+
+  if (navigator.onLine && isFirebaseConfigured && db && targetUid) {
+    const colPath = `users/${targetUid}/tutorSessions`;
+    try {
+      const q = query(collection(db, 'users', targetUid, 'tutorSessions'), orderBy('completedAt', 'desc'), limit(20));
+      const snap = await getDocs(q);
+      const remoteSessions: TutorSessionSummary[] = [];
+      snap.forEach((d) => {
+        remoteSessions.push(d.data() as TutorSessionSummary);
+      });
+      // Merge remote + local by sessionId
+      const byId = new Map<string, TutorSessionSummary>();
+      localSessions.forEach((s) => s?.sessionId && byId.set(s.sessionId, s));
+      remoteSessions.forEach((s) => s?.sessionId && byId.set(s.sessionId, s));
+      const merged = Array.from(byId.values())
+        .sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || ''))
+        .slice(0, 30);
+      try {
+        localStorage.setItem(LOCAL_TUTOR_SESSIONS_KEY, JSON.stringify(merged));
+      } catch {
+        // ignore
+      }
+      return {
+        sessions: merged,
+        weaknesses: Array.isArray(localProfile.tutorWeaknesses) ? localProfile.tutorWeaknesses : [],
+        source: 'firestore'
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('Missing or insufficient permissions')) {
+        handleFirestoreError(err, OperationType.LIST, colPath);
+      }
+      console.warn('Firestore tutorSessions fetch warning:', err);
+    }
+  }
+
+  return {
+    sessions: localSessions,
+    weaknesses: Array.isArray(localProfile.tutorWeaknesses) ? localProfile.tutorWeaknesses : [],
+    source: 'local'
+  };
 }
 
 /**
@@ -1797,4 +2187,245 @@ export async function fetchWeeklyLeaderboard(
 
   return ranked;
 }
+
+/**
+ * Strip undefined keys recursively so Firestore setDoc never rejects optional undefined fields
+ */
+function stripUndefinedDeep<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((item) => stripUndefinedDeep(item)) as unknown as T;
+  }
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (v !== undefined) {
+        out[k] = stripUndefinedDeep(v);
+      }
+    }
+    return out as T;
+  }
+  return value;
+}
+
+export interface ReconcileFirestoreResult {
+  profile: UserProfile;
+  synced: boolean;
+  attemptsSynced: number;
+  reason?: 'offline' | 'unauthenticated' | 'not_configured';
+}
+
+/**
+ * Immediately reconcile local user profile, progression, and unsynced attempts with Cloud Firestore.
+ */
+export async function reconcileUserProfileWithFirestore(): Promise<ReconcileFirestoreResult> {
+  const localProfile = getLocalUserProfile();
+
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return { profile: localProfile, synced: false, attemptsSynced: 0, reason: 'offline' };
+  }
+  if (!isFirebaseConfigured || !db) {
+    return { profile: localProfile, synced: false, attemptsSynced: 0, reason: 'not_configured' };
+  }
+  if (!auth?.currentUser) {
+    return { profile: localProfile, synced: false, attemptsSynced: 0, reason: 'unauthenticated' };
+  }
+
+  const firebaseUser = auth.currentUser;
+  const uid = firebaseUser.uid;
+  const userPath = `users/${uid}`;
+  const userRef = doc(db, 'users', uid);
+
+  let remoteData: UserProfile | null = null;
+  try {
+    const snap = await getDocFromServer(userRef);
+    if (snap.exists()) {
+      remoteData = snap.data() as UserProfile;
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('Missing or insufficient permissions')) {
+      handleFirestoreError(err, OperationType.GET, userPath);
+    }
+    try {
+      const cachedSnap = await getDoc(userRef);
+      if (cachedSnap.exists()) {
+        remoteData = cachedSnap.data() as UserProfile;
+      }
+    } catch (innerErr) {
+      const innerMsg = innerErr instanceof Error ? innerErr.message : String(innerErr);
+      if (innerMsg.includes('Missing or insufficient permissions')) {
+        handleFirestoreError(innerErr, OperationType.GET, userPath);
+      }
+      throw innerErr;
+    }
+  }
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const mergedArcadePoints = Math.max(
+    localProfile.arcadeProgression?.points || 0,
+    remoteData?.arcadeProgression?.points || 0
+  );
+  const mergedCompletedGames = Array.from(
+    new Set([
+      ...(localProfile.arcadeProgression?.completedGames || []),
+      ...(remoteData?.arcadeProgression?.completedGames || [])
+    ])
+  );
+
+  const localDate = localProfile.stats?.lastActiveDate || '';
+  const remoteDate = remoteData?.stats?.lastActiveDate || '';
+  const mergedLastActiveDate = (localDate >= remoteDate ? localDate : remoteDate) || todayStr;
+  const mergedStudyToday =
+    localDate === todayStr && remoteDate === todayStr
+      ? Math.max(localProfile.stats?.studyMinutesToday ?? 0, remoteData?.stats?.studyMinutesToday ?? 0)
+      : localDate === todayStr
+      ? localProfile.stats?.studyMinutesToday ?? 0
+      : remoteData?.stats?.studyMinutesToday ?? 0;
+
+  const instancesMap = new Map<string, any>();
+  (remoteData?.ownedCardInstances || []).forEach((inst) => instancesMap.set(inst.serialCode, inst));
+  (localProfile.ownedCardInstances || []).forEach((inst) => instancesMap.set(inst.serialCode, inst));
+  const mergedInstances = Array.from(instancesMap.values());
+
+  const mergedFavs = Array.from(
+    new Set([...(localProfile.favoriteLessonIds || []), ...(remoteData?.favoriteLessonIds || [])])
+  ).slice(0, 200);
+
+  const mergedAnnotations = mergeChartAnnotations(
+    localProfile.chartAnnotations || getChartAnnotations(),
+    remoteData?.chartAnnotations
+  ).slice(0, 60);
+  if (mergedAnnotations.length > 0) {
+    persistAnnotationsLocally(mergedAnnotations);
+  }
+
+  const mergedCityMap = mergeCityMapProgression(
+    localProfile.cityMapProgression,
+    remoteData?.cityMapProgression
+  );
+
+  const validLevels: CEFRLevel[] = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+  const resolvedLevel: CEFRLevel = validLevels.includes(localProfile.level)
+    ? localProfile.level
+    : validLevels.includes(remoteData?.level as CEFRLevel)
+    ? (remoteData!.level as CEFRLevel)
+    : 'B1';
+
+  const validGrades: SchoolGrade[] = ['6e', '5e', '4e', '3e', '2nde', '1re', 'terminale'];
+  const resolvedGrade: SchoolGrade | undefined =
+    localProfile.schoolGrade && validGrades.includes(localProfile.schoolGrade)
+      ? localProfile.schoolGrade
+      : remoteData?.schoolGrade && validGrades.includes(remoteData.schoolGrade)
+      ? remoteData.schoolGrade
+      : undefined;
+
+  const mergedProfile: UserProfile = {
+    ...(remoteData || {}),
+    ...localProfile,
+    uid,
+    displayName: (
+      (localProfile.displayName && localProfile.displayName !== DEFAULT_USER_PROFILE.displayName
+        ? localProfile.displayName
+        : firebaseUser.displayName || remoteData?.displayName || localProfile.displayName || 'Lord Chesterfield Scholar')
+    ).slice(0, 120),
+    email: firebaseUser.email || remoteData?.email || localProfile.email || '',
+    photoURL: firebaseUser.photoURL || localProfile.photoURL || remoteData?.photoURL || DEFAULT_USER_PROFILE.photoURL,
+    level: resolvedLevel,
+    ...(resolvedGrade ? { schoolGrade: resolvedGrade } : {}),
+    stats: {
+      ...(remoteData?.stats || DEFAULT_USER_PROFILE.stats),
+      ...(localProfile.stats || {}),
+      totalXp: Math.max(remoteData?.stats?.totalXp || 0, localProfile.stats?.totalXp || 0, mergedArcadePoints),
+      weeklyXp: Math.max(remoteData?.stats?.weeklyXp || 0, localProfile.stats?.weeklyXp || 0),
+      completedModules: Math.max(remoteData?.stats?.completedModules || 0, localProfile.stats?.completedModules || 0),
+      totalModules: Math.max(remoteData?.stats?.totalModules || 18, localProfile.stats?.totalModules || 18),
+      streakDays: Math.max(remoteData?.stats?.streakDays || 0, localProfile.stats?.streakDays || 0),
+      studyMinutesToday: mergedStudyToday,
+      studyMinutesTarget: localProfile.stats?.studyMinutesTarget ?? remoteData?.stats?.studyMinutesTarget ?? 30,
+      totalImmersionMinutes: Math.max(
+        remoteData?.stats?.totalImmersionMinutes ?? 0,
+        localProfile.stats?.totalImmersionMinutes ?? 0
+      ),
+      lastActiveDate: mergedLastActiveDate
+    },
+    arcadeProgression: {
+      points: mergedArcadePoints,
+      level: Math.max(localProfile.arcadeProgression?.level || 1, remoteData?.arcadeProgression?.level || 1),
+      unlockedMaxGameNumber: Math.max(
+        localProfile.arcadeProgression?.unlockedMaxGameNumber || 1,
+        remoteData?.arcadeProgression?.unlockedMaxGameNumber || 1
+      ),
+      completedGames: mergedCompletedGames,
+      activeSession: localProfile.arcadeProgression?.activeSession || remoteData?.arcadeProgression?.activeSession || null
+    },
+    cityMapProgression: mergedCityMap,
+    ownedCardInstances: mergedInstances,
+    mszCoinsBalance: Math.max(
+      typeof remoteData?.mszCoinsBalance === 'number' ? remoteData.mszCoinsBalance : 0,
+      typeof localProfile.mszCoinsBalance === 'number' ? localProfile.mszCoinsBalance : 150
+    ),
+    equippedCharacterId: localProfile.equippedCharacterId || remoteData?.equippedCharacterId || 'char_eclat',
+    favoriteLessonIds: mergedFavs,
+    chartAnnotations: mergedAnnotations,
+    tutorWeaknesses: mergeTutorWeaknesses(localProfile.tutorWeaknesses, remoteData?.tutorWeaknesses),
+    ...(Array.isArray(localProfile.tutorSavedNotes || remoteData?.tutorSavedNotes)
+      ? {
+          tutorSavedNotes: (localProfile.tutorSavedNotes || remoteData?.tutorSavedNotes || []).slice(0, 40)
+        }
+      : {})
+  };
+
+  const payload = stripUndefinedDeep(mergedProfile) as unknown as Record<string, unknown>;
+  try {
+    await setDoc(userRef, payload, { merge: true });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('Missing or insufficient permissions')) {
+      handleFirestoreError(err, OperationType.WRITE, userPath);
+    }
+    throw err;
+  }
+
+  saveLocalUserProfile(mergedProfile);
+  await saveProfileToIndexedDB(mergedProfile);
+
+  // Also ensure any unsynced attempts in IndexedDB are pushed idempotently
+  let attemptsSynced = 0;
+  try {
+    const idbAttempts = (await getAllAttemptsFromIndexedDB()) as Array<LearningAttempt & { syncedToCloud?: number }>;
+    const unsynced = idbAttempts.filter((a) => a.attemptId && a.syncedToCloud !== 1).slice(0, 25);
+    const newlySyncedIds: string[] = [];
+    for (const att of unsynced) {
+      const attemptPath = `users/${uid}/attempts/${att.attemptId}`;
+      const { syncedToCloud: _ignoreFlag, savedAt: _ignoreSavedAt, ...cleanAttempt } = att as LearningAttempt & {
+        syncedToCloud?: number;
+        savedAt?: string;
+      };
+      try {
+        await setDoc(doc(db, 'users', uid, 'attempts', att.attemptId), stripUndefinedDeep(cleanAttempt), {
+          merge: true
+        });
+        newlySyncedIds.push(att.attemptId);
+        attemptsSynced++;
+      } catch (attErr) {
+        const msg = attErr instanceof Error ? attErr.message : String(attErr);
+        if (msg.includes('Missing or insufficient permissions')) {
+          handleFirestoreError(attErr, OperationType.WRITE, attemptPath);
+        }
+        throw attErr;
+      }
+    }
+    if (newlySyncedIds.length > 0) {
+      await markAttemptsAsSyncedInIndexedDB(newlySyncedIds);
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith('{')) {
+      throw err;
+    }
+    console.warn('Unsynced attempts push warning:', err);
+  }
+
+  return { profile: mergedProfile, synced: true, attemptsSynced };
+}
+
 

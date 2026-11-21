@@ -37,7 +37,7 @@ import {
   getFavoriteLessonIds,
   toggleFavoriteLesson
 } from './firebase/client';
-import type { UserProfile, CEFRLevel } from './firebase/types';
+import type { UserProfile, CEFRLevel, SchoolGrade } from './firebase/types';
 import { ALL_200_LESSONS, type StudyFolio, type CurioWord, type SchoolLesson } from './data/curriculum';
 import { calculateLevel } from './utils/levelUtils';
 import { LevelUpCelebrationModal, type LevelUpData } from './components/LevelUpCelebrationModal';
@@ -49,6 +49,12 @@ import { LessonDetailModal } from './components/LessonDetailModal';
 import { FavoriteLessonsQuickAccess } from './components/FavoriteLessonsQuickAccess';
 import { CityQuizMapView } from './components/CityQuizMapView';
 import { getCityMapProgression } from './utils/cityMapManager';
+import { SmartEcosystemHub, type EcosystemLaunchTarget } from './components/SmartEcosystemHub';
+import { AITutorModal } from './components/AITutorModal';
+import { EnglishEscapeRoomModal } from './components/EnglishEscapeRoomModal';
+import { ListeningCinemaModal } from './components/ListeningCinemaModal';
+import { GrammarBattleModal } from './components/GrammarBattleModal';
+import { inferGradeFromCefr, markLessonCompletedLocally } from './services/adaptiveEngine';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabKey>('accueil');
@@ -76,6 +82,10 @@ export default function App() {
   const [isSpeakingOpen, setIsSpeakingOpen] = useState<boolean>(false);
   const [isAccentStudioOpen, setIsAccentStudioOpen] = useState<boolean>(false);
   const [isShopModalOpen, setIsShopModalOpen] = useState<boolean>(false);
+  const [isTutorOpen, setIsTutorOpen] = useState<boolean>(false);
+  const [isEscapeRoomOpen, setIsEscapeRoomOpen] = useState<boolean>(false);
+  const [isCinemaOpen, setIsCinemaOpen] = useState<boolean>(false);
+  const [isGrammarBattleOpen, setIsGrammarBattleOpen] = useState<boolean>(false);
   const [activeFolioForStudy, setActiveFolioForStudy] = useState<StudyFolio | null>(null);
 
   // Active Lesson selected across Curriculum / Search
@@ -184,10 +194,64 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  const activeSchoolGrade: SchoolGrade = user.schoolGrade || inferGradeFromCefr(currentLevel);
+
   const handleLevelChange = async (newLevel: CEFRLevel) => {
     setCurrentLevel(newLevel);
     const updated = await updateUserProfile({ level: newLevel });
     setUser(updated);
+  };
+
+  const handleSelectSchoolGrade = async (grade: SchoolGrade, suggestedCefr?: CEFRLevel) => {
+    if (suggestedCefr) {
+      setCurrentLevel(suggestedCefr);
+    }
+    const updated = await updateUserProfile({
+      schoolGrade: grade,
+      ...(suggestedCefr ? { level: suggestedCefr } : {})
+    });
+    setUser(updated);
+  };
+
+  const handleLaunchEcosystemModule = (target: EcosystemLaunchTarget) => {
+    switch (target) {
+      case 'tutor':
+        setIsTutorOpen(true);
+        break;
+      case 'adventure_world':
+        setActiveTab('carte');
+        break;
+      case 'flashcards':
+        setFlashcardsDeckMode('vocab');
+        setFlashcardsFocusMode(false);
+        setIsFlashcardsOpen(true);
+        break;
+      case 'speaking':
+        setIsSpeakingOpen(true);
+        break;
+      case 'escape_room':
+        setIsEscapeRoomOpen(true);
+        break;
+      case 'dialogues':
+        setDialoguesInitialTheme('all');
+        setIsDialoguesOpen(true);
+        break;
+      case 'listening_cinema':
+        setIsCinemaOpen(true);
+        break;
+      case 'grammar_battle':
+        setIsGrammarBattleOpen(true);
+        break;
+      case 'collectibles':
+        setIsShopModalOpen(true);
+        break;
+      case 'dashboard':
+        setActiveTab('dashboard');
+        break;
+      case 'leaderboard':
+        setActiveTab('classement');
+        break;
+    }
   };
 
   const handlePhotoChange = async (newUrl: string) => {
@@ -423,6 +487,22 @@ export default function App() {
               totalXp={user.stats?.totalXp ?? 0}
               weeklyXp={user.stats?.weeklyXp ?? 0}
               onNavigateLeaderboard={() => setActiveTab('classement')}
+            />
+
+            {/* Smart Adaptive Ecosystem Hub (6e-Terminale, Daily Missions, Adaptive Recommendations, SM-2 Queue, 12 Pillars) */}
+            <SmartEcosystemHub
+              user={user}
+              currentLevel={currentLevel}
+              onSelectSchoolGrade={handleSelectSchoolGrade}
+              onLaunchModule={handleLaunchEcosystemModule}
+              onOpenLesson={(lesson) => {
+                setActiveSelectedLesson(lesson);
+                setSearchLessonForDetail(lesson);
+              }}
+              onClaimMissionXp={(xp) => {
+                handleChallengeComplete(xp);
+                setUser(getLocalUserProfile());
+              }}
             />
 
             {/* Monumental Hero Section with background-clip text & scroll zoom */}
@@ -728,7 +808,10 @@ export default function App() {
         {activeTab === 'cursus' && (
           <div className="max-w-4xl mx-auto animate-fadeIn pt-2">
             <SchoolCurriculumView
-              onLessonCompleted={(_lessonId, xp) => handleChallengeComplete(xp)}
+              onLessonCompleted={(lessonId, xp) => {
+                markLessonCompletedLocally(lessonId);
+                handleChallengeComplete(xp);
+              }}
               activeSelectedLessonId={activeSelectedLesson?.id}
               onSelectLesson={(lesson) => setActiveSelectedLesson(lesson)}
               favoriteLessonIds={favoriteLessonIds}
@@ -783,6 +866,7 @@ export default function App() {
                 onUpdateStudyTarget={handleUpdateStudyTarget}
                 onOpenFlashcards={() => setIsFlashcardsOpen(true)}
                 onNavigateLeaderboard={() => setActiveTab('classement')}
+                onLaunchEcosystemModule={handleLaunchEcosystemModule}
               />
               {/* Section 'Mon historique de progression' sous le composant DashboardView */}
               <ProgressHistorySection user={user} />
@@ -818,6 +902,10 @@ export default function App() {
               onOpenSpeaking={() => setIsSpeakingOpen(true)}
               onOpenGames={() => setActiveTab('jeux')}
               onOpenCityMap={() => setActiveTab('carte')}
+              onOpenAiTutor={() => setIsTutorOpen(true)}
+              onOpenEscapeRoom={() => setIsEscapeRoomOpen(true)}
+              onOpenListeningCinema={() => setIsCinemaOpen(true)}
+              onOpenGrammarBattle={() => setIsGrammarBattleOpen(true)}
             />
           </div>
         )}
@@ -970,12 +1058,66 @@ export default function App() {
         onDismiss={() => setXpToast(null)}
       />
 
+      {/* AI English Tutor Modal */}
+      <AITutorModal
+        isOpen={isTutorOpen}
+        onClose={() => setIsTutorOpen(false)}
+        user={user}
+        schoolGrade={activeSchoolGrade}
+        cefrLevel={currentLevel}
+        weakestSkills={user.adaptiveProfile?.weakestSkills}
+        onXpEarned={(xp) => {
+          handleChallengeComplete(xp);
+          setUser(getLocalUserProfile());
+        }}
+        onProfileUpdated={() => setUser(getLocalUserProfile())}
+      />
+
+      {/* English Escape Room Modal */}
+      <EnglishEscapeRoomModal
+        isOpen={isEscapeRoomOpen}
+        onClose={() => setIsEscapeRoomOpen(false)}
+        schoolGrade={activeSchoolGrade}
+        cefrLevel={currentLevel}
+        onXpEarned={(xp) => {
+          handleChallengeComplete(xp);
+          setUser(getLocalUserProfile());
+        }}
+      />
+
+      {/* Listening Cinema Modal */}
+      <ListeningCinemaModal
+        isOpen={isCinemaOpen}
+        onClose={() => setIsCinemaOpen(false)}
+        schoolGrade={activeSchoolGrade}
+        cefrLevel={currentLevel}
+        onXpEarned={(xp) => {
+          handleChallengeComplete(xp);
+          setUser(getLocalUserProfile());
+        }}
+      />
+
+      {/* Grammar Battle Arena Modal */}
+      <GrammarBattleModal
+        isOpen={isGrammarBattleOpen}
+        onClose={() => setIsGrammarBattleOpen(false)}
+        schoolGrade={activeSchoolGrade}
+        cefrLevel={currentLevel}
+        onXpEarned={(xp) => {
+          handleChallengeComplete(xp);
+          setUser(getLocalUserProfile());
+        }}
+      />
+
       {/* Interactive Lesson Detail Modal from Global Search */}
       <LessonDetailModal
         lesson={searchLessonForDetail}
         isOpen={searchLessonForDetail !== null}
         onClose={() => setSearchLessonForDetail(null)}
-        onCompleteLesson={(_id, xp) => handleChallengeComplete(xp)}
+        onCompleteLesson={(id, xp) => {
+          markLessonCompletedLocally(id);
+          handleChallengeComplete(xp);
+        }}
         isFavorite={searchLessonForDetail ? favoriteLessonIds.includes(searchLessonForDetail.id) : false}
         onToggleFavorite={
           searchLessonForDetail

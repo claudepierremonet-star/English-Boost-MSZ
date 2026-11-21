@@ -2,7 +2,7 @@
   "entities": {
     "UserProfile": {
       "title": "UserProfile",
-      "description": "User account profile, CEFR level tier, and aggregate learning statistics.",
+      "description": "User account profile, school grade (6e-Terminale), CEFR level tier (A1-C2), adaptive profile, daily missions, and aggregate learning statistics.",
       "type": "object",
       "properties": {
         "uid": {
@@ -24,13 +24,13 @@
         },
         "level": {
           "type": "string",
-          "enum": [
-            "B1",
-            "B2",
-            "C1",
-            "C2"
-          ],
+          "enum": ["A1", "A2", "B1", "B2", "C1", "C2"],
           "description": "Current CEFR level"
+        },
+        "schoolGrade": {
+          "type": "string",
+          "enum": ["6e", "5e", "4e", "3e", "2nde", "1re", "terminale"],
+          "description": "Middle school or high school grade level"
         },
         "heroImageURL": {
           "type": "string",
@@ -46,125 +46,159 @@
         },
         "cityMapProgression": {
           "type": "object",
-          "description": "600-level City Map quiz progression (unlockedLevel 1-600, completedChaptersByLevel 1-10, conqueredLevels, stars, bounded seenQuestionHashes & seenAnswerHashes anti-repetition sets)"
+          "description": "600-level City Map quiz progression"
+        },
+        "adaptiveProfile": {
+          "type": "object",
+          "description": "Centralized 7-skill adaptive evaluation profile (vocabulary, grammar, listening, reading, writing, speaking, pronunciation)"
+        },
+        "dailyMissions": {
+          "type": "object",
+          "description": "Daily adaptive mission states and rewards"
+        },
+        "tutorSavedNotes": {
+          "type": "array",
+          "description": "Validated AI English Tutor coaching tips, writing feedback, and custom drills saved by the student (up to 40)"
+        },
+        "tutorWeaknesses": {
+          "type": "array",
+          "description": "Recurring grammar, vocabulary, structure, unnatural phrasing, and pronunciation weaknesses tracked by the AI English Tutor (up to 30)"
         },
         "favoriteLessonIds": {
           "type": "array",
-          "description": "List of favorited school lesson IDs (up to 200) saved by the scholar for quick access"
+          "description": "List of favorited school lesson IDs (up to 200)"
         },
         "chartAnnotations": {
           "type": "array",
-          "description": "Personal text annotations pinned to specific points of the progression chart (up to 60 entries)"
+          "description": "Personal text annotations pinned to the 30-day progression chart (up to 60)"
+        },
+        "mszCoinsBalance": {
+          "type": "number",
+          "description": "Current MSZ Coins balance"
+        },
+        "ownedCardInstances": {
+          "type": "array",
+          "description": "Owned collectible character cards"
+        },
+        "equippedCharacterId": {
+          "type": "string",
+          "description": "Equipped collectible card ID"
+        },
+        "unlockedBadgeIds": {
+          "type": "array",
+          "description": "Unlocked achievement badge identifiers"
         }
       },
-      "required": [
-        "uid",
-        "level"
-      ]
+      "required": ["uid", "level"]
     },
     "LearningAttempt": {
       "title": "LearningAttempt",
-      "description": "A completed dictation, quiz, speech studio or daily challenge attempt.",
+      "description": "A completed exercise, escape room, listening cinema, grammar battle, AI tutor, dictation, quiz, or speaking attempt.",
       "type": "object",
       "properties": {
-        "attemptId": {
-          "type": "string",
-          "description": "Unique attempt identifier"
-        },
-        "type": {
+        "attemptId": { "type": "string", "description": "Unique attempt identifier" },
+        "moduleId": { "type": "string", "description": "Source module identifier" },
+        "moduleType": {
           "type": "string",
           "enum": [
             "dictation",
+            "flashcard",
             "quiz",
             "speaking",
-            "challenge",
-            "reading"
+            "daily_challenge",
+            "grammar",
+            "reading",
+            "writing",
+            "escape_room",
+            "listening_cinema",
+            "grammar_battle",
+            "tutor",
+            "dialogue",
+            "city_map",
+            "arcade"
           ],
           "description": "Exercise modality"
         },
-        "title": {
-          "type": "string",
-          "description": "Title of exercise or lesson"
-        },
-        "score": {
-          "type": "number",
-          "description": "Score achieved (0-100)"
-        },
-        "level": {
-          "type": "string",
-          "description": "CEFR level"
-        },
-        "completedAt": {
-          "type": "string",
-          "format": "date-time",
-          "description": "ISO timestamp"
-        },
-        "durationSeconds": {
-          "type": "number",
-          "description": "Time spent on attempt in seconds"
-        },
-        "details": {
-          "type": "object",
-          "description": "Phonetics, transcription, or answer details"
-        }
+        "title": { "type": "string", "description": "Title of exercise or lesson" },
+        "score": { "type": "number", "description": "Score achieved (0-100)" },
+        "level": { "type": "string", "description": "CEFR level" },
+        "completedAt": { "type": "string", "format": "date-time", "description": "ISO timestamp" },
+        "durationSeconds": { "type": "number", "description": "Time spent on attempt in seconds" },
+        "details": { "type": "object", "description": "Detailed exercise metrics" }
       },
-      "required": [
-        "attemptId",
-        "type",
-        "score",
-        "completedAt"
-      ]
+      "required": ["attemptId", "moduleType", "score", "completedAt"]
     },
     "FlashcardProgress": {
       "title": "FlashcardProgress",
       "description": "Spaced repetition (SM-2) memory schedule for a vocabulary term.",
       "type": "object",
       "properties": {
-        "cardId": {
-          "type": "string",
-          "description": "Identifier of the vocabulary item"
-        },
-        "interval": {
-          "type": "number",
-          "description": "SM-2 interval in days"
-        },
-        "repetition": {
-          "type": "number",
-          "description": "Repetition count"
-        },
-        "easeFactor": {
-          "type": "number",
-          "description": "SM-2 ease factor"
-        },
-        "dueDate": {
-          "type": "string",
-          "description": "Due date for next review"
-        },
-        "lastReviewed": {
-          "type": "string",
-          "description": "ISO timestamp of last review"
-        }
+        "cardId": { "type": "string", "description": "Identifier of the vocabulary item" },
+        "term": { "type": "string", "description": "Target English vocabulary term" },
+        "repetitions": { "type": "number", "description": "Repetition count" },
+        "intervalDays": { "type": "number", "description": "SM-2 interval in days" },
+        "easeFactor": { "type": "number", "description": "SM-2 ease factor" },
+        "nextReviewDate": { "type": "string", "description": "ISO timestamp for next due review" },
+        "lastQualityScore": { "type": "number", "description": "Last SM-2 recall quality 0-5" },
+        "state": { "type": "string", "enum": ["learning", "review", "mastered"] }
       },
-      "required": [
-        "cardId",
-        "interval",
-        "repetition",
-        "easeFactor"
-      ]
+      "required": ["cardId", "intervalDays", "repetitions", "easeFactor"]
+    },
+    "TutorSession": {
+      "title": "TutorSession",
+      "description": "Completed AI English Tutor coaching session summary with fluency score, strengths, and identified weaknesses.",
+      "type": "object",
+      "properties": {
+        "sessionId": { "type": "string", "description": "Unique tutor session identifier" },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "free_conversation",
+            "school_english",
+            "everyday_english",
+            "travel_english",
+            "restaurant_english",
+            "job_interview",
+            "debate_argumentation",
+            "exam_preparation",
+            "storytelling"
+          ]
+        },
+        "modeLabel": { "type": "string" },
+        "schoolGrade": { "type": "string", "enum": ["6e", "5e", "4e", "3e", "2nde", "1re", "terminale"] },
+        "cefrLevel": { "type": "string", "enum": ["A1", "A2", "B1", "B2", "C1", "C2"] },
+        "turnsCount": { "type": "number" },
+        "mistakesCount": { "type": "number" },
+        "fluencyScore": { "type": "number" },
+        "strengths": { "type": "array" },
+        "weaknessesIdentified": { "type": "array" },
+        "recommendedFocus": { "type": "string" },
+        "encouragementEn": { "type": "string" },
+        "summaryFr": { "type": "string" },
+        "nextPracticePrompt": { "type": "string" },
+        "xpEarned": { "type": "number" },
+        "durationSeconds": { "type": "number" },
+        "completedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["sessionId", "mode", "turnsCount", "fluencyScore", "completedAt"]
     }
   },
   "firestore": {
     "/users/{userId}": {
       "schema": "UserProfile",
-      "description": "User profile document storing academic level and study cadence"
+      "description": "User profile document storing academic grade, CEFR level, adaptive skill profile, daily missions, tutor weaknesses, and study cadence"
     },
     "/users/{userId}/attempts/{attemptId}": {
       "schema": "LearningAttempt",
-      "description": "Individual learning exercise attempts with scores and timestamps"
+      "description": "Individual learning exercise attempts across all 12 ecosystem modules"
     },
     "/users/{userId}/flashcardProgress/{cardId}": {
       "schema": "FlashcardProgress",
       "description": "Spaced repetition flashcard memory state"
+    },
+    "/users/{userId}/tutorSessions/{sessionId}": {
+      "schema": "TutorSession",
+      "description": "AI English Tutor session summaries and adaptive coaching diagnostics"
     }
   }
 }

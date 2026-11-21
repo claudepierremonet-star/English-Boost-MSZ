@@ -198,7 +198,7 @@ async function generateInsightWithRetry(
 
 async function startServer(): Promise<void> {
   const app = express();
-  app.use(express.json({ limit: '16kb' }));
+  app.use(express.json({ limit: '32kb' }));
 
   app.get('/api/health', (_req: Request, res: Response) => {
     res.json({ ok: true });
@@ -231,6 +231,551 @@ async function startServer(): Promise<void> {
       res.json({
         source: 'google_gemini',
         ...insight
+      });
+    } catch (err) {
+      const { status, message } = getHttpStatusFromError(err);
+      res.status(status).json({ error: message });
+    }
+  });
+
+  // =========================================================================
+  // AI ENGLISH TUTOR: Personalized Conversational Teacher, Feedback & Drills
+  // =========================================================================
+  const VALID_GRADES = new Set(['6e', '5e', '4e', '3e', '2nde', '1re', 'terminale']);
+  const VALID_CEFR = new Set(['A1', 'A2', 'B1', 'B2', 'C1', 'C2']);
+  const VALID_TUTOR_MODES = new Set([
+    'free_conversation',
+    'school_english',
+    'everyday_english',
+    'travel_english',
+    'restaurant_english',
+    'job_interview',
+    'debate_argumentation',
+    'exam_preparation',
+    'storytelling'
+  ]);
+  const VALID_MISTAKE_CATEGORIES = new Set([
+    'grammar',
+    'vocabulary',
+    'structure',
+    'unnatural',
+    'pronunciation'
+  ]);
+
+  const MODE_PEDAGOGICAL_BRIEF: Record<string, string> = {
+    free_conversation: 'Open, engaging English chat adapting naturally to student interests while gently stretching vocabulary.',
+    school_english: 'French Collège/Lycée English curriculum coach: tenses, irregular verbs, reading analysis, and classroom oral readiness.',
+    everyday_english: 'Authentic daily life routines, social small talk, shopping, hobbies, and idiomatic spoken phrasing.',
+    travel_english: 'Airport, hotel check-in, train directions, sightseeing, and resolving travel hiccups smoothly.',
+    restaurant_english: 'Polite ordering, dietary questions, recommending dishes, asking for the bill, and tipping etiquette.',
+    job_interview: 'Professional self-introduction, strengths, motivation, STAR answers, and polite interview questions.',
+    debate_argumentation: 'Structured opinion building, nuanced linkers (however, furthermore, nevertheless), and respectful counter-arguments.',
+    exam_preparation: 'Brevet / Bac / Cambridge speaking & synthesis tasks: clear thesis, cultural references, and formal accuracy.',
+    storytelling: 'Narrative tenses (past simple, past continuous, past perfect), sensory adjectives, suspense, and creative pacing.'
+  };
+
+  function sanitizeGrade(val: unknown): string {
+    return typeof val === 'string' && VALID_GRADES.has(val) ? val : '2nde';
+  }
+  function sanitizeCefr(val: unknown): string {
+    return typeof val === 'string' && VALID_CEFR.has(val) ? val : 'B1';
+  }
+  function sanitizeTutorMode(val: unknown): string {
+    return typeof val === 'string' && VALID_TUTOR_MODES.has(val) ? val : 'free_conversation';
+  }
+
+  app.post('/api/gemini/tutor-chat', async (req: Request, res: Response) => {
+    const body = (req.body || {}) as {
+      message?: string;
+      mode?: string;
+      schoolGrade?: string;
+      cefrLevel?: string;
+      weakestSkills?: string[];
+      teachingLanguagePreference?: 'english_default' | 'bilingual_fr';
+      struggleCount?: number;
+      studentProfileContext?: {
+        recentTestAvg?: number;
+        recentModules?: string[];
+        vocabWeaknesses?: string[];
+        recurringMistakes?: string[];
+        strongestSkills?: string[];
+      };
+      speechAnalysisReport?: {
+        accuracyScore?: number;
+        missedWords?: string[];
+        phoneticTips?: string[];
+      } | null;
+      history?: Array<{ role: string; text: string }>;
+    };
+
+    const userMsg = typeof body.message === 'string' ? body.message.trim().slice(0, 900) : '';
+    if (!userMsg || userMsg.length < 2) {
+      res.status(400).json({ error: 'Saisissez un message ou une phrase parlée (2 à 900 caractères).' });
+      return;
+    }
+
+    const ai = createGeminiClient();
+    if (!ai) {
+      res.status(503).json({
+        error: 'Clé API Google Gemini non configurée côté serveur. Ajoutez GEMINI_API_KEY dans Settings > Secrets.'
+      });
+      return;
+    }
+
+    const grade = sanitizeGrade(body.schoolGrade);
+    const cefr = sanitizeCefr(body.cefrLevel);
+    const mode = sanitizeTutorMode(body.mode);
+    const weakSkills = Array.isArray(body.weakestSkills)
+      ? body.weakestSkills.filter((s) => typeof s === 'string').slice(0, 4)
+      : [];
+    const ctx = body.studentProfileContext || {};
+    const recentAvg = typeof ctx.recentTestAvg === 'number' ? Math.round(ctx.recentTestAvg) : null;
+    const recentModules = Array.isArray(ctx.recentModules) ? ctx.recentModules.slice(0, 4) : [];
+    const vocabWeaknesses = Array.isArray(ctx.vocabWeaknesses) ? ctx.vocabWeaknesses.slice(0, 6) : [];
+    const recurringMistakes = Array.isArray(ctx.recurringMistakes) ? ctx.recurringMistakes.slice(0, 6) : [];
+    const strongestSkills = Array.isArray(ctx.strongestSkills) ? ctx.strongestSkills.slice(0, 3) : [];
+    const struggleCount = typeof body.struggleCount === 'number' ? Math.max(0, body.struggleCount) : 0;
+
+    const wantsFrenchExplicit =
+      body.teachingLanguagePreference === 'bilingual_fr' ||
+      /français|french|en francais|explique|je ne comprends pas|aide-moi|comment dit-on|traduis/i.test(userMsg);
+    const needsFrenchHelp = wantsFrenchExplicit || struggleCount >= 2;
+
+    const speechReport = body.speechAnalysisReport;
+    const hasReliableSpeechData = Boolean(
+      speechReport &&
+      (typeof speechReport.accuracyScore === 'number' ||
+        (Array.isArray(speechReport.missedWords) && speechReport.missedWords.length > 0))
+    );
+
+    const historyLines = Array.isArray(body.history)
+      ? body.history
+          .slice(-8)
+          .map((h) => `${h.role === 'user' ? 'Student' : 'Professor Sterling'}: ${String(h.text || '').slice(0, 280)}`)
+          .join('\n')
+      : '';
+
+    const systemInstruction = `You are Professor Arthur Sterling, a warm, highly qualified, endlessly patient and encouraging Oxford English Teacher inside English Boost MSZ.
+PERSONALITY RULES (STRICT):
+- Celebrate genuine progress and effort warmly; NEVER humiliate, scold, or use harsh/discouraging words.
+- Adapt sentence length, vocabulary, and complexity strictly to a French ${grade} student at CEFR ${cefr}.
+- Mode: "${mode}" — ${MODE_PEDAGOGICAL_BRIEF[mode] || MODE_PEDAGOGICAL_BRIEF.free_conversation}
+
+TEACHING LANGUAGE RULE (STRICT):
+- English is your default teaching language. Keep "replyEn", "followUpQuestion", "praiseNote", and correction "explanation" in clear, supportive English tailored to ${cefr}.
+- French Support Mode active: ${needsFrenchHelp ? 'YES — student requested French, wrote in French, or has struggled on consecutive turns. Provide a warm, clear French explanation in "frenchSupport" and fill "explanationFr" for every correction.' : 'NO — keep English immersion primary; leave "frenchSupport" empty ("") unless the student asked a French question.'}
+
+STUDENT DIAGNOSTIC PROFILE:
+- School Grade: ${grade} | CEFR: ${cefr}${recentAvg !== null ? ` | Recent Quiz/Exercise Avg: ${recentAvg}%` : ''}
+- Weakest skills: ${weakSkills.join(', ') || 'balanced fluency'}
+- Strongest skills: ${strongestSkills.join(', ') || 'curiosity & participation'}
+- Vocabulary weaknesses to weave in naturally: ${vocabWeaknesses.join(', ') || 'none flagged yet'}
+- Recurring mistakes to watch kindly for: ${recurringMistakes.join(' | ') || 'none recorded yet'}
+- Recent studied modules: ${recentModules.join(', ') || 'general practice'}
+
+CORRECTION DISCIPLINE (AFTER STUDENT FINISHES):
+- Inspect the student's completed message without breaking conversational flow.
+- Identify genuine mistakes in these exact categories ONLY: "grammar", "vocabulary", "structure", "unnatural", "pronunciation".
+- IMPORTANT: Only create a "pronunciation" mistake if reliable speech-analysis data is supplied below OR the student explicitly asked about pronunciation.
+- If the student made NO real mistakes, return "corrections": [] and celebrate their accuracy!
+- For EVERY mistake returned, you MUST populate ALL fields:
+  1. "category": one of grammar | vocabulary | structure | unnatural | pronunciation
+  2. "original": exact faulty snippet/sentence from the student
+  3. "corrected": accurate, natural English version
+  4. "explanation": clear, simple, encouraging explanation in English
+  5. "explanationFr": brief French clarification when French help is helpful
+  6. "additionalExample": ONE new natural English example sentence illustrating the correct pattern
+
+Return valid JSON strictly matching the schema.`;
+
+    const promptParts = [
+      historyLines ? `Recent conversation:\n${historyLines}` : '',
+      hasReliableSpeechData
+        ? `Reliable Voice/Phonetic Telemetry from Student Audio:\n- Orthographic/Phonetic match: ${speechReport?.accuracyScore ?? 'N/A'}%\n- Missed or misheard words: ${(speechReport?.missedWords || []).join(', ') || 'none'}\n- Phonetic notes: ${(speechReport?.phoneticTips || []).join(' | ') || 'none'}`
+        : 'Input modality: Written text or uncalibrated mic (do NOT invent pronunciation errors).',
+      `Student message: "${userMsg}"`
+    ].filter(Boolean);
+
+    try {
+      const response = await ai.models.generateContent({
+        model: MODEL_NAME,
+        contents: promptParts.join('\n\n'),
+        config: {
+          systemInstruction,
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              replyEn: { type: Type.STRING, description: 'Encouraging, conversational reply in English matched to student CEFR and mode.' },
+              praiseNote: { type: Type.STRING, description: 'Specific positive reinforcement celebrating what the student did well in English.' },
+              frenchSupport: { type: Type.STRING, description: 'Clear French explanation when requested, student uses French, or struggles consecutively; empty string otherwise.' },
+              corrections: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    category: { type: Type.STRING, description: 'grammar | vocabulary | structure | unnatural | pronunciation' },
+                    original: { type: Type.STRING },
+                    corrected: { type: Type.STRING },
+                    explanation: { type: Type.STRING },
+                    explanationFr: { type: Type.STRING },
+                    additionalExample: { type: Type.STRING }
+                  },
+                  required: ['category', 'original', 'corrected', 'explanation', 'additionalExample']
+                }
+              },
+              vocabularyBoost: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    term: { type: Type.STRING },
+                    phonetic: { type: Type.STRING },
+                    translationFr: { type: Type.STRING }
+                  },
+                  required: ['term', 'phonetic', 'translationFr']
+                }
+              },
+              pronunciationCoach: { type: Type.STRING, description: 'Focused stress/IPA pronunciation tip grounded in a key word or speech telemetry (in English, or bilingual if French help active).' },
+              followUpQuestion: { type: Type.STRING, description: 'Warm follow-up question in English continuing the scenario.' },
+              suggestedReplies: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+                description: '3 helpful short English replies or questions the student can try next.'
+              },
+              fluencyScoreEstimate: { type: Type.INTEGER, description: 'Encouraging communicative clarity score 50-100.' }
+            },
+            required: [
+              'replyEn',
+              'praiseNote',
+              'frenchSupport',
+              'corrections',
+              'vocabularyBoost',
+              'pronunciationCoach',
+              'followUpQuestion',
+              'suggestedReplies',
+              'fluencyScoreEstimate'
+            ]
+          }
+        }
+      });
+
+      const rawJson = (response.text ?? '').trim();
+      const parsed = JSON.parse(rawJson);
+      if (!parsed || typeof parsed.replyEn !== 'string' || !parsed.replyEn.trim()) {
+        throw new Error('Réponse éducative AI incomplète.');
+      }
+
+      const rawCorrections = Array.isArray(parsed.corrections) ? parsed.corrections : [];
+      const sanitizedCorrections = rawCorrections
+        .filter((c: any) => c && typeof c.original === 'string' && typeof c.corrected === 'string' && c.original.trim() && c.corrected.trim())
+        .slice(0, 5)
+        .map((c: any) => ({
+          category: VALID_MISTAKE_CATEGORIES.has(c.category) ? c.category : 'grammar',
+          original: String(c.original).trim(),
+          corrected: String(c.corrected).trim(),
+          explanation: String(c.explanation || 'Use the corrected natural phrasing here.').trim(),
+          explanationFr: typeof c.explanationFr === 'string' ? c.explanationFr.trim() : '',
+          additionalExample: String(c.additionalExample || c.corrected).trim()
+        }));
+
+      res.json({
+        source: 'google_gemini',
+        replyEn: parsed.replyEn.trim(),
+        praiseNote: typeof parsed.praiseNote === 'string' && parsed.praiseNote.trim()
+          ? parsed.praiseNote.trim()
+          : 'Great effort expressing your ideas clearly in English!',
+        frenchSupport: typeof parsed.frenchSupport === 'string' ? parsed.frenchSupport.trim() : '',
+        usedFrenchHelp: Boolean(needsFrenchHelp || (typeof parsed.frenchSupport === 'string' && parsed.frenchSupport.trim().length > 0)),
+        corrections: sanitizedCorrections,
+        vocabularyBoost: Array.isArray(parsed.vocabularyBoost) ? parsed.vocabularyBoost.slice(0, 3) : [],
+        pronunciationCoach: typeof parsed.pronunciationCoach === 'string' ? parsed.pronunciationCoach.trim() : '',
+        followUpQuestion: typeof parsed.followUpQuestion === 'string' ? parsed.followUpQuestion.trim() : '',
+        suggestedReplies: Array.isArray(parsed.suggestedReplies)
+          ? parsed.suggestedReplies.filter((s: any) => typeof s === 'string' && s.trim()).slice(0, 3)
+          : [],
+        fluencyScoreEstimate: Math.max(55, Math.min(100, Math.round(Number(parsed.fluencyScoreEstimate) || 82)))
+      });
+    } catch (err) {
+      const { status, message } = getHttpStatusFromError(err);
+      res.status(status).json({ error: message });
+    }
+  });
+
+  app.post('/api/gemini/tutor-session-summary', async (req: Request, res: Response) => {
+    const body = (req.body || {}) as {
+      mode?: string;
+      modeLabel?: string;
+      schoolGrade?: string;
+      cefrLevel?: string;
+      turnsCount?: number;
+      transcriptTurns?: Array<{ role: string; text: string }>;
+      recordedCorrections?: Array<{ category: string; original: string; corrected: string; explanation: string }>;
+      recurringWeaknesses?: string[];
+    };
+
+    const ai = createGeminiClient();
+    if (!ai) {
+      res.status(503).json({
+        error: 'Clé API Google Gemini non configurée côté serveur. Ajoutez GEMINI_API_KEY dans Settings > Secrets.'
+      });
+      return;
+    }
+
+    const grade = sanitizeGrade(body.schoolGrade);
+    const cefr = sanitizeCefr(body.cefrLevel);
+    const mode = sanitizeTutorMode(body.mode);
+    const modeLabel = typeof body.modeLabel === 'string' ? body.modeLabel.slice(0, 80) : mode;
+    const transcript = Array.isArray(body.transcriptTurns)
+      ? body.transcriptTurns.slice(-14).map((t) => `${t.role === 'user' ? 'Student' : 'Tutor'}: ${String(t.text || '').slice(0, 220)}`).join('\n')
+      : '';
+    const corrSummary = Array.isArray(body.recordedCorrections)
+      ? body.recordedCorrections.slice(0, 12).map((c) => `[${c.category}] "${c.original}" -> "${c.corrected}" (${c.explanation})`).join('\n')
+      : '';
+
+    try {
+      const response = await ai.models.generateContent({
+        model: MODEL_NAME,
+        contents: `Session Mode: ${modeLabel} (${mode})\nStudent: ${grade}, CEFR ${cefr}\nTranscript:\n${transcript || 'Short practice session'}\n\nCorrections observed:\n${corrSummary || 'No major mistakes — smooth communication!'}`,
+        config: {
+          systemInstruction: 'You are Professor Arthur Sterling concluding a supportive AI English Tutor session. Celebrate strengths genuinely, summarize any weaknesses gently and constructively, recommend the next practice focus, and score communicative fluency from 60 to 100 fairly. Strict JSON only.',
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              fluencyScore: { type: Type.INTEGER },
+              strengths: { type: Type.ARRAY, items: { type: Type.STRING } },
+              weaknessesIdentified: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    category: { type: Type.STRING },
+                    label: { type: Type.STRING },
+                    tip: { type: Type.STRING }
+                  },
+                  required: ['category', 'label', 'tip']
+                }
+              },
+              recommendedFocus: { type: Type.STRING },
+              encouragementEn: { type: Type.STRING },
+              summaryFr: { type: Type.STRING },
+              nextPracticePrompt: { type: Type.STRING }
+            },
+            required: [
+              'fluencyScore',
+              'strengths',
+              'weaknessesIdentified',
+              'recommendedFocus',
+              'encouragementEn',
+              'summaryFr',
+              'nextPracticePrompt'
+            ]
+          }
+        }
+      });
+
+      const parsed = JSON.parse((response.text ?? '').trim());
+      if (!parsed || typeof parsed.encouragementEn !== 'string') {
+        throw new Error('Résumé de session IA incomplet.');
+      }
+
+      res.json({
+        source: 'google_gemini',
+        fluencyScore: Math.max(60, Math.min(100, Math.round(Number(parsed.fluencyScore) || 85))),
+        strengths: Array.isArray(parsed.strengths) ? parsed.strengths.slice(0, 4) : [],
+        weaknessesIdentified: Array.isArray(parsed.weaknessesIdentified)
+          ? parsed.weaknessesIdentified.slice(0, 5).map((w: any) => ({
+              category: VALID_MISTAKE_CATEGORIES.has(w?.category) ? w.category : 'grammar',
+              label: String(w?.label || 'Sentence refinement').slice(0, 100),
+              tip: String(w?.tip || '').slice(0, 200)
+            }))
+          : [],
+        recommendedFocus: String(parsed.recommendedFocus || '').slice(0, 200),
+        encouragementEn: String(parsed.encouragementEn || '').trim(),
+        summaryFr: String(parsed.summaryFr || '').trim(),
+        nextPracticePrompt: String(parsed.nextPracticePrompt || '').trim()
+      });
+    } catch (err) {
+      const { status, message } = getHttpStatusFromError(err);
+      res.status(status).json({ error: message });
+    }
+  });
+
+  app.post('/api/gemini/evaluate-writing', async (req: Request, res: Response) => {
+    const body = (req.body || {}) as {
+      text?: string;
+      promptTopic?: string;
+      schoolGrade?: string;
+      cefrLevel?: string;
+    };
+
+    const essay = typeof body.text === 'string' ? body.text.trim().slice(0, 1800) : '';
+    if (!essay || essay.length < 10) {
+      res.status(400).json({ error: 'Rédigez au moins 10 caractères en anglais pour obtenir une évaluation.' });
+      return;
+    }
+
+    const ai = createGeminiClient();
+    if (!ai) {
+      res.status(503).json({
+        error: 'Clé API Google Gemini non configurée côté serveur. Ajoutez GEMINI_API_KEY dans Settings > Secrets.'
+      });
+      return;
+    }
+
+    const grade = sanitizeGrade(body.schoolGrade);
+    const cefr = sanitizeCefr(body.cefrLevel);
+    const topic = typeof body.promptTopic === 'string' ? body.promptTopic.trim().slice(0, 160) : 'Expression libre';
+
+    try {
+      const response = await ai.models.generateContent({
+        model: MODEL_NAME,
+        contents: `Sujet : ${topic}\nClasse : ${grade} | Niveau visé : ${cefr}\nTexte de l'élève :\n"""${essay}"""`,
+        config: {
+          systemInstruction: `Tu es examinateur académique d'anglais pour élèves francophones (${grade}, niveau cible ${cefr}). Évalue la production écrite sur 100 avec rigueur et bienveillance, propose une version corrigée et enrichie en anglais, liste les points forts et axes d'amélioration en français, et identifie la règle grammaticale clé à retenir.`,
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              score: { type: Type.INTEGER, description: 'Score out of 100 matching CEFR standards for this grade.' },
+              cefrEstimate: { type: Type.STRING, description: 'Estimated CEFR level: A1, A2, B1, B2, C1, or C2.' },
+              correctedText: { type: Type.STRING, description: 'Polished and grammatically accurate English version.' },
+              strengthsFr: { type: Type.ARRAY, items: { type: Type.STRING } },
+              improvementsFr: { type: Type.ARRAY, items: { type: Type.STRING } },
+              keyGrammarPointFr: { type: Type.STRING },
+              encouragementFr: { type: Type.STRING }
+            },
+            required: ['score', 'cefrEstimate', 'correctedText', 'strengthsFr', 'improvementsFr', 'keyGrammarPointFr', 'encouragementFr']
+          }
+        }
+      });
+
+      const parsed = JSON.parse((response.text ?? '').trim());
+      if (!parsed || typeof parsed.correctedText !== 'string' || !parsed.correctedText.trim()) {
+        throw new Error('Évaluation IA invalide.');
+      }
+
+      const clampedScore = Math.max(20, Math.min(100, Math.round(Number(parsed.score) || 70)));
+      const estCefr = VALID_CEFR.has(parsed.cefrEstimate) ? parsed.cefrEstimate : cefr;
+
+      res.json({
+        source: 'google_gemini',
+        score: clampedScore,
+        cefrEstimate: estCefr,
+        correctedText: parsed.correctedText.trim(),
+        strengthsFr: Array.isArray(parsed.strengthsFr) ? parsed.strengthsFr.slice(0, 4) : [],
+        improvementsFr: Array.isArray(parsed.improvementsFr) ? parsed.improvementsFr.slice(0, 4) : [],
+        keyGrammarPointFr: typeof parsed.keyGrammarPointFr === 'string' ? parsed.keyGrammarPointFr : '',
+        encouragementFr: typeof parsed.encouragementFr === 'string' ? parsed.encouragementFr : ''
+      });
+    } catch (err) {
+      const { status, message } = getHttpStatusFromError(err);
+      res.status(status).json({ error: message });
+    }
+  });
+
+  app.post('/api/gemini/generate-drill', async (req: Request, res: Response) => {
+    const body = (req.body || {}) as {
+      focusSkill?: string;
+      schoolGrade?: string;
+      cefrLevel?: string;
+      topic?: string;
+      recurringWeaknesses?: string[];
+      vocabWeaknesses?: string[];
+    };
+
+    const allowedSkills = new Set(['vocabulary', 'grammar', 'reading', 'writing', 'structure']);
+    const focusSkill = typeof body.focusSkill === 'string' && allowedSkills.has(body.focusSkill) ? body.focusSkill : 'grammar';
+    const grade = sanitizeGrade(body.schoolGrade);
+    const cefr = sanitizeCefr(body.cefrLevel);
+    const topic = typeof body.topic === 'string' ? body.topic.trim().slice(0, 140) : 'Programme scolaire officiel';
+    const recurringWeaknesses = Array.isArray(body.recurringWeaknesses)
+      ? body.recurringWeaknesses.filter((w) => typeof w === 'string' && w.trim()).slice(0, 6)
+      : [];
+    const vocabWeaknesses = Array.isArray(body.vocabWeaknesses)
+      ? body.vocabWeaknesses.filter((w) => typeof w === 'string' && w.trim()).slice(0, 6)
+      : [];
+
+    const ai = createGeminiClient();
+    if (!ai) {
+      res.status(503).json({
+        error: 'Clé API Google Gemini non configurée côté serveur. Ajoutez GEMINI_API_KEY dans Settings > Secrets.'
+      });
+      return;
+    }
+
+    const weaknessBlock = [
+      recurringWeaknesses.length > 0 ? `Erreurs récurrentes détectées chez cet élève à cibler en priorité : ${recurringWeaknesses.join(' | ')}` : '',
+      vocabWeaknesses.length > 0 ? `Mots du journal d'erreurs à réactiver : ${vocabWeaknesses.join(', ')}` : ''
+    ].filter(Boolean).join('\n');
+
+    try {
+      const response = await ai.models.generateContent({
+        model: MODEL_NAME,
+        contents: `Crée un micro-atelier d'entraînement personnalisé de 3 questions QCM (4 choix exacts par question) ciblant la compétence "${focusSkill}" pour un élève en ${grade} (niveau CECRL ${cefr}), thème "${topic}".${weaknessBlock ? `\n\n${weaknessBlock}` : ''}`,
+        config: {
+          systemInstruction: `Tu es concepteur pédagogique certifié pour English Boost MSZ. Génère exactement 3 questions QCM valides pédagogiquement, sans ambiguïté, avec exactement 4 options distinctes chacune, un correctIndex (0 à 3) exact, et une explication claire en français + exemple en anglais. Lorsque des erreurs récurrentes de l'élève sont fournies, construis les questions pour corriger ces erreurs précises.`,
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING },
+              explanationFr: { type: Type.STRING },
+              questions: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    question: { type: Type.STRING },
+                    options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    correctIndex: { type: Type.INTEGER },
+                    explanationFr: { type: Type.STRING },
+                    sampleSentenceEn: { type: Type.STRING }
+                  },
+                  required: ['question', 'options', 'correctIndex', 'explanationFr', 'sampleSentenceEn']
+                }
+              }
+            },
+            required: ['title', 'explanationFr', 'questions']
+          }
+        }
+      });
+
+      const parsed = JSON.parse((response.text ?? '').trim());
+      const validQuestions = Array.isArray(parsed?.questions)
+        ? parsed.questions
+            .filter(
+              (q: any) =>
+                q &&
+                typeof q.question === 'string' &&
+                q.question.trim().length > 4 &&
+                Array.isArray(q.options) &&
+                q.options.length === 4 &&
+                typeof q.correctIndex === 'number' &&
+                q.correctIndex >= 0 &&
+                q.correctIndex <= 3
+            )
+            .slice(0, 3)
+        : [];
+
+      if (validQuestions.length < 3 || typeof parsed?.title !== 'string') {
+        throw new Error('Contenu éducatif généré non conforme aux critères de validation.');
+      }
+
+      res.json({
+        source: 'google_gemini',
+        title: parsed.title.trim(),
+        focusSkill,
+        cefrLevel: cefr,
+        schoolGrade: grade,
+        targetedWeaknessesCount: recurringWeaknesses.length + vocabWeaknesses.length,
+        explanationFr: typeof parsed.explanationFr === 'string' ? parsed.explanationFr.trim() : '',
+        questions: validQuestions
       });
     } catch (err) {
       const { status, message } = getHttpStatusFromError(err);

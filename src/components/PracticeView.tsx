@@ -16,6 +16,10 @@ interface PracticeViewProps {
   onOpenSpeaking: () => void;
   onOpenGames?: () => void;
   onOpenCityMap?: () => void;
+  onOpenAiTutor?: () => void;
+  onOpenEscapeRoom?: () => void;
+  onOpenListeningCinema?: () => void;
+  onOpenGrammarBattle?: () => void;
 }
 
 export const PracticeView: React.FC<PracticeViewProps> = ({
@@ -29,7 +33,11 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
   onOpenQuiz,
   onOpenSpeaking,
   onOpenGames,
-  onOpenCityMap
+  onOpenCityMap,
+  onOpenAiTutor,
+  onOpenEscapeRoom,
+  onOpenListeningCinema,
+  onOpenGrammarBattle
 }) => {
   const [miniCardFlipped, setMiniCardFlipped] = useState<boolean>(false);
   const levelDescriptions: Record<CEFRLevel, string> = {
@@ -212,8 +220,8 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
           </span>
         </div>
 
-        <div className="grid grid-cols-4 gap-2">
-          {(['B1', 'B2', 'C1', 'C2'] as CEFRLevel[]).map((lvl) => {
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+          {(['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as CEFRLevel[]).map((lvl) => {
             const isActive = currentLevel === lvl;
             const subLabels: Record<CEFRLevel, string> = {
               A1: 'Initiation',
@@ -259,6 +267,115 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
           {levelDescriptions[currentLevel]}
         </p>
       </section>
+
+      {/* Immersive Labs Grid: AI Tutor, Escape Room, Listening Cinema, Grammar Battle */}
+      {(onOpenAiTutor || onOpenEscapeRoom || onOpenListeningCinema || onOpenGrammarBattle) && (
+        <section className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {onOpenAiTutor && (
+            <button
+              type="button"
+              onClick={onOpenAiTutor}
+              className="p-4 rounded-2xl bg-gradient-to-br from-[#1b2438] to-[#0e1526] border border-[#f2ca50]/45 hover:border-[#f2ca50] text-left flex items-center justify-between gap-3 shadow-lg transition-all cursor-pointer group"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-11 h-11 rounded-xl bg-[#f2ca50] text-[#3c2f00] flex items-center justify-center shrink-0 shadow">
+                  <span className="material-symbols-outlined text-2xl">psychology</span>
+                </div>
+                <div className="min-w-0">
+                  <span className="text-[10px] font-mono font-bold uppercase text-[#f2ca50]">
+                    Tuteur IA Gemini · 6e–Tle
+                  </span>
+                  <h3 className="font-serif font-bold text-sm text-[#dce2f8] group-hover:text-[#f2ca50] truncate">
+                    AI English Tutor &amp; Correcteur
+                  </h3>
+                  <p className="text-[11px] text-[#d0c5af]/80 line-clamp-1">
+                    Dialogue coaché, correction d&apos;écriture &amp; fiches adaptatives.
+                  </p>
+                </div>
+              </div>
+              <span className="material-symbols-outlined text-[#f2ca50] shrink-0">arrow_forward</span>
+            </button>
+          )}
+
+          {onOpenEscapeRoom && (
+            <button
+              type="button"
+              onClick={onOpenEscapeRoom}
+              className="p-4 rounded-2xl bg-gradient-to-br from-[#1f2236] to-[#0e1424] border border-amber-500/40 hover:border-[#f2ca50] text-left flex items-center justify-between gap-3 shadow-lg transition-all cursor-pointer group"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-11 h-11 rounded-xl bg-[#232a3a] border border-[#f2ca50]/45 text-[#f2ca50] flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-2xl">lock_open</span>
+                </div>
+                <div className="min-w-0">
+                  <span className="text-[10px] font-mono font-bold uppercase text-amber-300">
+                    Compréhension Écrite &amp; Logique
+                  </span>
+                  <h3 className="font-serif font-bold text-sm text-[#dce2f8] group-hover:text-[#f2ca50] truncate">
+                    English Escape Room
+                  </h3>
+                  <p className="text-[11px] text-[#d0c5af]/80 line-clamp-1">
+                    4 salles d&apos;énigmes chronométrées et codes à déchiffrer.
+                  </p>
+                </div>
+              </div>
+              <span className="material-symbols-outlined text-[#f2ca50] shrink-0">arrow_forward</span>
+            </button>
+          )}
+
+          {onOpenListeningCinema && (
+            <button
+              type="button"
+              onClick={onOpenListeningCinema}
+              className="p-4 rounded-2xl bg-gradient-to-br from-[#23192b] to-[#0d1323] border border-rose-500/40 hover:border-[#f2ca50] text-left flex items-center justify-between gap-3 shadow-lg transition-all cursor-pointer group"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-11 h-11 rounded-xl bg-[#232a3a] border border-rose-400/40 text-rose-300 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-2xl">movie</span>
+                </div>
+                <div className="min-w-0">
+                  <span className="text-[10px] font-mono font-bold uppercase text-rose-300">
+                    Cinéma Audio Multi-Voix
+                  </span>
+                  <h3 className="font-serif font-bold text-sm text-[#dce2f8] group-hover:text-[#f2ca50] truncate">
+                    Listening Cinema
+                  </h3>
+                  <p className="text-[11px] text-[#d0c5af]/80 line-clamp-1">
+                    Scènes audio avec sous-titres VO/VF/Aveugle &amp; quiz.
+                  </p>
+                </div>
+              </div>
+              <span className="material-symbols-outlined text-[#f2ca50] shrink-0">arrow_forward</span>
+            </button>
+          )}
+
+          {onOpenGrammarBattle && (
+            <button
+              type="button"
+              onClick={onOpenGrammarBattle}
+              className="p-4 rounded-2xl bg-gradient-to-br from-[#142536] to-[#0c1322] border border-cyan-500/40 hover:border-[#f2ca50] text-left flex items-center justify-between gap-3 shadow-lg transition-all cursor-pointer group"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-11 h-11 rounded-xl bg-[#232a3a] border border-cyan-400/40 text-cyan-300 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-2xl">gavel</span>
+                </div>
+                <div className="min-w-0">
+                  <span className="text-[10px] font-mono font-bold uppercase text-cyan-300">
+                    Arène Boss PvE
+                  </span>
+                  <h3 className="font-serif font-bold text-sm text-[#dce2f8] group-hover:text-[#f2ca50] truncate">
+                    Grammar Battle (Collège &amp; Lycée)
+                  </h3>
+                  <p className="text-[11px] text-[#d0c5af]/80 line-clamp-1">
+                    Brisez le bouclier syntaxique par combos de grammaire.
+                  </p>
+                </div>
+              </div>
+              <span className="material-symbols-outlined text-[#f2ca50] shrink-0">arrow_forward</span>
+            </button>
+          )}
+        </section>
+      )}
 
       {/* Featured Atelier 500 Dialogues Engine Card */}
       {onOpenDialogues && (

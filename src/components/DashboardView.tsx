@@ -26,6 +26,8 @@ import { speakText, stopSpeech } from '../services/speechService';
 import { calculateLevel } from '../utils/levelUtils';
 import { exportProgressReportPdf } from '../utils/progressPdfExporter';
 import { AppNoticeModal } from './AppNoticeModal';
+import { LinguisticRadarSection } from './LinguisticRadarSection';
+import type { EcosystemLaunchTarget } from './SmartEcosystemHub';
 
 interface CustomTooltipProps {
   active?: boolean;
@@ -220,6 +222,7 @@ interface DashboardViewProps {
   onOpenProfile?: () => void;
   onOpenFlashcards?: () => void;
   onNavigateLeaderboard?: () => void;
+  onLaunchEcosystemModule?: (target: EcosystemLaunchTarget) => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -228,7 +231,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onUpdateStudyTarget,
   onOpenProfile,
   onOpenFlashcards,
-  onNavigateLeaderboard
+  onNavigateLeaderboard,
+  onLaunchEcosystemModule
 }) => {
   const shouldReduceMotion = useReducedMotion();
   const [dashboardTab, setDashboardTab] = useState<'all' | 'mastery' | 'analytics' | 'curriculum'>('all');
@@ -769,6 +773,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           {/* 7-Day Performance & Weekly XP Evolution Section with Recharts */}
           {(dashboardTab === 'all' || dashboardTab === 'analytics') && (
+            <>
             <motion.section
         variants={dashboardCardVariants}
         initial="hidden"
@@ -1090,6 +1095,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </AnimatePresence>
       </motion.section>
 
+      <motion.div variants={dashboardCardVariants} initial="hidden" animate="show">
+        <LinguisticRadarSection
+          user={user}
+          onLaunchSkillModule={(action) => onLaunchEcosystemModule?.(action)}
+        />
+      </motion.div>
+            </>
           )}
 
       {(dashboardTab === 'all' || dashboardTab === 'mastery') && (

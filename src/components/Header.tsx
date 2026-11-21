@@ -7,6 +7,7 @@ import { getMszCoinsBalance } from '../utils/mszCoinsManager';
 import { HeaderSessionTimer } from './HeaderSessionTimer';
 import { HeaderLevelProgressBar } from './HeaderLevelProgressBar';
 import { isSoundEffectsEnabled, toggleSoundEffects, SOUND_EFFECTS_EVENT } from '../utils/soundEffects';
+import { inferGradeFromCefr } from '../services/adaptiveEngine';
 import appIconImg from '../assets/images/app_icon_msz_1792789129742.jpg';
 
 interface HeaderProps {
@@ -266,22 +267,34 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* CEFR Level Quick Selector */}
-          <div className="relative">
-            <select
-              aria-label="Sélectionner votre niveau CECRL"
-              value={currentLevel}
-              onChange={(e) => onLevelChange(e.target.value as CEFRLevel)}
-              className="appearance-none cursor-pointer inline-flex items-center gap-1.5 pl-3 pr-7 py-1 rounded-full bg-[#232a3a]/90 hover:bg-[#2e3545] border border-[#f2ca50]/30 text-xs font-bold text-[#f2ca50] tracking-wider uppercase transition-colors focus:outline-none focus:ring-1 focus:ring-[#f2ca50]"
+          {/* School Grade Indicator + CEFR Level Quick Selector */}
+          <div className="flex items-center gap-1.5">
+            <span
+              className="hidden md:inline-flex items-center px-2 py-1 rounded-full bg-[#151b2b] border border-[#f2ca50]/25 text-[10px] font-mono font-bold text-[#d4c78f] uppercase"
+              title="Classe scolaire configurée"
             >
-              <option value="B1" className="bg-[#151b2b] text-[#dce2f8]">B1 SEUIL</option>
-              <option value="B2" className="bg-[#151b2b] text-[#dce2f8]">B2 AVANCÉ</option>
-              <option value="C1" className="bg-[#151b2b] text-[#f2ca50]">C1 ADVANCED</option>
-              <option value="C2" className="bg-[#151b2b] text-[#f2ca50]">C2 MASTERY</option>
-            </select>
-            <span className="material-symbols-outlined pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[#f2ca50]">
-              expand_more
+              {(user.schoolGrade || inferGradeFromCefr(currentLevel)) === 'terminale'
+                ? 'Tle'
+                : user.schoolGrade || inferGradeFromCefr(currentLevel)}
             </span>
+            <div className="relative">
+              <select
+                aria-label="Sélectionner votre niveau CECRL"
+                value={currentLevel}
+                onChange={(e) => onLevelChange(e.target.value as CEFRLevel)}
+                className="appearance-none cursor-pointer inline-flex items-center gap-1.5 pl-3 pr-7 py-1 rounded-full bg-[#232a3a]/90 hover:bg-[#2e3545] border border-[#f2ca50]/30 text-xs font-bold text-[#f2ca50] tracking-wider uppercase transition-colors focus:outline-none focus:ring-1 focus:ring-[#f2ca50]"
+              >
+                <option value="A1" className="bg-[#151b2b] text-[#dce2f8]">A1 DÉCOUVERTE</option>
+                <option value="A2" className="bg-[#151b2b] text-[#dce2f8]">A2 ÉLÉMENTAIRE</option>
+                <option value="B1" className="bg-[#151b2b] text-[#dce2f8]">B1 SEUIL</option>
+                <option value="B2" className="bg-[#151b2b] text-[#dce2f8]">B2 AVANCÉ</option>
+                <option value="C1" className="bg-[#151b2b] text-[#f2ca50]">C1 ADVANCED</option>
+                <option value="C2" className="bg-[#151b2b] text-[#f2ca50]">C2 MASTERY</option>
+              </select>
+              <span className="material-symbols-outlined pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[#f2ca50]">
+                expand_more
+              </span>
+            </div>
           </div>
 
           {/* Google Sign-in CTA for unauthenticated scholars */}

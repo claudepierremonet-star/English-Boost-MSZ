@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { syncManager, type SyncStatusState } from './syncManager';
+import { useState, useEffect, useCallback } from 'react';
+import { syncManager, type SyncStatusState, type ManualSyncResult } from './syncManager';
 
 export function useSyncStatus() {
   const [status, setStatus] = useState<SyncStatusState>(syncManager.getState());
@@ -11,17 +11,27 @@ export function useSyncStatus() {
     return unsubscribe;
   }, []);
 
-  const triggerSync = async () => {
+  const triggerSync = useCallback(async () => {
     return await syncManager.syncPendingData();
-  };
+  }, []);
 
-  const refreshStats = async () => {
+  const syncNow = useCallback(async (): Promise<ManualSyncResult> => {
+    return await syncManager.syncNow();
+  }, []);
+
+  const setAutoSyncEnabled = useCallback((enabled: boolean) => {
+    syncManager.setAutoSyncEnabled(enabled);
+  }, []);
+
+  const refreshStats = useCallback(async () => {
     return await syncManager.refreshStats();
-  };
+  }, []);
 
   return {
     ...status,
     triggerSync,
+    syncNow,
+    setAutoSyncEnabled,
     refreshStats
   };
 }
