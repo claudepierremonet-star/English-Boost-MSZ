@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import imgOverview from '../assets/images/notice_app_overview_map_1795214324278.jpg';
 import imgCity from '../assets/images/notice_city_map_3d_1795214324394.jpg';
 import imgStudio from '../assets/images/notice_speaking_dictation_studio_1795214325581.jpg';
 import imgCurriculum from '../assets/images/notice_curriculum_flashcards_1795214325385.jpg';
 import imgDashboard from '../assets/images/notice_dashboard_arcade_rewards_1795214325447.jpg';
+import { GlassSlidingCapsule } from './GlassSlidingCapsule';
 
 interface NoticeChapter {
   id: string;
@@ -276,6 +277,7 @@ export const AppNoticeModal: React.FC<AppNoticeModalProps> = ({ isOpen, onClose 
   const [activeIndex, setActiveIndex] = useState<number>(0);
   const [viewMode, setViewMode] = useState<'visual' | 'steps'>('visual');
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
+  const chapterNavRef = useRef<HTMLElement | null>(null);
 
   if (!isOpen) return null;
 
@@ -373,20 +375,23 @@ export const AppNoticeModal: React.FC<AppNoticeModalProps> = ({ isOpen, onClose 
 
         {/* Chapter Quick Selector Bar */}
         <nav
+          ref={chapterNavRef}
           aria-label="Chapitres de la notice"
-          className="px-4 py-2.5 sm:px-7 bg-[#191f2f] border-b border-[#232a3a] flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0"
+          className="relative px-4 py-2.5 sm:px-7 bg-[#191f2f] border-b border-[#232a3a] flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0"
         >
+          <GlassSlidingCapsule containerRef={chapterNavRef} activeKey={chapter.id} />
           {NOTICE_CHAPTERS.map((ch, idx) => {
             const isActive = idx === activeIndex;
             return (
               <button
                 key={ch.id}
                 type="button"
+                data-capsule-key={ch.id}
                 onClick={() => setActiveIndex(idx)}
-                className={`px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 flex items-center gap-1.5 border transition-colors cursor-pointer ${
+                className={`relative z-10 px-3.5 py-2 rounded-full text-xs font-semibold whitespace-nowrap shrink-0 flex items-center gap-1.5 border transition-colors cursor-pointer ${
                   isActive
-                    ? 'bg-[#f2ca50] border-[#f2ca50] text-[#3c2f00] font-bold shadow-sm'
-                    : 'bg-[#151b2b] border-[#232a3a] text-[#d0c5af] hover:text-[#dce2f8] hover:border-[#f2ca50]/45'
+                    ? 'glass-capsule-active-text border-transparent font-bold'
+                    : 'bg-[#151b2b]/80 border-[#232a3a] text-[#d0c5af] hover:text-[#dce2f8] hover:border-[#f2ca50]/45'
                 }`}
               >
                 <span className="font-mono tabular-nums text-[11px] opacity-80">{ch.order}.</span>

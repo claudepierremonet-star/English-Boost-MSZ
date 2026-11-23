@@ -9,6 +9,7 @@ import { DualSpeakerButton } from './DualSpeakerButton';
 import { speakText, stopSpeech } from '../services/speechService';
 import { getWordLinguisticDetails } from '../utils/flashcardDetailsHelper';
 import { recordDictationError } from '../utils/errorJournal';
+import { useAdaptiveProfile } from '../hooks/useAdaptiveProfile';
 
 interface DictationModalProps {
   currentLevel: CEFRLevel;
@@ -39,9 +40,13 @@ export const DictationModal: React.FC<DictationModalProps> = ({
   // Focus Immersion Mode (hides non-essential chrome during paced dictation)
   const [isFocusMode, setIsFocusMode] = useState<boolean>(initialFocusMode);
 
+  // Adaptive engine calibration
+  const { assessment: adaptiveAssessment } = useAdaptiveProfile();
+  const isScaffolded = adaptiveAssessment.dynamicDirective.mode === 'scaffolded';
+
   // Audio Playback states
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0);
+  const [playbackSpeed, setPlaybackSpeed] = useState<number>(() => (isScaffolded ? 0.8 : 1.0));
   const [activeSpeechAccent, setActiveSpeechAccent] = useState<'en-GB' | 'en-US'>('en-GB');
   const [listenCount, setListenCount] = useState<number>(0);
 
@@ -854,10 +859,15 @@ export const DictationModal: React.FC<DictationModalProps> = ({
 
               {/* DUAL SPEAKER AUDIO BAR: British UK & American US */}
               <div className="p-3.5 rounded-xl bg-[#0c1322]/80 border border-[#4d4635]/30 flex flex-col gap-3">
-                <div className="flex items-center justify-between text-xs gap-2">
+                <div className="flex items-center justify-between text-xs gap-2 flex-wrap">
                   <span className="text-[11px] text-[#99907c] uppercase font-bold tracking-wider flex items-center gap-1.5">
                     <span className="material-symbols-outlined text-sm text-[#f2ca50]">headphones</span>
                     {isFocusMode ? 'Audio Dictée Cadencée' : 'Écoute & Prononciation Comparative'}
+                    {isScaffolded && (
+                      <span className="px-1.5 py-0.5 rounded bg-amber-950/60 border border-amber-500/40 text-amber-200 text-[9px] font-mono">
+                        Cadence 0.8x Adaptée
+                      </span>
+                    )}
                   </span>
                   <div className="flex items-center gap-2 text-[11px] font-mono tabular-nums text-[#d4c78f] shrink-0">
                     {isFocusMode && (
@@ -1023,6 +1033,28 @@ export const DictationModal: React.FC<DictationModalProps> = ({
                       ))}
                     </div>
                   </div>
+                  {/* Adaptive coaching cue when accuracy < 70% */}
+                  {accuracyScore < 70 && (
+                    <div className="p-3 rounded-xl bg-amber-950/35 border border-amber-500/45 text-xs text-amber-100 space-y-1">
+                      <span className="text-[10px] font-mono font-bold uppercase text-amber-300 block">
+                        Soutien Adaptatif · Règle &amp; Écoute Guidée
+                      </span>
+                      <p className="text-[11px] leading-relaxed">
+                        {adaptiveAssessment.dynamicDirective.ruleExplanationFr} Réécoutez en cadence{' '}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPlaybackSpeed(0.8);
+                            showToast('Cadence ralentie à 0.8x pour l’analyse syllabique');
+                          }}
+                          className="underline font-bold text-[#f2ca50] cursor-pointer"
+                        >
+                          0.8x (lente)
+                        </button>{' '}
+                        puis retournez la carte pour examiner l’étymologie.
+                      </p>
+                    </div>
+                  )}
                   {/* Next Session Action directly accessible in Focus Mode */}
                   {isFocusMode && (
                     <button

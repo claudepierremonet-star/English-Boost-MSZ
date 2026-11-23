@@ -1,8 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { UserProfile, CEFRLevel, AcademicBadge, SchoolGrade } from '../firebase/types';
+import type {
+  UserProfile,
+  CEFRLevel,
+  AcademicBadge,
+  SchoolGrade,
+  AgeRangeKey,
+  LearningObjectiveId
+} from '../firebase/types';
 import { signInWithGoogle, signOutUser, isFirebaseConfigured, auth, isUserSignedInWithGoogle } from '../firebase/client';
 import { useAppTheme, type AppTheme, type FloralBorderWidth } from '../theme/ThemeContext';
-import { SCHOOL_GRADES_META, inferGradeFromCefr } from '../services/adaptiveEngine';
+import {
+  SCHOOL_GRADES_META,
+  AGE_RANGES_META,
+  LEARNING_OBJECTIVES_META,
+  PREFERRED_DURATIONS,
+  inferGradeFromCefr,
+  inferAgeRangeFromGrade
+} from '../services/adaptiveEngine';
+import { useAdaptiveProfile } from '../hooks/useAdaptiveProfile';
 import { BadgesSection } from './BadgesSection';
 import { LinguisticRadarSection } from './LinguisticRadarSection';
 import { computeUserBadges } from '../data/badges';
@@ -38,6 +53,7 @@ interface ProfileModalProps {
   onUpdateUser: (updated: Partial<UserProfile>) => void;
   onCustomPhotoUpload: (file: File) => Promise<string>;
   onOpenInstallModal?: () => void;
+  onOpenPlacement?: () => void;
 }
 
 export const ProfileModal: React.FC<ProfileModalProps> = ({
@@ -45,13 +61,25 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   onClose,
   onUpdateUser,
   onCustomPhotoUpload,
-  onOpenInstallModal
+  onOpenInstallModal,
+  onOpenPlacement
 }) => {
+  const { assessment } = useAdaptiveProfile(user);
   const [selectedLevel, setSelectedLevel] = useState<CEFRLevel>(user.level);
   const [selectedGrade, setSelectedGrade] = useState<SchoolGrade>(
     user.schoolGrade || inferGradeFromCefr(user.level)
   );
-  const [selectedPace, setSelectedPace] = useState<number>(user.stats.studyMinutesTarget || 30);
+  const [selectedAgeRange, setSelectedAgeRange] = useState<AgeRangeKey>(
+    user.ageRange || inferAgeRangeFromGrade(user.schoolGrade || inferGradeFromCefr(user.level))
+  );
+  const [selectedObjectives, setSelectedObjectives] = useState<LearningObjectiveId[]>(
+    user.learningObjectives && user.learningObjectives.length > 0
+      ? user.learningObjectives
+      : ['school_excellence', 'oral_fluency']
+  );
+  const [selectedPace, setSelectedPace] = useState<number>(
+    user.preferredDurationMinutes || user.stats.studyMinutesTarget || 30
+  );
   const [isUploadingPhoto, setIsUploadingPhoto] = useState<boolean>(false);
   const [isSigningIn, setIsSigningIn] = useState<boolean>(false);
   const [autoPlayAudio, setAutoPlayAudio] = useState<boolean>(getAutoPlayOnDisplay());
@@ -175,12 +203,30 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   const handleGradeSelect = (grade: SchoolGrade, targetCefr: CEFRLevel) => {
     setSelectedGrade(grade);
     setSelectedLevel(targetCefr);
-    onUpdateUser({ schoolGrade: grade, level: targetCefr });
+    const nextAge = inferAgeRangeFromGrade(grade);
+    setSelectedAgeRange(nextAge);
+    onUpdateUser({ schoolGrade: grade, level: targetCefr, ageRange: nextAge });
+  };
+
+  const handleAgeSelect = (age: AgeRangeKey) => {
+    setSelectedAgeRange(age);
+    onUpdateUser({ ageRange: age });
+  };
+
+  const handleToggleObjective = (objId: LearningObjectiveId) => {
+    const exists = selectedObjectives.includes(objId);
+    const next = exists
+      ? selectedObjectives.filter((id) => id !== objId)
+      : [...selectedObjectives, objId];
+    const finalObjectives: LearningObjectiveId[] = next.length > 0 ? next : [objId];
+    setSelectedObjectives(finalObjectives);
+    onUpdateUser({ learningObjectives: finalObjectives });
   };
 
   const handlePaceSelect = (mins: number) => {
     setSelectedPace(mins);
     onUpdateUser({
+      preferredDurationMinutes: mins,
       stats: {
         ...user.stats,
         studyMinutesTarget: mins
@@ -941,6 +987,114 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           </div>
         </div>
 
+        {/* Multi-Signal Adaptive Placement Diagnostic & Calibration Card */}
+        <div className="p-5 rounded-2xl bg-gradient-to-br from-[#192238] via-[#151b2b] to-[#0f1628] border border-[#f2ca50]/45 shadow-xl flex flex-col gap-3.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#f2ca50]">
+                MOTEUR ADAPTATIF MULTI-SIGNAUX
+              </span>
+              <h3 className="font-serif font-bold text-base text-[#dce2f8]">
+                Diagnostic de Placement &amp; Profil Étudiant
+              </h3>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (onOpenPlacement) {
+                  onOpenPlacement();
+                } else {
+                  window.dispatchEvent(new CustomEvent('eb_open_placement_modal'));
+                }
+              }}
+              className="px-3.5 py-2 rounded-xl bg-[#f2ca50] hover:bg-[#ffe088] text-[#3c2f00] font-bold text-xs flex items-center gap-1.5 shadow cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-sm">psychology_alt</span>
+              <span>{user.placementTest ? 'Refaire le Diagnostic' : 'Passer le Test (6 axes)'}</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+            <div className="p-2.5 rounded-xl bg-[#0c1322] border border-[#232a3a]">
+              <span className="text-[10px] font-mono text-[#99907c] block">CECRL Multi-Signal</span>
+              <span className="font-mono font-bold text-[#f2ca50]">{assessment.multiSignal.compositeCefr}</span>
+              <span className="text-[10px] text-sky-300 block">{assessment.multiSignal.confidenceScore}% conf.</span>
+            </div>
+            <div className="p-2.5 rounded-xl bg-[#0c1322] border border-[#232a3a]">
+              <span className="text-[10px] font-mono text-[#99907c] block">Vitesse / Rétention</span>
+              <span className="font-mono font-bold text-emerald-300">{assessment.vocabularyRetentionRate}%</span>
+              <span className="text-[10px] text-[#d0c5af] block">
+                {assessment.learningSpeed === 'fast'
+                  ? 'Rapide'
+                  : assessment.learningSpeed === 'methodical'
+                  ? 'Méthodique'
+                  : 'Régulière'}
+              </span>
+            </div>
+            <div className="p-2.5 rounded-xl bg-[#0c1322] border border-[#232a3a]">
+              <span className="text-[10px] font-mono text-[#99907c] block">Équilibre 4 Axes</span>
+              <span className="font-mono font-bold text-[#f2ca50]">{assessment.skillBalanceScore}%</span>
+              <span className="text-[10px] text-rose-300 block">Erreurs {assessment.errorFrequency}%</span>
+            </div>
+            <div className="p-2.5 rounded-xl bg-[#0c1322] border border-[#232a3a]">
+              <span className="text-[10px] font-mono text-[#99907c] block">Test de Placement</span>
+              <span className="font-mono font-bold text-[#dce2f8]">
+                {user.placementTest ? `${user.placementTest.overallScore}% (${user.placementTest.compositeCefr})` : 'Non passé'}
+              </span>
+              <span className="text-[10px] text-[#99907c] block">{assessment.multiSignal.signalsCount} signaux actifs</span>
+            </div>
+          </div>
+
+          {/* Age Range */}
+          <div className="space-y-1.5 pt-1">
+            <span className="text-[11px] font-mono font-bold uppercase text-[#d4c78f]">Tranche d&apos;âge :</span>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {AGE_RANGES_META.map((a) => (
+                <button
+                  key={a.id}
+                  type="button"
+                  onClick={() => handleAgeSelect(a.id)}
+                  className={`py-2 px-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    selectedAgeRange === a.id
+                      ? 'bg-[#f2ca50] text-[#3c2f00] border-[#f2ca50] font-bold shadow'
+                      : 'bg-[#0c1322] text-[#dce2f8] border-[#232a3a] hover:border-[#f2ca50]/40'
+                  }`}
+                >
+                  <div className="text-xs font-mono font-bold">{a.label}</div>
+                  <div className="text-[10px] opacity-80">{a.bracket}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Learning Objectives */}
+          <div className="space-y-1.5 pt-1">
+            <span className="text-[11px] font-mono font-bold uppercase text-[#d4c78f]">
+              Objectifs d&apos;apprentissage ({selectedObjectives.length} sélectionnés) :
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+              {LEARNING_OBJECTIVES_META.map((obj) => {
+                const active = selectedObjectives.includes(obj.id);
+                return (
+                  <button
+                    key={obj.id}
+                    type="button"
+                    onClick={() => handleToggleObjective(obj.id)}
+                    className={`p-2 rounded-xl border text-left flex items-center gap-2 transition-all cursor-pointer ${
+                      active
+                        ? 'bg-[#f2ca50]/15 border-[#f2ca50] text-[#f2ca50]'
+                        : 'bg-[#0c1322] border-[#232a3a] text-[#d0c5af] hover:border-[#f2ca50]/40'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-base shrink-0">{obj.icon}</span>
+                    <span className="text-xs font-semibold truncate">{obj.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
         {/* School Grade Selector (Collège 6e-3e & Lycée 2nde-Tle) */}
         <div className="p-5 rounded-2xl bg-[#191f2f] border border-[#4d4635]/40 shadow-xl flex flex-col gap-3">
           <div className="flex items-center justify-between">
@@ -1002,24 +1156,24 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
         <div className="p-5 rounded-2xl bg-[#191f2f] border border-[#4d4635]/40 shadow-xl flex flex-col gap-3">
           <div className="flex items-center justify-between text-xs">
             <span className="text-[#f2ca50] font-bold uppercase tracking-wider">
-              Cadence Quotidienne
+              Durée Préférée &amp; Cadence Quotidienne
             </span>
             <span className="text-[#d4c78f] font-mono">{selectedPace} minutes / jour</span>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
-            {[20, 30, 45].map((mins) => (
+          <div className="grid grid-cols-5 gap-2">
+            {PREFERRED_DURATIONS.map((mins) => (
               <button
                 key={mins}
                 type="button"
                 onClick={() => handlePaceSelect(mins)}
-                className={`py-2.5 rounded-xl text-xs font-bold font-mono transition-all border ${
+                className={`py-2.5 rounded-xl text-xs font-bold font-mono transition-all border cursor-pointer ${
                   selectedPace === mins
                     ? 'bg-[#f2ca50] text-[#3c2f00] border-[#f2ca50] shadow-md'
                     : 'bg-[#232a3a] text-[#dce2f8] border-[#4d4635]/30 hover:bg-[#2e3545]'
                 }`}
               >
-                {mins} min
+                {mins}m
               </button>
             ))}
           </div>

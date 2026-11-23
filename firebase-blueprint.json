@@ -50,7 +50,24 @@
         },
         "adaptiveProfile": {
           "type": "object",
-          "description": "Centralized 7-skill adaptive evaluation profile (vocabulary, grammar, listening, reading, writing, speaking, pronunciation)"
+          "description": "Centralized 7-skill adaptive evaluation profile (vocabulary, grammar, listening, reading, writing, speaking, pronunciation, speed, retention, balance)"
+        },
+        "ageRange": {
+          "type": "string",
+          "enum": ["11-12", "13-14", "15-16", "17-18+"],
+          "description": "Student age range aligned with middle/high school bracket"
+        },
+        "learningObjectives": {
+          "type": "array",
+          "description": "Student personal English learning objectives (up to 8)"
+        },
+        "preferredDurationMinutes": {
+          "type": "number",
+          "description": "Preferred daily study session duration in minutes (10-180)"
+        },
+        "placementTest": {
+          "type": "object",
+          "description": "Multi-signal diagnostic placement assessment across vocabulary, grammar, reading, listening, writing, and speaking"
         },
         "dailyMissions": {
           "type": "object",

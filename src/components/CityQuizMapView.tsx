@@ -27,6 +27,7 @@ import {
   LuxuryCornerBrackets,
   LuxurySkyline3DSvg
 } from './CityMapLuxury3DKit';
+import { GlassSlidingCapsule } from './GlassSlidingCapsule';
 
 const CITY_NAV_PREFS_KEY = 'eb_msz_city_nav_prefs_v1';
 
@@ -122,6 +123,9 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
   const activeSectorMeta = useMemo(() => getSectorForLevel(unlockedLevel), [unlockedLevel]);
   const activeBlock50Meta = useMemo(() => getBlock50ForLevel(unlockedLevel), [unlockedLevel]);
   const levelBlocks50 = useMemo(() => getLevelBlocksOf50(50), []);
+
+  const navModeTrackRef = useRef<HTMLDivElement | null>(null);
+  const perspectiveTrackRef = useRef<HTMLDivElement | null>(null);
 
   // Navigation mode on Plan Principal: 12 groups of 50 levels (1-50, 51-100...) OR 7 school classes
   const [navMode, setNavMode] = useState<'blocks_50' | 'classes'>(() => {
@@ -711,13 +715,18 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
         >
           {/* Navigation Mode Switch Bar */}
           <div className="flex flex-wrap items-center justify-between gap-2.5 pb-3 border-b border-[#232a3a]/80">
-            <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-[#0c1322] border border-[#232a3a]">
+            <div
+              ref={navModeTrackRef}
+              className="relative inline-flex items-center gap-1 p-1 rounded-full bg-[#0c1322] border border-[#232a3a]"
+            >
+              <GlassSlidingCapsule containerRef={navModeTrackRef} activeKey={navMode} />
               <button
                 type="button"
+                data-capsule-key="blocks_50"
                 onClick={() => setNavMode('blocks_50')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 flex items-center gap-1.5 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] ${
+                className={`relative z-10 px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap shrink-0 flex items-center gap-1.5 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] ${
                   navMode === 'blocks_50'
-                    ? 'bg-[#f2ca50] text-[#3c2f00] font-bold shadow-sm'
+                    ? 'glass-capsule-active-text font-bold'
                     : 'text-[#d0c5af] hover:text-[#dce2f8]'
                 }`}
               >
@@ -727,10 +736,11 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
 
               <button
                 type="button"
+                data-capsule-key="classes"
                 onClick={() => setNavMode('classes')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 flex items-center gap-1.5 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] ${
+                className={`relative z-10 px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap shrink-0 flex items-center gap-1.5 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] ${
                   navMode === 'classes'
-                    ? 'bg-[#f2ca50] text-[#3c2f00] font-bold shadow-sm'
+                    ? 'glass-capsule-active-text font-bold'
                     : 'text-[#d0c5af] hover:text-[#dce2f8]'
                 }`}
               >
@@ -741,16 +751,22 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
 
             <div className="flex items-center gap-2 flex-wrap">
               <div
-                className="inline-flex items-center gap-1 p-1 rounded-xl bg-[#0c1322] border border-[#232a3a]"
+                ref={perspectiveTrackRef}
+                className="relative inline-flex items-center gap-1 p-1 rounded-full bg-[#0c1322] border border-[#232a3a]"
                 role="group"
                 aria-label="Perspective cartographique"
               >
+                <GlassSlidingCapsule
+                  containerRef={perspectiveTrackRef}
+                  activeKey={is3DView ? '3d' : '2d'}
+                />
                 <button
                   type="button"
+                  data-capsule-key="3d"
                   onClick={() => setIs3DView(true)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 flex items-center gap-1 transition-colors cursor-pointer ${
+                  className={`relative z-10 px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap shrink-0 flex items-center gap-1 transition-colors cursor-pointer ${
                     is3DView
-                      ? 'bg-[#f2ca50] text-[#3c2f00] font-bold shadow-sm'
+                      ? 'glass-capsule-active-text font-bold'
                       : 'text-[#d0c5af] hover:text-[#dce2f8]'
                   }`}
                 >
@@ -759,10 +775,11 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
                 </button>
                 <button
                   type="button"
+                  data-capsule-key="2d"
                   onClick={() => setIs3DView(false)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 flex items-center gap-1 transition-colors cursor-pointer ${
+                  className={`relative z-10 px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap shrink-0 flex items-center gap-1 transition-colors cursor-pointer ${
                     !is3DView
-                      ? 'bg-[#f2ca50] text-[#3c2f00] font-bold shadow-sm'
+                      ? 'glass-capsule-active-text font-bold'
                       : 'text-[#d0c5af] hover:text-[#dce2f8]'
                   }`}
                 >

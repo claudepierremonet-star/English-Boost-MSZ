@@ -2,6 +2,42 @@ export type CEFRLevel = 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
 
 export type SchoolGrade = '6e' | '5e' | '4e' | '3e' | '2nde' | '1re' | 'terminale';
 
+export type AgeRangeKey = '11-12' | '13-14' | '15-16' | '17-18+';
+
+export type LearningObjectiveId =
+  | 'school_excellence'
+  | 'exam_prep'
+  | 'oral_fluency'
+  | 'vocabulary_mastery'
+  | 'travel_culture'
+  | 'everyday_confidence';
+
+export type DynamicAdaptationMode = 'scaffolded' | 'balanced' | 'accelerated';
+
+export type LearningSpeedLevel = 'fast' | 'steady' | 'methodical';
+
+export interface PlacementSkillBreakdown {
+  vocabulary: number;
+  grammar: number;
+  reading: number;
+  listening: number;
+  writing: number;
+  speaking: number;
+}
+
+export interface PlacementTestResult {
+  completedAt: string;
+  estimatedCefr: CEFRLevel;
+  compositeCefr: CEFRLevel;
+  confidenceScore: number; // 0..100 across multiple signals
+  overallScore: number; // 0..100
+  signalsCount: number;
+  skillScores: PlacementSkillBreakdown;
+  identifiedWeaknesses: string[];
+  recommendedTrack: DynamicAdaptationMode;
+  speakingAssessedViaMic: boolean;
+}
+
 export type SkillKey =
   | 'vocabulary'
   | 'grammar'
@@ -28,6 +64,14 @@ export interface AdaptiveLearningProfile {
   strongestSkills: SkillKey[];
   recommendedLessonIds: string[];
   dueVocabularyCount: number;
+  learningSpeed?: LearningSpeedLevel;
+  errorFrequency?: number; // 0..100%
+  vocabularyRetentionRate?: number; // 0..100%
+  exerciseCompletionCount?: number;
+  skillBalanceScore?: number; // 0..100 balance across L/S/R/W
+  adaptationMode?: DynamicAdaptationMode;
+  multiSignalSourcesCount?: number;
+  confidenceScore?: number;
   updatedAt: string;
 }
 
@@ -243,6 +287,10 @@ export interface UserProfile {
   dailyMissions?: DailyMissionsState;
   tutorSavedNotes?: TutorSavedNote[];
   tutorWeaknesses?: TutorWeaknessRecord[];
+  ageRange?: AgeRangeKey;
+  learningObjectives?: LearningObjectiveId[];
+  preferredDurationMinutes?: number;
+  placementTest?: PlacementTestResult;
 }
 
 export type AttemptModuleType =

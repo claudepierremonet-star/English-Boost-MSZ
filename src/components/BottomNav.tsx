@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { motion } from 'framer-motion';
+import { GlassSlidingCapsule } from './GlassSlidingCapsule';
 
 export type TabKey = 'accueil' | 'carte' | 'cursus' | 'jeux' | 'classement' | 'pratique' | 'dashboard' | 'profil';
 
@@ -9,6 +10,8 @@ interface BottomNavProps {
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) => {
+  const navTrackRef = useRef<HTMLDivElement | null>(null);
+
   const tabs: Array<{ key: TabKey; label: string; icon: string }> = [
     { key: 'accueil', label: 'Accueil', icon: 'auto_stories' },
     { key: 'carte', label: 'Plan 600', icon: 'map' },
@@ -21,34 +24,25 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 pb-safe bg-[#0c1322]/90 backdrop-blur-xl border-t border-[#232a3a]/80 shadow-[0_-4px_24px_rgba(0,0,0,0.6)]">
-      <div className="max-w-2xl mx-auto h-16 px-1 sm:px-3 flex items-center justify-between gap-0.5">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 pb-safe bg-[#0c1322]/88 backdrop-blur-xl border-t border-[#232a3a]/80 shadow-[0_-4px_24px_rgba(0,0,0,0.6)]">
+      <div
+        ref={navTrackRef}
+        className="relative max-w-2xl mx-auto h-[68px] px-1.5 sm:px-3 flex items-center justify-between gap-0.5 sm:gap-1"
+      >
+        <GlassSlidingCapsule containerRef={navTrackRef} activeKey={activeTab} />
+
         {tabs.map((tab) => {
           const isActive = activeTab === tab.key;
           return (
             <button
               key={tab.key}
               type="button"
+              data-capsule-key={tab.key}
               onClick={() => onTabChange(tab.key)}
-              className={`relative flex-1 min-w-0 flex flex-col items-center justify-center gap-0.5 min-h-[48px] py-1 px-0.5 sm:px-1.5 rounded-2xl transition-colors duration-200 cursor-pointer active:scale-95 ${
-                isActive ? 'text-[#f2ca50]' : 'text-[#d0c5af]/70 hover:text-[#dce2f8]'
+              className={`relative z-10 flex-1 min-w-0 flex flex-col items-center justify-center gap-0.5 h-[50px] py-1 px-0.5 sm:px-1.5 rounded-full transition-colors duration-200 cursor-pointer active:scale-95 ${
+                isActive ? 'glass-capsule-active-text' : 'text-[#d0c5af]/75 hover:text-[#dce2f8]'
               }`}
             >
-              {/* Bloc de mise en évidence aux coins arrondis glissant avec rebond ressort */}
-              {isActive && (
-                <motion.div
-                  layoutId="activeBottomNavHighlight"
-                  transition={{
-                    type: 'spring',
-                    stiffness: 380,
-                    damping: 24,
-                    mass: 0.8
-                  }}
-                  className="absolute inset-0 rounded-2xl bg-gradient-to-b from-[#f2ca50]/25 via-[#f2ca50]/15 to-[#d4af37]/20 border border-[#f2ca50]/60 shadow-[0_0_18px_rgba(242,202,80,0.3)] pointer-events-none"
-                  style={{ zIndex: 0 }}
-                />
-              )}
-
               <div className="relative z-10 flex items-center justify-center">
                 <motion.span
                   animate={{ scale: isActive ? 1.12 : 1 }}
@@ -62,7 +56,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
 
               <span
                 className={`relative z-10 text-[10px] sm:text-[11px] tracking-tight sm:tracking-wide font-sans truncate max-w-full transition-all duration-200 ${
-                  isActive ? 'text-[#f2ca50] font-bold' : 'text-[#d0c5af]/80 font-medium'
+                  isActive ? 'font-bold' : 'font-medium'
                 }`}
               >
                 {tab.label}
@@ -74,3 +68,4 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
     </nav>
   );
 };
+

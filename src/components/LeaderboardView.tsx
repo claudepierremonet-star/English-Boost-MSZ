@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { UserProfile, CEFRLevel, LeaderboardEntry, LeagueTier } from '../firebase/types';
 import { fetchWeeklyLeaderboard, sendPeerCheer } from '../firebase/client';
 import {
@@ -11,6 +10,7 @@ import {
 } from '../data/curriculum';
 import { LessonDetailModal } from './LessonDetailModal';
 import confetti from 'canvas-confetti';
+import { GlassSlidingCapsule } from './GlassSlidingCapsule';
 
 interface LeaderboardViewProps {
   user: UserProfile;
@@ -253,6 +253,7 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
   const [levelFilter, setLevelFilter] = useState<'ALL' | CEFRLevel>('ALL');
   const [cheeredUids, setCheeredUids] = useState<Record<string, boolean>>({});
   const [recentCheerAnimation, setRecentCheerAnimation] = useState<string | null>(null);
+  const viewSwitchRef = useRef<HTMLDivElement | null>(null);
 
   // Group Challenges State with LocalStorage persistence
   const [groups, setGroups] = useState<GroupChallenge[]>(() => {
@@ -625,54 +626,36 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
 
           {/* View Mode Toggle: Global Leaderboard vs Private Group Challenges */}
           <div className="flex flex-col sm:flex-row gap-2 shrink-0">
-            <div className="p-1 rounded-2xl bg-[#070b14]/90 border border-[#f2ca50]/40 flex items-center shadow-lg relative">
+            <div
+              ref={viewSwitchRef}
+              className="p-1 rounded-full bg-[#070b14]/90 border border-[#f2ca50]/35 flex items-center shadow-lg relative"
+            >
+              <GlassSlidingCapsule containerRef={viewSwitchRef} activeKey={viewSection} tone="dark" />
               <button
                 type="button"
+                data-capsule-key="global"
                 onClick={() => setViewSection('global')}
-                className={`relative px-4 py-2.5 rounded-xl text-xs font-bold font-mono uppercase tracking-wider flex items-center gap-2 transition-colors cursor-pointer ${
-                  viewSection === 'global' ? 'text-[#3c2f00]' : 'text-[#d0c5af] hover:text-white'
+                className={`relative z-10 px-4 py-2.5 rounded-full text-xs font-bold font-mono uppercase tracking-wider flex items-center gap-2 transition-colors cursor-pointer ${
+                  viewSection === 'global' ? 'glass-capsule-active-text' : 'text-[#d0c5af] hover:text-white'
                 }`}
+                data-glass-tone={viewSection === 'global' ? 'dark' : undefined}
               >
-                {viewSection === 'global' && (
-                  <motion.div
-                    layoutId="activeLeaderboardViewPill"
-                    transition={{
-                      type: 'spring',
-                      stiffness: 380,
-                      damping: 24,
-                      mass: 0.8
-                    }}
-                    className="absolute inset-0 rounded-xl bg-gradient-to-r from-[#d4af37] via-[#f2ca50] to-[#cca639] shadow-md shadow-[#f2ca50]/20 pointer-events-none"
-                    style={{ zIndex: 0 }}
-                  />
-                )}
                 <span className="relative z-10 material-symbols-outlined text-base">emoji_events</span>
-                <span className="relative z-10">Ligue d'Oxford</span>
+                <span className="relative z-10">Ligue d&apos;Oxford</span>
               </button>
 
               <button
                 type="button"
+                data-capsule-key="groups"
                 onClick={() => setViewSection('groups')}
-                className={`relative px-4 py-2.5 rounded-xl text-xs font-bold font-mono uppercase tracking-wider flex items-center gap-2 transition-colors cursor-pointer ${
-                  viewSection === 'groups' ? 'text-[#3c2f00]' : 'text-[#d0c5af] hover:text-white'
+                className={`relative z-10 px-4 py-2.5 rounded-full text-xs font-bold font-mono uppercase tracking-wider flex items-center gap-2 transition-colors cursor-pointer ${
+                  viewSection === 'groups' ? 'glass-capsule-active-text' : 'text-[#d0c5af] hover:text-white'
                 }`}
+                data-glass-tone={viewSection === 'groups' ? 'dark' : undefined}
               >
-                {viewSection === 'groups' && (
-                  <motion.div
-                    layoutId="activeLeaderboardViewPill"
-                    transition={{
-                      type: 'spring',
-                      stiffness: 380,
-                      damping: 24,
-                      mass: 0.8
-                    }}
-                    className="absolute inset-0 rounded-xl bg-gradient-to-r from-[#d4af37] via-[#f2ca50] to-[#cca639] shadow-md shadow-[#f2ca50]/20 pointer-events-none"
-                    style={{ zIndex: 0 }}
-                  />
-                )}
                 <span className="relative z-10 material-symbols-outlined text-base">forum</span>
                 <span className="relative z-10">Défis de Groupe Privés</span>
-                <span className="relative z-10 px-1.5 py-0.2 rounded-full bg-[#3c2f00]/30 text-[10px] font-bold">
+                <span className="relative z-10 px-1.5 py-0.2 rounded-full bg-white/15 text-[10px] font-bold">
                   {groups.length}
                 </span>
               </button>

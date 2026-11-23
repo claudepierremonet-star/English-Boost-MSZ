@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { UserProfile, LearningAttempt } from '../firebase/types';
 import {
   isFirebaseConfigured,
@@ -28,6 +28,7 @@ import { exportProgressReportPdf } from '../utils/progressPdfExporter';
 import { AppNoticeModal } from './AppNoticeModal';
 import { LinguisticRadarSection } from './LinguisticRadarSection';
 import type { EcosystemLaunchTarget } from './SmartEcosystemHub';
+import { GlassSlidingCapsule } from './GlassSlidingCapsule';
 
 interface CustomTooltipProps {
   active?: boolean;
@@ -264,6 +265,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [folioAccents, setFolioAccents] = useState<Record<string, 'en-GB' | 'en-US'>>({});
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
   const [pdfExportedLabel, setPdfExportedLabel] = useState<string | null>(null);
+  const dashboardNavRef = useRef<HTMLElement | null>(null);
 
   const handleExportProgressPdf = async () => {
     if (isExportingPdf) return;
@@ -527,9 +529,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* FRAMER MOTION ANIMATED DASHBOARD SUB-TAB NAVIGATOR */}
       <nav
+        ref={dashboardNavRef}
         aria-label="Onglets de progression du tableau de bord"
-        className="flex items-center gap-1 p-1.5 rounded-2xl bg-[#151b2b] border border-[#232a3a] overflow-x-auto no-scrollbar"
+        className="relative flex items-center gap-1 p-1.5 rounded-full bg-[#151b2b] border border-[#232a3a] overflow-x-auto no-scrollbar"
       >
+        <GlassSlidingCapsule containerRef={dashboardNavRef} activeKey={dashboardTab} />
         {[
           { id: 'all' as const, label: 'Vue Complète', icon: 'dashboard' },
           { id: 'mastery' as const, label: 'Objectifs & Maîtrise', icon: 'verified' },
@@ -541,18 +545,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <button
               key={tab.id}
               type="button"
+              data-capsule-key={tab.id}
               onClick={() => setDashboardTab(tab.id)}
-              className={`relative flex-1 min-w-fit px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
-                isActive ? 'text-[#3c2f00] font-bold' : 'text-[#d0c5af] hover:text-[#dce2f8]'
+              className={`relative z-10 flex-1 min-w-fit px-3.5 py-2 rounded-full text-xs font-semibold whitespace-nowrap flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                isActive ? 'glass-capsule-active-text font-bold' : 'text-[#d0c5af] hover:text-[#dce2f8]'
               }`}
             >
-              {isActive && (
-                <motion.div
-                  layoutId="dashboardSubTabActivePill"
-                  transition={{ type: 'spring', stiffness: 360, damping: 28 }}
-                  className="absolute inset-0 rounded-xl bg-[#f2ca50] shadow-sm pointer-events-none"
-                />
-              )}
               <span className="relative z-10 material-symbols-outlined text-[16px]">{tab.icon}</span>
               <span className="relative z-10">{tab.label}</span>
             </button>

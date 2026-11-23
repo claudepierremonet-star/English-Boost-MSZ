@@ -5,6 +5,7 @@ import { recordAttempt } from '../firebase/client';
 import type { CEFRLevel } from '../firebase/types';
 import confetti from 'canvas-confetti';
 import { playCorrectCue, playIncorrectCue, playVictoryCue } from '../utils/soundEffects';
+import { useAdaptiveProfile } from '../hooks/useAdaptiveProfile';
 
 interface QuizModalProps {
   currentLevel: CEFRLevel;
@@ -46,11 +47,15 @@ export const QuizModal: React.FC<QuizModalProps> = ({
     return batch;
   };
 
+  const { assessment } = useAdaptiveProfile();
   const [questions, setQuestions] = useState<GeneralQuizQuestionItem[]>(() => createUnseenBatch());
   const [questionIndex, setQuestionIndex] = useState<number>(0);
   const [selectedOptionIdx, setSelectedOptionIdx] = useState<number | null>(null);
   const [hasAnswered, setHasAnswered] = useState<boolean>(false);
   const [score, setScore] = useState<number>(0);
+  const [consecutiveErrors, setConsecutiveErrors] = useState<number>(0);
+  const [consecutiveCorrect, setConsecutiveCorrect] = useState<number>(0);
+  const [showAdaptiveHint, setShowAdaptiveHint] = useState<boolean>(false);
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
 
   // Persist seen questions/answers cleanly outside render
@@ -70,8 +75,12 @@ export const QuizModal: React.FC<QuizModalProps> = ({
     const isCorrect = currentQ.options[idx]?.isCorrect;
     if (isCorrect) {
       setScore((prev) => prev + 1);
+      setConsecutiveErrors(0);
+      setConsecutiveCorrect((prev) => prev + 1);
       playCorrectCue();
     } else {
+      setConsecutiveErrors((prev) => prev + 1);
+      setConsecutiveCorrect(0);
       playIncorrectCue();
     }
   };
@@ -81,6 +90,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
       setQuestionIndex((prev) => prev + 1);
       setSelectedOptionIdx(null);
       setHasAnswered(false);
+      setShowAdaptiveHint(false);
     } else {
       setIsCompleted(true);
       playVictoryCue();
@@ -116,6 +126,9 @@ export const QuizModal: React.FC<QuizModalProps> = ({
     setSelectedOptionIdx(null);
     setHasAnswered(false);
     setScore(0);
+    setConsecutiveErrors(0);
+    setConsecutiveCorrect(0);
+    setShowAdaptiveHint(false);
     setIsCompleted(false);
   };
 
@@ -169,6 +182,45 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                 style={{ width: `${((questionIndex + 1) / questions.length) * 100}%` }}
               />
             </div>
+
+            {/* Adaptive Live Support / Challenge Banner */}
+            {(consecutiveErrors >= 2 || assessment.dynamicDirective.mode === 'scaffolded') && (
+              <div className="p-3 rounded-xl bg-amber-950/35 border border-amber-500/45 text-xs text-amber-100 space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono font-bold uppercase text-[10px] text-amber-300 flex items-center gap-1">
+                    <span className="material-symbols-outlined text-sm">support</span>
+                    Soutien Adaptatif Activé ({assessment.gradeMeta.shortLabel})
+                  </span>
+                  {!hasAnswered && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAdaptiveHint((v) => !v)}
+                      className="text-[10px] font-mono font-bold text-[#f2ca50] underline cursor-pointer"
+                    >
+                      {showAdaptiveHint ? 'Masquer l’indice' : 'Indice guidé'}
+                    </button>
+                  )}
+                </div>
+                {showAdaptiveHint && (
+                  <p className="text-[11px] text-[#ffe088] leading-relaxed">
+                    <strong>Règle utile :</strong>{' '}
+                    {currentQ.options.find((o) => o.isCorrect)?.explanation || assessment.dynamicDirective.ruleExplanationFr}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {(consecutiveCorrect >= 3 || (assessment.dynamicDirective.mode === 'accelerated' && consecutiveErrors === 0)) && (
+              <div className="px-3 py-2 rounded-xl bg-emerald-950/35 border border-emerald-500/40 text-[11px] text-emerald-200 flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 font-semibold">
+                  <span className="material-symbols-outlined text-sm text-emerald-400">bolt</span>
+                  Rythme Accéléré · Précision {assessment.dynamicDirective.targetCefrForExercises}
+                </span>
+                {consecutiveCorrect >= 3 && (
+                  <span className="font-mono font-bold text-[#f2ca50]">Série {consecutiveCorrect} ✓</span>
+                )}
+              </div>
+            )}
 
             {/* Prompt sentence card */}
             <div className="p-5 rounded-2xl bg-[#151b2b] border border-[#4d4635]/40 shadow-xl flex flex-col gap-2">

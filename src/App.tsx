@@ -54,6 +54,7 @@ import { AITutorModal } from './components/AITutorModal';
 import { EnglishEscapeRoomModal } from './components/EnglishEscapeRoomModal';
 import { ListeningCinemaModal } from './components/ListeningCinemaModal';
 import { GrammarBattleModal } from './components/GrammarBattleModal';
+import { AdaptivePlacementModal } from './components/AdaptivePlacementModal';
 import { inferGradeFromCefr, markLessonCompletedLocally } from './services/adaptiveEngine';
 
 export default function App() {
@@ -86,6 +87,7 @@ export default function App() {
   const [isEscapeRoomOpen, setIsEscapeRoomOpen] = useState<boolean>(false);
   const [isCinemaOpen, setIsCinemaOpen] = useState<boolean>(false);
   const [isGrammarBattleOpen, setIsGrammarBattleOpen] = useState<boolean>(false);
+  const [isPlacementModalOpen, setIsPlacementModalOpen] = useState<boolean>(false);
   const [activeFolioForStudy, setActiveFolioForStudy] = useState<StudyFolio | null>(null);
 
   // Active Lesson selected across Curriculum / Search
@@ -253,6 +255,28 @@ export default function App() {
         break;
     }
   };
+
+  useEffect(() => {
+    const openPlacement = () => setIsPlacementModalOpen(true);
+    const launchEcosystem = (e: Event) => {
+      const ce = e as CustomEvent<EcosystemLaunchTarget | 'dictation' | 'quiz'>;
+      const target = ce.detail;
+      if (!target) return;
+      if (target === 'dictation') {
+        setIsDictationOpen(true);
+      } else if (target === 'quiz') {
+        setIsQuizOpen(true);
+      } else {
+        handleLaunchEcosystemModule(target);
+      }
+    };
+    window.addEventListener('eb_open_placement_modal', openPlacement);
+    window.addEventListener('eb_launch_ecosystem_target', launchEcosystem);
+    return () => {
+      window.removeEventListener('eb_open_placement_modal', openPlacement);
+      window.removeEventListener('eb_launch_ecosystem_target', launchEcosystem);
+    };
+  }, []);
 
   const handlePhotoChange = async (newUrl: string) => {
     setHeroPhotoUrl(newUrl);
@@ -921,6 +945,7 @@ export default function App() {
               }}
               onCustomPhotoUpload={handleCustomUpload}
               onOpenInstallModal={() => setIsInstallModalOpen(true)}
+              onOpenPlacement={() => setIsPlacementModalOpen(true)}
             />
           </div>
         )}
@@ -940,6 +965,10 @@ export default function App() {
           }}
           onCustomPhotoUpload={handleCustomUpload}
           onOpenInstallModal={() => setIsInstallModalOpen(true)}
+          onOpenPlacement={() => {
+            setIsProfileOpen(false);
+            setIsPlacementModalOpen(true);
+          }}
         />
       )}
 
@@ -1106,6 +1135,20 @@ export default function App() {
         onXpEarned={(xp) => {
           handleChallengeComplete(xp);
           setUser(getLocalUserProfile());
+        }}
+      />
+
+      {/* Adaptive Placement Test & Student Profile Modal */}
+      <AdaptivePlacementModal
+        isOpen={isPlacementModalOpen}
+        user={user}
+        onClose={() => setIsPlacementModalOpen(false)}
+        onCompleted={(updated, xpAwarded) => {
+          setUser(updated);
+          setCurrentLevel(updated.level);
+          if (xpAwarded > 0) {
+            handleChallengeComplete(xpAwarded);
+          }
         }}
       />
 

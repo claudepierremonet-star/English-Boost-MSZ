@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useRef } from 'react';
 import type { CEFRLevel } from '../firebase/types';
 import { DIALOGUE_THEMES, type DialogueThemeId } from '../data/atelierDialoguesTypes';
 import { speakText } from '../services/speechService';
+import { GlassSlidingCapsule } from './GlassSlidingCapsule';
+import { useAdaptiveProfile } from '../hooks/useAdaptiveProfile';
+import { AdaptiveGlobalBanner } from './AdaptiveGlobalBanner';
+import { SKILL_META } from '../services/adaptiveEngine';
 
 interface PracticeViewProps {
   currentLevel: CEFRLevel;
@@ -40,6 +43,43 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
   onOpenGrammarBattle
 }) => {
   const [miniCardFlipped, setMiniCardFlipped] = useState<boolean>(false);
+  const cefrTrackRef = useRef<HTMLDivElement | null>(null);
+  const { assessment } = useAdaptiveProfile();
+  const recommendedAtelierAction = assessment.modulePlans.atelier.recommendedAction;
+  const weakestSkillLabel = SKILL_META[assessment.profile.weakestSkills[0]].labelFr;
+
+  const handleAdaptiveAtelierLaunch = () => {
+    switch (recommendedAtelierAction) {
+      case 'dictation':
+        onOpenDictation();
+        break;
+      case 'flashcards':
+        onOpenFlashcards();
+        break;
+      case 'quiz':
+        onOpenQuiz();
+        break;
+      case 'speaking':
+        onOpenSpeaking();
+        break;
+      case 'dialogues':
+        onOpenDialogues?.('all');
+        break;
+      case 'tutor':
+        onOpenAiTutor?.();
+        break;
+      case 'escape_room':
+        onOpenEscapeRoom?.();
+        break;
+      case 'listening_cinema':
+        onOpenListeningCinema?.();
+        break;
+      case 'grammar_battle':
+        onOpenGrammarBattle?.();
+        break;
+    }
+  };
+
   const levelDescriptions: Record<CEFRLevel, string> = {
     A1: 'A1 : Découverte et acquisition des structures élémentaires (6e / Cycle 3).',
     A2: 'A2 : Consolidation et communication usuelle en contexte quotidien (5e / 4e).',
@@ -76,6 +116,12 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
           Orfèvrerie linguistique, analyse rhétorique et répétition savante conçues pour l'autonomie absolue.
         </p>
       </section>
+
+      {/* Global Adaptive Learning Banner (Atelier Context) */}
+      <AdaptiveGlobalBanner
+        context="atelier"
+        onPrimaryAction={handleAdaptiveAtelierLaunch}
+      />
 
       {/* Featured Synthesis Challenge Card */}
       <section className="relative p-5 rounded-2xl bg-gradient-to-br from-[#232a3a] via-[#191f2f] to-[#0c1322] border border-[#f2ca50]/30 shadow-xl overflow-hidden">
@@ -220,7 +266,8 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
           </span>
         </div>
 
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+        <div ref={cefrTrackRef} className="relative grid grid-cols-3 sm:grid-cols-6 gap-2">
+          <GlassSlidingCapsule containerRef={cefrTrackRef} activeKey={currentLevel} />
           {(['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as CEFRLevel[]).map((lvl) => {
             const isActive = currentLevel === lvl;
             const subLabels: Record<CEFRLevel, string> = {
@@ -235,27 +282,14 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
               <button
                 key={lvl}
                 type="button"
+                data-capsule-key={lvl}
                 onClick={() => onSelectLevel(lvl)}
-                className={`relative flex flex-col items-center justify-center py-2.5 px-1 rounded-xl transition-colors duration-200 border cursor-pointer ${
+                className={`relative z-10 flex flex-col items-center justify-center py-2.5 px-1 rounded-full transition-colors duration-200 border cursor-pointer ${
                   isActive
-                    ? 'text-[#3c2f00] font-bold border-[#f2ca50]'
+                    ? 'glass-capsule-active-text font-bold border-transparent'
                     : 'bg-[#191f2f] text-[#d0c5af] border-[#4d4635]/30 hover:bg-[#232a3a]'
                 }`}
               >
-                {/* Bloc de mise en évidence aux coins arrondis glissant avec rebond ressort */}
-                {isActive && (
-                  <motion.div
-                    layoutId="activeCefrLevelHighlight"
-                    transition={{
-                      type: 'spring',
-                      stiffness: 380,
-                      damping: 24,
-                      mass: 0.8
-                    }}
-                    className="absolute inset-0 rounded-xl bg-gradient-to-r from-[#d4af37] via-[#f2ca50] to-[#cca639] shadow-lg shadow-[#f2ca50]/25 pointer-events-none"
-                    style={{ zIndex: 0 }}
-                  />
-                )}
                 <span className="relative z-10 text-base font-bold font-mono">{lvl}</span>
                 <span className="relative z-10 text-[10px] opacity-90 mt-0.5">{subLabels[lvl]}</span>
               </button>
@@ -465,11 +499,16 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
               </div>
             </div>
 
-            <div className="flex flex-col items-end">
+            <div className="flex flex-col items-end gap-1">
+              {recommendedAtelierAction === 'dictation' && (
+                <span className="px-2 py-0.5 rounded-full bg-[#f2ca50] text-[#3c2f00] text-[9px] font-mono font-black uppercase">
+                  Focus · {weakestSkillLabel}
+                </span>
+              )}
               <span className="px-2 py-0.5 rounded-full bg-[#070e1d] text-[10px] font-bold text-[#f2ca50] font-mono border border-[#f2ca50]/30">
                 500 SESSIONS
               </span>
-              <span className="text-[11px] text-[#d0c5af]/80 mt-1">6e à Terminale • 10 Thèmes</span>
+              <span className="text-[11px] text-[#d0c5af]/80 mt-0.5">6e à Terminale • 10 Thèmes</span>
             </div>
           </div>
 
@@ -534,11 +573,16 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
               </div>
             </div>
 
-            <div className="flex flex-col items-end">
+            <div className="flex flex-col items-end gap-1">
+              {recommendedAtelierAction === 'flashcards' && (
+                <span className="px-2 py-0.5 rounded-full bg-[#f2ca50] text-[#3c2f00] text-[9px] font-mono font-black uppercase">
+                  Focus · {weakestSkillLabel}
+                </span>
+              )}
               <span className="px-2 py-0.5 rounded-full bg-[#070e1d] text-[10px] font-bold text-[#d4c78f] font-mono">
-                34 CARTES DUES
+                {assessment.dueVocabularyCount} CARTES DUES
               </span>
-              <span className="text-[11px] text-[#d0c5af]/80 mt-1">260 Mémorisées</span>
+              <span className="text-[11px] text-[#d0c5af]/80 mt-0.5">Rétention {assessment.vocabularyRetentionRate}%</span>
             </div>
           </div>
 
@@ -686,11 +730,16 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
               </div>
             </div>
 
-            <div className="flex flex-col items-end">
+            <div className="flex flex-col items-end gap-1">
+              {(recommendedAtelierAction === 'quiz' || recommendedAtelierAction === 'grammar_battle') && (
+                <span className="px-2 py-0.5 rounded-full bg-[#f2ca50] text-[#3c2f00] text-[9px] font-mono font-black uppercase">
+                  Focus · {weakestSkillLabel}
+                </span>
+              )}
               <span className="px-2 py-0.5 rounded-full bg-[#070e1d] text-[10px] font-bold text-[#f2ca50] font-mono">
-                NIVEAU EXPERT
+                NIVEAU {assessment.dynamicDirective.targetCefrForExercises}
               </span>
-              <span className="text-[11px] text-[#d0c5af]/80 mt-1">Score Moyen : 94%</span>
+              <span className="text-[11px] text-[#d0c5af]/80 mt-0.5">Soutien adaptatif</span>
             </div>
           </div>
 
@@ -742,11 +791,16 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
               </div>
             </div>
 
-            <div className="flex flex-col items-end">
+            <div className="flex flex-col items-end gap-1">
+              {recommendedAtelierAction === 'speaking' && (
+                <span className="px-2 py-0.5 rounded-full bg-[#f2ca50] text-[#3c2f00] text-[9px] font-mono font-black uppercase">
+                  Focus · {weakestSkillLabel}
+                </span>
+              )}
               <span className="px-2 py-0.5 rounded-full bg-[#070e1d] text-[10px] font-bold text-[#f2ca50] font-mono border border-[#f2ca50]/30">
                 RECONNAISSANCE IA
               </span>
-              <span className="text-[11px] text-[#d0c5af]/80 mt-1">Dictée & Phonétique</span>
+              <span className="text-[11px] text-[#d0c5af]/80 mt-0.5">Dictée & Phonétique</span>
             </div>
           </div>
 

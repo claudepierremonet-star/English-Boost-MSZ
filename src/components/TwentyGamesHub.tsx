@@ -67,6 +67,9 @@ import {
   playIncorrectCue,
   playVictoryCue
 } from '../utils/soundEffects';
+import { GlassSlidingCapsule } from './GlassSlidingCapsule';
+import { useAdaptiveProfile } from '../hooks/useAdaptiveProfile';
+import { AdaptiveGlobalBanner } from './AdaptiveGlobalBanner';
 
 interface TwentyGamesHubProps {
   onXpEarned?: (xp: number) => void;
@@ -126,6 +129,7 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({
   });
   const [activeGame, setActiveGame] = useState<MiniGameMeta | null>(null);
   const [howToPlayModal, setHowToPlayModal] = useState<MiniGameMeta | null>(null);
+  const viewModeTrackRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     try {
@@ -140,7 +144,10 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({
   const [showLevelUpCelebration, setShowLevelUpCelebration] = useState<{ newLevel: number; oldLevel: number } | null>(null);
   const [showRulesModal, setShowRulesModal] = useState<boolean>(false);
   const [showDefiExpress, setShowDefiExpress] = useState<boolean>(false);
-  const [expressLevel, setExpressLevel] = useState<CEFRLevel>('B2');
+  const { assessment: adaptiveAssessment } = useAdaptiveProfile();
+  const [expressLevel, setExpressLevel] = useState<CEFRLevel>(
+    () => adaptiveAssessment.modulePlans.game.recommendedExpressCefr || 'B2'
+  );
   const [pointsToast, setPointsToast] = useState<{ text: string; isGain: boolean } | null>(null);
 
   // Hydratation asynchrone sécurisée depuis IndexedDB et Firestore au montage
@@ -631,6 +638,27 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({
           </div>
         </section>
 
+        {/* MOTEUR D'APPRENTISSAGE ADAPTATIF GLOBAL (GAME CONTEXT) */}
+        <div className="mb-5">
+          <AdaptiveGlobalBanner
+            context="game"
+            onPrimaryAction={() => {
+              const targetMeta =
+                TWENTY_GAMES_METADATA.find(
+                  (g) => g.id === adaptiveAssessment.modulePlans.game.recommendedGameId
+                ) || TWENTY_GAMES_METADATA[0];
+              if (isGameUnlocked(targetMeta)) {
+                handleLaunchGame(targetMeta);
+              } else {
+                const highestUnlocked =
+                  [...TWENTY_GAMES_METADATA].reverse().find((g) => isGameUnlocked(g)) ||
+                  TWENTY_GAMES_METADATA[0];
+                handleLaunchGame(highestUnlocked);
+              }
+            }}
+          />
+        </div>
+
         {/* SÉLECTEUR DE PRÉSENTATION : PLAN URBAIN (CITY MAP) · GRILLE · DECK ÉVENTAIL */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-4 rounded-2xl bg-[#151b2b] border border-[#232a3a] mb-5">
           <div className="flex flex-col gap-0.5">
@@ -643,10 +671,12 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({
           </div>
 
           <div
+            ref={viewModeTrackRef}
             role="tablist"
             aria-label="Mode de présentation des jeux"
-            className="inline-flex items-center gap-1 p-1 rounded-xl bg-[#0c1322] border border-[#232a3a] self-start sm:self-auto"
+            className="relative inline-flex items-center gap-1 p-1 rounded-full bg-[#0c1322] border border-[#232a3a] self-start sm:self-auto"
           >
+            <GlassSlidingCapsule containerRef={viewModeTrackRef} activeKey={viewMode} />
             {[
               { id: 'map' as const, label: 'Plan Urbain', icon: 'map' },
               { id: 'grid' as const, label: 'Grille', icon: 'grid_view' },
@@ -659,13 +689,14 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({
                   type="button"
                   role="tab"
                   aria-selected={active}
+                  data-capsule-key={mode.id}
                   onClick={() => {
                     sfx.playPop();
                     setViewMode(mode.id);
                   }}
-                  className={`px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 flex items-center gap-1.5 transition-colors cursor-pointer ${
+                  className={`relative z-10 px-3.5 py-2 rounded-full text-xs font-semibold whitespace-nowrap shrink-0 flex items-center gap-1.5 transition-colors cursor-pointer ${
                     active
-                      ? 'bg-[#f2ca50] text-[#3c2f00] font-bold shadow-sm'
+                      ? 'glass-capsule-active-text font-bold'
                       : 'text-[#d0c5af] hover:text-[#dce2f8]'
                   }`}
                 >
@@ -838,10 +869,15 @@ export const TwentyGamesHub: React.FC<TwentyGamesHubProps> = ({
                         <span className="text-[10px] font-mono tabular-nums text-[#f2ca50] font-bold">
                           JEU #{game.number.toString().padStart(2, '0')}
                         </span>
-                        <div className="flex items-center gap-1.5 mt-0.5 text-[11px] font-mono">
+                        <div className="flex items-center gap-1.5 mt-0.5 text-[11px] font-mono flex-wrap">
                           <span className="text-[#d0c5af] font-semibold">{game.difficulty}</span>
                           {isCompleted && (
                             <span className="text-emerald-400 font-bold">· Réussi</span>
+                          )}
+                          {game.id === adaptiveAssessment.modulePlans.game.recommendedGameId && (
+                            <span className="px-1.5 py-0.2 rounded bg-emerald-950/70 border border-emerald-400/50 text-emerald-300 text-[9px] font-bold">
+                              Adapté
+                            </span>
                           )}
                         </div>
                       </div>

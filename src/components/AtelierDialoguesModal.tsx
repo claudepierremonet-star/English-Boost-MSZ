@@ -22,6 +22,7 @@ import {
 import { LessonDictionaryProvider } from './LessonDictionaryContext';
 import { InteractiveHighlightText } from './InteractiveHighlightText';
 import { VoiceStudioModal } from './VoiceStudioModal';
+import { useAdaptiveProfile } from '../hooks/useAdaptiveProfile';
 
 interface AtelierDialoguesModalProps {
   isOpen: boolean;
@@ -65,6 +66,8 @@ export const AtelierDialoguesModal: React.FC<AtelierDialoguesModalProps> = ({
   onDialogueCompleted
 }) => {
   const shouldReduceMotion = useReducedMotion();
+  const { assessment: adaptiveAssessment } = useAdaptiveProfile();
+  const adaptiveDialogueLevel = adaptiveAssessment.modulePlans.atelier.recommendedDialogueLevel;
   const stats = useMemo(() => getAtelierDialoguesStats(), []);
 
   const [selectedTheme, setSelectedTheme] = useState<DialogueThemeId | 'all'>(initialTheme);
@@ -79,7 +82,9 @@ export const AtelierDialoguesModal: React.FC<AtelierDialoguesModalProps> = ({
   // Audio & Learning helpers
   const [accent, setAccent] = useState<AccentType>('en-GB');
   const [includeFrenchAudio, setIncludeFrenchAudio] = useState<boolean>(false);
-  const [speechRate, setSpeechRate] = useState<number>(1.0);
+  const [speechRate, setSpeechRate] = useState<number>(
+    () => adaptiveAssessment.dynamicDirective.recommendedAudioRate || 1.0
+  );
   const [isPlayingFull, setIsPlayingFull] = useState<boolean>(false);
   const [activeTurnIdx, setActiveTurnIdx] = useState<number | null>(null);
   const [showFrenchText, setShowFrenchText] = useState<boolean>(true);
@@ -481,6 +486,26 @@ export const AtelierDialoguesModal: React.FC<AtelierDialoguesModalProps> = ({
                 </option>
               ))}
             </select>
+
+            <button
+              type="button"
+              onClick={() =>
+                setSelectedLevel((prev) =>
+                  prev === adaptiveDialogueLevel ? 'all' : adaptiveDialogueLevel
+                )
+              }
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold whitespace-nowrap border flex items-center gap-1 cursor-pointer ${
+                selectedLevel === adaptiveDialogueLevel
+                  ? 'bg-[#f2ca50] border-[#f2ca50] text-[#3c2f00]'
+                  : 'bg-[#151b2b] border-emerald-500/45 text-emerald-300 hover:border-[#f2ca50]'
+              }`}
+              title="Filtrer selon votre niveau adaptatif actuel"
+            >
+              <span className="material-symbols-outlined text-xs">auto_awesome</span>
+              <span>
+                Adapté ({DIALOGUE_LEVELS.find((l) => l.id === adaptiveDialogueLevel)?.shortLabel || adaptiveDialogueLevel.replace('_', ' ')})
+              </span>
+            </button>
 
             <button
               type="button"

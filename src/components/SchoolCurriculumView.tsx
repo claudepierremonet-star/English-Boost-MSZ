@@ -33,8 +33,10 @@ import { LessonDetailModal } from './LessonDetailModal';
 import { Grammar6eStudio } from './Grammar6eStudio';
 import { RhetoricalAnalyzerView } from './RhetoricalAnalyzerView';
 import { getBestVoice } from '../services/speechService';
-import { getFavoriteLessonIds, toggleFavoriteLesson } from '../firebase/client';
+import { getFavoriteLessonIds, toggleFavoriteLesson, getLocalUserProfile } from '../firebase/client';
 import { LessonDictionaryProvider } from './LessonDictionaryContext';
+import { useAdaptiveProfile } from '../hooks/useAdaptiveProfile';
+import { AdaptiveGlobalBanner } from './AdaptiveGlobalBanner';
 
 interface SchoolCurriculumViewProps {
   onLessonCompleted?: (lessonId: string, xpEarned: number) => void;
@@ -59,7 +61,18 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
   onCityXpEarned,
   onCityProgressionUpdated
 }) => {
-  const [selectedGrade, setSelectedGrade] = useState<SchoolGrade>('6e');
+  const [selectedGrade, setSelectedGrade] = useState<SchoolGrade>(() => {
+    try {
+      return getLocalUserProfile().schoolGrade || '6e';
+    } catch {
+      return '6e';
+    }
+  });
+  const { assessment: adaptiveAssessment } = useAdaptiveProfile();
+  const recommendedLessonIdsSet = useMemo(
+    () => new Set(adaptiveAssessment.modulePlans.cursus.recommendedLessonIds),
+    [adaptiveAssessment.modulePlans.cursus.recommendedLessonIds]
+  );
   const [subTab6e, setSubTab6e] = useState<'themes' | 'grammar' | 'rhetoric'>('themes');
   const [selectedThemeId, setSelectedThemeId] = useState<string>('all');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState<boolean>(false);
@@ -549,6 +562,23 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
         </div>
       </section>
 
+      {/* GLOBAL ADAPTIVE LEARNING ENGINE BANNER (CURSUS CONTEXT) */}
+      <AdaptiveGlobalBanner
+        context="cursus"
+        onPrimaryAction={() => {
+          const recGrade = adaptiveAssessment.modulePlans.cursus.recommendedGrade;
+          if (recGrade !== selectedGrade) {
+            setSelectedGrade(recGrade);
+            setSelectedThemeId('all');
+            setShowFavoritesOnly(false);
+          }
+          const topLesson = adaptiveAssessment.recommendedLessons[0] || allGradeLessons[0];
+          if (topLesson) {
+            handleSelectLessonAndOpen(topLesson);
+          }
+        }}
+      />
+
       {/* 600 LEVELS GROUPED BY 50 USING LEVEL GROUP NAVIGATOR */}
       <section
         aria-label="Parcours des 600 niveaux regroupés par blocs de 50"
@@ -1035,6 +1065,7 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
                     key={lesson.id}
                     lesson={lesson}
                     isActiveSelected={activeSelectedLessonId === lesson.id}
+                    isAdaptiveRecommended={recommendedLessonIdsSet.has(lesson.id)}
                     isFavorite={effectiveFavorites.includes(lesson.id)}
                     isCurrentAudioLesson={audioSummaryLesson?.id === lesson.id}
                     isAudioPlaying={isAudioPlaying && audioSummaryLesson?.id === lesson.id}
@@ -1091,6 +1122,7 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
                           key={lesson.id}
                           lesson={lesson}
                           isActiveSelected={activeSelectedLessonId === lesson.id}
+                          isAdaptiveRecommended={recommendedLessonIdsSet.has(lesson.id)}
                           isFavorite={effectiveFavorites.includes(lesson.id)}
                           isCurrentAudioLesson={audioSummaryLesson?.id === lesson.id}
                           isAudioPlaying={isAudioPlaying && audioSummaryLesson?.id === lesson.id}
@@ -1563,6 +1595,7 @@ export { CollapsibleLevelGroup, type CollapsibleLevelGroupProps } from './LevelG
 interface LessonCardItemProps {
   lesson: SchoolLesson;
   isActiveSelected?: boolean;
+  isAdaptiveRecommended?: boolean;
   isFavorite?: boolean;
   isCurrentAudioLesson?: boolean;
   isAudioPlaying?: boolean;
@@ -1576,6 +1609,7 @@ interface LessonCardItemProps {
 const LessonCardItem: React.FC<LessonCardItemProps> = ({
   lesson,
   isActiveSelected = false,
+  isAdaptiveRecommended = false,
   isFavorite = false,
   isCurrentAudioLesson = false,
   isAudioPlaying = false,
@@ -1625,6 +1659,12 @@ const LessonCardItem: React.FC<LessonCardItemProps> = ({
           </div>
 
           <div className="flex items-center gap-1 shrink-0">
+            {isAdaptiveRecommended && !isActiveSelected && (
+              <span className="text-[9px] font-mono text-emerald-200 bg-emerald-950/60 border border-emerald-400/50 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-0.5">
+                <span className="material-symbols-outlined text-[11px]">auto_awesome</span>
+                <span>Adapté</span>
+              </span>
+            )}
             {isActiveSelected && (
               <span className="text-[10px] font-mono text-[#3c2f00] bg-[#f2ca50] px-2 py-0.5 rounded-full font-extrabold flex items-center gap-0.5 shadow-sm">
                 <span>⭐</span>

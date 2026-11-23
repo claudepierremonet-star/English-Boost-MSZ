@@ -17,7 +17,10 @@ import {
   evaluateAdaptiveLearning,
   SCHOOL_GRADES_META,
   SKILL_META,
-  inferGradeFromCefr
+  inferGradeFromCefr,
+  getCompletedTenMinBlockIds,
+  toggleTenMinBlockCompleted,
+  TEN_MIN_SESSION_UPDATED_EVENT
 } from '../services/adaptiveEngine';
 import {
   getDailyMissionsState,
@@ -105,6 +108,23 @@ export const SmartEcosystemHub: React.FC<SmartEcosystemHubProps> = ({
     () => evaluateAdaptiveLearning({ ...user, schoolGrade: activeGrade, level: currentLevel }, attempts, flashcards, cityProg),
     [user, activeGrade, currentLevel, attempts, flashcards, cityProg]
   );
+
+  const [completedTenMinIds, setCompletedTenMinIds] = useState<string[]>(() =>
+    getCompletedTenMinBlockIds()
+  );
+
+  useEffect(() => {
+    const onTenMinEvt = (e: Event) => {
+      const ce = e as CustomEvent<string[]>;
+      if (Array.isArray(ce.detail)) {
+        setCompletedTenMinIds(ce.detail);
+      } else {
+        setCompletedTenMinIds(getCompletedTenMinBlockIds());
+      }
+    };
+    window.addEventListener(TEN_MIN_SESSION_UPDATED_EVENT, onTenMinEvt);
+    return () => window.removeEventListener(TEN_MIN_SESSION_UPDATED_EVENT, onTenMinEvt);
+  }, []);
 
   const [missionsState, setMissionsState] = useState<DailyMissionsState>(() =>
     getDailyMissionsState(
@@ -273,22 +293,50 @@ export const SmartEcosystemHub: React.FC<SmartEcosystemHubProps> = ({
       <div className="flex flex-col gap-3 pb-4 border-b border-[#232a3a]">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#f2ca50]">
-              CENTRE DE PILOTAGE ADAPTATIF • COLLÈGE & LYCÉE
-            </span>
-            <h2 className="font-serif text-lg sm:text-xl font-bold text-[#dce2f8]">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#f2ca50]">
+                MOTEUR ADAPTATIF GLOBAL • COLLÈGE &amp; LYCÉE
+              </span>
+              <span className="px-2 py-0.5 rounded-full bg-[#0c1322] border border-[#f2ca50]/35 text-[10px] font-mono font-bold text-sky-300">
+                {assessment.multiSignal.compositeCefr} ({assessment.multiSignal.signalsCount} signaux · {assessment.multiSignal.confidenceScore}%)
+              </span>
+              <span
+                className={`px-2 py-0.5 rounded-full border text-[10px] font-mono font-bold ${
+                  assessment.dynamicDirective.mode === 'scaffolded'
+                    ? 'bg-amber-500/15 border-amber-400/50 text-amber-200'
+                    : assessment.dynamicDirective.mode === 'accelerated'
+                    ? 'bg-emerald-500/15 border-emerald-400/50 text-emerald-200'
+                    : 'bg-sky-500/15 border-sky-400/50 text-sky-200'
+                }`}
+              >
+                {assessment.dynamicDirective.badgeLabel}
+              </span>
+            </div>
+            <h2 className="font-serif text-lg sm:text-xl font-bold text-[#dce2f8] mt-0.5">
               Parcours Personnalisé ({assessment.gradeMeta.label} · {currentLevel})
             </h2>
           </div>
 
-          <button
-            type="button"
-            onClick={() => onLaunchModule('tutor')}
-            className="px-3.5 py-2 rounded-xl bg-[#f2ca50] hover:bg-[#ffe088] text-[#3c2f00] font-bold text-xs flex items-center gap-1.5 shadow-md cursor-pointer shrink-0"
-          >
-            <span className="material-symbols-outlined text-base">psychology</span>
-            <span>Parler au Tuteur IA</span>
-          </button>
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('eb_open_placement_modal'))}
+              className="px-3 py-2 rounded-xl bg-[#0c1322] hover:bg-[#191f2f] border border-[#f2ca50]/50 text-[#f2ca50] font-bold text-xs flex items-center gap-1.5 shadow-sm cursor-pointer"
+              title="Configurer classe, âge, objectifs et passer le test diagnostic 6 axes"
+            >
+              <span className="material-symbols-outlined text-base">tune</span>
+              <span>{user.placementTest ? 'Diagnostic & Profil' : 'Test de Niveau (6 axes)'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onLaunchModule('tutor')}
+              className="px-3.5 py-2 rounded-xl bg-[#f2ca50] hover:bg-[#ffe088] text-[#3c2f00] font-bold text-xs flex items-center gap-1.5 shadow-md cursor-pointer shrink-0"
+            >
+              <span className="material-symbols-outlined text-base">psychology</span>
+              <span>Parler au Tuteur IA</span>
+            </button>
+          </div>
         </div>
 
         {/* School Grade Selector Pills (6e -> Terminale) */}
@@ -360,6 +408,180 @@ export const SmartEcosystemHub: React.FC<SmartEcosystemHubProps> = ({
             </div>
             <span className="text-[10px] text-[#99907c] font-mono">Badges acquis</span>
           </div>
+        </div>
+
+        {/* Balanced 4 Major Skills + Personal Telemetry */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-1.5 pt-2">
+          {assessment.majorSkillBalances.map((m) => {
+            const isWeak = assessment.profile.weakestSkills.includes(m.key);
+            return (
+              <div
+                key={m.key}
+                className={`px-2.5 py-1.5 rounded-lg border text-[11px] flex items-center justify-between gap-1 ${
+                  isWeak
+                    ? 'bg-amber-950/35 border-amber-500/45 text-amber-200'
+                    : 'bg-[#0c1322] border-[#232a3a] text-[#d0c5af]'
+                }`}
+                title={`${m.labelFr} : ${m.score}%`}
+              >
+                <span className="flex items-center gap-1 truncate">
+                  <span className="material-symbols-outlined text-xs text-[#f2ca50]">{m.icon}</span>
+                  <span className="truncate">{m.labelFr.replace('Compréhension ', '').replace('Expression ', '')}</span>
+                </span>
+                <span className="font-mono font-bold tabular-nums">{m.score}%</span>
+              </div>
+            );
+          })}
+
+          <div className="px-2.5 py-1.5 rounded-lg bg-[#0c1322] border border-[#232a3a] text-[11px] flex items-center justify-between gap-1 text-[#d0c5af]">
+            <span className="truncate">Vitesse</span>
+            <span className="font-mono font-bold text-sky-300">
+              {assessment.learningSpeed === 'fast'
+                ? 'Rapide'
+                : assessment.learningSpeed === 'methodical'
+                ? 'Posée'
+                : 'Régulière'}
+            </span>
+          </div>
+
+          <div className="px-2.5 py-1.5 rounded-lg bg-[#0c1322] border border-[#232a3a] text-[11px] flex items-center justify-between gap-1 text-[#d0c5af]">
+            <span className="truncate">Erreurs</span>
+            <span className="font-mono font-bold text-rose-300 tabular-nums">{assessment.errorFrequency}%</span>
+          </div>
+
+          <div className="px-2.5 py-1.5 rounded-lg bg-[#0c1322] border border-[#232a3a] text-[11px] flex items-center justify-between gap-1 text-[#d0c5af]">
+            <span className="truncate">Rétention</span>
+            <span className="font-mono font-bold text-emerald-300 tabular-nums">{assessment.vocabularyRetentionRate}%</span>
+          </div>
+
+          <div className="px-2.5 py-1.5 rounded-lg bg-[#0c1322] border border-[#232a3a] text-[11px] flex items-center justify-between gap-1 text-[#d0c5af]">
+            <span className="truncate">Équilibre</span>
+            <span className="font-mono font-bold text-[#f2ca50] tabular-nums">{assessment.skillBalanceScore}%</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 1B. Personalized 10-Minute Session & Dynamic Adaptation Panel */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Session 10 Minutes Quotidienne (4 Compétences Équilibrées) */}
+        <div className="p-4 rounded-xl bg-[#0c1322] border border-[#f2ca50]/30 space-y-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-[#f2ca50] text-lg">timer</span>
+              <h3 className="font-serif font-bold text-sm text-[#dce2f8]">
+                Session Recommandée 10 Min (Équilibre 4 Axes)
+              </h3>
+            </div>
+            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-[#191f2f] text-[#f2ca50] tabular-nums">
+              {assessment.tenMinuteSession.filter((b) => completedTenMinIds.includes(b.id)).length}/4
+            </span>
+          </div>
+
+          <div className="space-y-1.5">
+            {assessment.tenMinuteSession.map((blk) => {
+              const isDone = completedTenMinIds.includes(blk.id);
+              return (
+                <div
+                  key={blk.id}
+                  className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 transition-colors ${
+                    isDone ? 'bg-emerald-950/25 border-emerald-500/40' : 'bg-[#151b2b] border-[#2e3545]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => toggleTenMinBlockCompleted(blk.id)}
+                      className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 cursor-pointer ${
+                        isDone
+                          ? 'bg-emerald-500 border-emerald-400 text-slate-950'
+                          : 'border-[#f2ca50]/55 text-transparent hover:border-[#f2ca50]'
+                      }`}
+                      aria-label={`Valider ${blk.title}`}
+                    >
+                      <span className="material-symbols-outlined text-xs font-bold">check</span>
+                    </button>
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-[#dce2f8] truncate">
+                        {blk.order}. {blk.title}
+                      </div>
+                      <div className="text-[10px] text-[#99907c] truncate">
+                        {blk.minutes} min · {blk.skillLabel} · {blk.difficultyTag}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      toggleTenMinBlockCompleted(blk.id, true);
+                      onLaunchModule(blk.actionTarget);
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-[#232a3a] hover:bg-[#f2ca50] text-[#f2ca50] hover:text-[#3c2f00] font-bold text-[10px] font-mono shrink-0 cursor-pointer transition-colors"
+                  >
+                    Lancer →
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Adaptation Dynamique: Soutien Règle+Exemples OU Défi Excellence */}
+        <div className="p-4 rounded-xl bg-[#0c1322] border border-[#232a3a] flex flex-col justify-between gap-2.5">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-[10px] font-mono font-bold uppercase text-[#f2ca50]">
+                {assessment.dynamicDirective.mode === 'scaffolded'
+                  ? 'Adaptation : Soutien & Règle Expliquée'
+                  : assessment.dynamicDirective.mode === 'accelerated'
+                  ? 'Adaptation : Défi Avancé & Vocabulaire Riche'
+                  : 'Adaptation : Consolidation Guidée'}
+              </span>
+              <span className="text-[10px] font-mono text-[#d4c78f]">
+                Cible : {assessment.dynamicDirective.targetCefrForExercises} · Audio {assessment.dynamicDirective.recommendedAudioRate}x
+              </span>
+            </div>
+
+            <p className="text-xs text-[#d0c5af] leading-relaxed">
+              {assessment.dynamicDirective.summaryFr}
+            </p>
+
+            <div className="p-2.5 rounded-xl bg-[#151b2b] border border-[#2e3545] space-y-1.5">
+              <div className="text-[11px] font-semibold text-[#dce2f8]">
+                {assessment.dynamicDirective.ruleExplanationFr}
+              </div>
+              {assessment.dynamicDirective.examplesEn.slice(0, 2).map((ex, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() =>
+                    speakText(ex, 'en-GB', `hub-dyn-ex-${idx}`, {
+                      rate: assessment.dynamicDirective.recommendedAudioRate
+                    })
+                  }
+                  className="w-full p-1.5 rounded-lg bg-[#0c1322] hover:border-[#f2ca50]/50 border border-[#232a3a] flex items-center justify-between gap-2 text-left text-[11px] italic text-[#ffe088] cursor-pointer"
+                >
+                  <span className="truncate">« {ex} »</span>
+                  <span className="material-symbols-outlined text-sm text-[#f2ca50] shrink-0">volume_up</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {assessment.dynamicDirective.mode === 'accelerated' && (
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {assessment.dynamicDirective.advancedChallengeWords.map((w) => (
+                <button
+                  key={w.term}
+                  type="button"
+                  onClick={() => speakText(w.term, 'en-GB', `hub-stretch-${w.term}`)}
+                  className="px-2 py-1 rounded-lg bg-emerald-950/40 border border-emerald-500/40 text-[10px] text-emerald-200 cursor-pointer"
+                  title={w.frenchDef}
+                >
+                  <strong>{w.term}</strong> · {w.frenchDef}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

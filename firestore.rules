@@ -22,11 +22,19 @@ service cloud.firestore {
       return g in ['6e', '5e', '4e', '3e', '2nde', '1re', 'terminale'];
     }
 
+    function isValidAgeRange(age) {
+      return age in ['11-12', '13-14', '15-16', '17-18+'];
+    }
+
     function isValidUserPayload(data) {
       return data.keys().hasAll(['uid', 'level']) &&
         data.uid == request.auth.uid &&
         isValidCefrLevel(data.level) &&
         (!('schoolGrade' in data) || isValidGrade(data.schoolGrade)) &&
+        (!('ageRange' in data) || isValidAgeRange(data.ageRange)) &&
+        (!('learningObjectives' in data) || (data.learningObjectives is list && data.learningObjectives.size() <= 8)) &&
+        (!('preferredDurationMinutes' in data) || (data.preferredDurationMinutes is number && data.preferredDurationMinutes >= 5 && data.preferredDurationMinutes <= 180)) &&
+        (!('placementTest' in data) || data.placementTest is map) &&
         (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 120)) &&
         (!('favoriteLessonIds' in data) || (data.favoriteLessonIds is list && data.favoriteLessonIds.size() <= 200)) &&
         (!('chartAnnotations' in data) || (data.chartAnnotations is list && data.chartAnnotations.size() <= 60)) &&
@@ -88,6 +96,10 @@ service cloud.firestore {
         (!('uid' in request.resource.data) || request.resource.data.uid == userId) &&
         (!('level' in request.resource.data) || isValidCefrLevel(request.resource.data.level)) &&
         (!('schoolGrade' in request.resource.data) || isValidGrade(request.resource.data.schoolGrade)) &&
+        (!('ageRange' in request.resource.data) || isValidAgeRange(request.resource.data.ageRange)) &&
+        (!('learningObjectives' in request.resource.data) || (request.resource.data.learningObjectives is list && request.resource.data.learningObjectives.size() <= 8)) &&
+        (!('preferredDurationMinutes' in request.resource.data) || (request.resource.data.preferredDurationMinutes is number && request.resource.data.preferredDurationMinutes >= 5 && request.resource.data.preferredDurationMinutes <= 180)) &&
+        (!('placementTest' in request.resource.data) || request.resource.data.placementTest is map) &&
         (!('favoriteLessonIds' in request.resource.data) || (request.resource.data.favoriteLessonIds is list && request.resource.data.favoriteLessonIds.size() <= 200)) &&
         (!('chartAnnotations' in request.resource.data) || (request.resource.data.chartAnnotations is list && request.resource.data.chartAnnotations.size() <= 60)) &&
         (!('tutorSavedNotes' in request.resource.data) || (request.resource.data.tutorSavedNotes is list && request.resource.data.tutorSavedNotes.size() <= 40)) &&
