@@ -4,6 +4,12 @@ import { fileURLToPath } from 'url';
 import express from 'express';
 import type { Request, Response } from 'express';
 import { GoogleGenAI, Type, ThinkingLevel } from '@google/genai';
+import {
+  getRegistrySnapshot,
+  toggleSkillEnabled,
+  selectAndLoadSkillsForTask,
+  getSkillInstructionsDetails
+} from './skills/skillsStore.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1105,6 +1111,92 @@ Return valid JSON strictly matching the schema.`;
     } catch (err) {
       const { status, message } = getHttpStatusFromError(err);
       res.status(status).json({ error: message });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // AI Studio Master & Workspace Skills Registry / Context Endpoints
+  // ---------------------------------------------------------------------------
+  app.get('/api/skills', (_req: Request, res: Response) => {
+    try {
+      const snapshot = getRegistrySnapshot(__dirname);
+      res.json(snapshot);
+    } catch (err) {
+      console.error('Failed to read skills registry:', err instanceof Error ? err.message : err);
+      res.status(500).json({ error: 'Impossible de lire le registre skills/index.json.' });
+    }
+  });
+
+  app.patch('/api/skills/:id', async (req: Request, res: Response) => {
+    const rawId = typeof req.params.id === 'string' ? req.params.id.trim() : '';
+    if (!/^[a-z0-9-]+$/.test(rawId) || rawId.length > 80) {
+      res.status(400).json({ error: 'Identifiant de compétence invalide.' });
+      return;
+    }
+
+    const body = (req.body || {}) as { enabled?: unknown };
+    if (typeof body.enabled !== 'boolean') {
+      res.status(400).json({ error: 'Le champ booléen "enabled" est requis.' });
+      return;
+    }
+
+    try {
+      const updated = await toggleSkillEnabled(__dirname, rawId, body.enabled);
+      res.json(updated);
+    } catch (err) {
+      const statusCode =
+        typeof (err as { statusCode?: unknown })?.statusCode === 'number'
+          ? (err as { statusCode: number }).statusCode
+          : 500;
+      const message =
+        statusCode === 404
+          ? `Compétence introuvable : ${rawId}`
+          : 'Impossible de mettre à jour le statut de la compétence.';
+      res.status(statusCode).json({ error: message });
+    }
+  });
+
+  app.post('/api/skills/select', (req: Request, res: Response) => {
+    const body = (req.body || {}) as { task?: unknown; maxResults?: unknown };
+    const rawTask = typeof body.task === 'string' ? body.task.trim() : '';
+    if (!rawTask || rawTask.length > 2000) {
+      res.status(400).json({
+        error: 'Décrivez la tâche demandée (1 à 2000 caractères).'
+      });
+      return;
+    }
+
+    const maxResults =
+      typeof body.maxResults === 'number' && Number.isFinite(body.maxResults)
+        ? Math.max(1, Math.min(26, Math.round(body.maxResults)))
+        : 8;
+
+    try {
+      const result = selectAndLoadSkillsForTask(__dirname, rawTask, { maxResults });
+      res.json(result);
+    } catch (err) {
+      console.error('Failed to select skills:', err instanceof Error ? err.message : err);
+      res.status(500).json({ error: 'Erreur lors de la sélection des compétences.' });
+    }
+  });
+
+  app.get('/api/skills/:id/instructions', (req: Request, res: Response) => {
+    const rawId = typeof req.params.id === 'string' ? req.params.id.trim() : '';
+    if (!/^[a-z0-9-]+$/.test(rawId) || rawId.length > 80) {
+      res.status(400).json({ error: 'Identifiant de compétence invalide.' });
+      return;
+    }
+
+    try {
+      const details = getSkillInstructionsDetails(__dirname, rawId);
+      if (details.found === false) {
+        res.status(404).json({ error: `Compétence introuvable : ${rawId}` });
+        return;
+      }
+      res.json(details);
+    } catch (err) {
+      console.error('Failed to read skill instructions:', err instanceof Error ? err.message : err);
+      res.status(500).json({ error: 'Erreur lors de la lecture des instructions Skill.' });
     }
   });
 

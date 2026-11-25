@@ -38,6 +38,7 @@ import type { EcosystemLaunchTarget } from './SmartEcosystemHub';
 import { GlassSlidingCapsule } from './GlassSlidingCapsule';
 import { LexicalMasteryD3Chart } from './LexicalMasteryD3Chart';
 import { MotionTooltip } from './MotionTooltip';
+import { SkillsAdminView } from './SkillsAdminView';
 
 interface CustomTooltipProps {
   active?: boolean;
@@ -326,7 +327,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onLaunchEcosystemModule
 }) => {
   const shouldReduceMotion = useReducedMotion();
-  const [dashboardTab, setDashboardTab] = useState<'all' | 'mastery' | 'analytics' | 'curriculum'>('all');
+  const [dashboardTab, setDashboardTab] = useState<'all' | 'mastery' | 'analytics' | 'curriculum' | 'skills'>('all');
   const [showAdjustModal, setShowAdjustModal] = useState<boolean>(false);
   const [selectedTarget, setSelectedTarget] = useState<number>(user.stats.studyMinutesTarget || 30);
   const [chartMetric, setChartMetric] = useState<'xp' | 'score'>('xp');
@@ -686,6 +687,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             label: 'Cursus & Boutique',
             icon: 'auto_stories',
             tooltip: "Folios du cursus, calendrier d'étude, boutique 3D et synchro locale."
+          },
+          {
+            id: 'skills' as const,
+            label: 'Skills IA',
+            icon: 'tune',
+            tooltip: "Registre des Skills (skills/index.json), activation/désactivation et chargement contextuel."
           }
         ].map((tab) => {
           const isActive = dashboardTab === tab.id;
@@ -1837,6 +1844,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </MotionTooltip>
         </div>
       </motion.section>
+      )}
+      {dashboardTab === 'skills' && (
+        <SkillsAdminView />
       )}
         </motion.div>
       </AnimatePresence>
