@@ -32,6 +32,8 @@ import { computeUserBadges } from '../data/badges';
 import { calculateLevel } from '../utils/levelUtils';
 import { speakText } from '../services/speechService';
 import { playVictoryCue } from '../utils/soundEffects';
+import { motion, AnimatePresence } from 'framer-motion';
+import { TelemetryListSkeleton } from './SkeletonLoaders';
 
 export type EcosystemLaunchTarget =
   | 'tutor'
@@ -213,9 +215,9 @@ export const SmartEcosystemHub: React.FC<SmartEcosystemHubProps> = ({
     {
       id: 'adventure_world',
       title: 'English Adventure World',
-      subtitle: `Cité 600 Niveaux • Niv. ${cityProg.unlockedLevel}`,
-      icon: 'map',
-      badge: `${cityProg.totalStars} ★`,
+      subtitle: `7 Îles 3D (${user.englishAdventure?.bossDefeatedIslandIds?.length || 0}/7) • Cité Niv. ${cityProg.unlockedLevel}`,
+      icon: 'public',
+      badge: `${(user.englishAdventure?.totalStars || 0) + cityProg.totalStars} ★`,
       accentClass: 'text-emerald-300 border-emerald-500/35'
     },
     {
@@ -658,39 +660,44 @@ export const SmartEcosystemHub: React.FC<SmartEcosystemHubProps> = ({
             </span>
           </div>
 
-          {isLoadingTelemetry ? (
-            <div className="space-y-2 animate-pulse">
-              <div className="h-14 rounded-xl bg-[#151b2b]" />
-              <div className="h-14 rounded-xl bg-[#151b2b]" />
-              <div className="h-14 rounded-xl bg-[#151b2b]" />
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {assessment.recommendedLessons.slice(0, 3).map((lesson) => (
-                <button
-                  key={lesson.id}
-                  type="button"
-                  onClick={() => onOpenLesson(lesson)}
-                  className="w-full p-2.5 rounded-xl bg-[#151b2b] hover:bg-[#191f2f] border border-[#2e3545] hover:border-[#f2ca50]/50 text-left flex items-center justify-between gap-2 transition-all cursor-pointer group"
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] font-mono font-bold text-[#f2ca50]">
-                        {lesson.class_label} · {lesson.cefr_level}
-                      </span>
-                      <span className="text-[10px] text-[#99907c] truncate">{lesson.theme_label}</span>
+          <AnimatePresence mode="wait">
+            {isLoadingTelemetry ? (
+              <TelemetryListSkeleton key="hub-telemetry-skeleton" count={3} />
+            ) : (
+              <motion.div
+                key="hub-telemetry-ready"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                className="space-y-2"
+              >
+                {assessment.recommendedLessons.slice(0, 3).map((lesson) => (
+                  <button
+                    key={lesson.id}
+                    type="button"
+                    onClick={() => onOpenLesson(lesson)}
+                    className="w-full p-2.5 rounded-xl bg-[#151b2b] hover:bg-[#191f2f] border border-[#2e3545] hover:border-[#f2ca50]/50 text-left flex items-center justify-between gap-2 transition-all cursor-pointer group"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-mono font-bold text-[#f2ca50]">
+                          {lesson.class_label} · {lesson.cefr_level}
+                        </span>
+                        <span className="text-[10px] text-[#99907c] truncate">{lesson.theme_label}</span>
+                      </div>
+                      <div className="text-xs font-semibold text-[#dce2f8] group-hover:text-[#f2ca50] truncate mt-0.5">
+                        {lesson.title}
+                      </div>
                     </div>
-                    <div className="text-xs font-semibold text-[#dce2f8] group-hover:text-[#f2ca50] truncate mt-0.5">
-                      {lesson.title}
-                    </div>
-                  </div>
-                  <span className="material-symbols-outlined text-base text-[#f2ca50] shrink-0">
-                    arrow_forward
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
+                    <span className="material-symbols-outlined text-base text-[#f2ca50] shrink-0">
+                      arrow_forward
+                    </span>
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <div className="text-[11px] text-[#99907c] pt-1 border-t border-[#191f2f]">
             Sélection adaptative parmi les 200 leçons selon votre classe ({assessment.gradeMeta.shortLabel}) et vos résultats récents.

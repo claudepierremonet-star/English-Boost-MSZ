@@ -39,7 +39,100 @@ service cloud.firestore {
         (!('favoriteLessonIds' in data) || (data.favoriteLessonIds is list && data.favoriteLessonIds.size() <= 200)) &&
         (!('chartAnnotations' in data) || (data.chartAnnotations is list && data.chartAnnotations.size() <= 60)) &&
         (!('tutorSavedNotes' in data) || (data.tutorSavedNotes is list && data.tutorSavedNotes.size() <= 40)) &&
-        (!('tutorWeaknesses' in data) || (data.tutorWeaknesses is list && data.tutorWeaknesses.size() <= 30));
+        (!('tutorWeaknesses' in data) || (data.tutorWeaknesses is list && data.tutorWeaknesses.size() <= 30)) &&
+        (!('englishAdventure' in data) || isValidEnglishAdventure(data.englishAdventure));
+    }
+
+    function isValidAdventureXpBoost(boost) {
+      return boost is map &&
+        boost.keys().hasAll(['multiplier', 'sourceChallengeId', 'sourceChallengeTitle', 'skillPairLabelFr', 'cefrLevel', 'activatedAt', 'expiresAt']) &&
+        boost.keys().hasOnly(['multiplier', 'sourceChallengeId', 'sourceChallengeTitle', 'skillPairLabelFr', 'cefrLevel', 'activatedAt', 'expiresAt']) &&
+        boost.multiplier is number && boost.multiplier >= 1.0 && boost.multiplier <= 2.0 &&
+        boost.sourceChallengeId is string && boost.sourceChallengeId.size() >= 1 && boost.sourceChallengeId.size() <= 100 &&
+        boost.sourceChallengeTitle is string && boost.sourceChallengeTitle.size() >= 1 && boost.sourceChallengeTitle.size() <= 140 &&
+        boost.skillPairLabelFr is string && boost.skillPairLabelFr.size() >= 1 && boost.skillPairLabelFr.size() <= 100 &&
+        isValidCefrLevel(boost.cefrLevel) &&
+        boost.activatedAt is string && boost.activatedAt.size() <= 64 &&
+        boost.expiresAt is string && boost.expiresAt.size() <= 64;
+    }
+
+    function isValidEnglishAdventure(adv) {
+      return adv is map &&
+        (!('unlockedIslandIds' in adv) || (adv.unlockedIslandIds is list && adv.unlockedIslandIds.size() <= 7)) &&
+        (!('completedMissionIds' in adv) || (adv.completedMissionIds is list && adv.completedMissionIds.size() <= 64)) &&
+        (!('bossDefeatedIslandIds' in adv) || (adv.bossDefeatedIslandIds is list && adv.bossDefeatedIslandIds.size() <= 7)) &&
+        (!('claimedRewardIds' in adv) || (adv.claimedRewardIds is list && adv.claimedRewardIds.size() <= 180)) &&
+        (!('unlockedTrophyIds' in adv) || (adv.unlockedTrophyIds is list && adv.unlockedTrophyIds.size() <= 30)) &&
+        (!('unlockedAvatarIds' in adv) || (adv.unlockedAvatarIds is list && adv.unlockedAvatarIds.size() <= 20)) &&
+        (!('unlockedThemeIds' in adv) || (adv.unlockedThemeIds is list && adv.unlockedThemeIds.size() <= 12)) &&
+        (!('unlockedCardIds' in adv) || (adv.unlockedCardIds is list && adv.unlockedCardIds.size() <= 30)) &&
+        (!('completedDailyChallengeIds' in adv) || (adv.completedDailyChallengeIds is list && adv.completedDailyChallengeIds.size() <= 60 && (adv.completedDailyChallengeIds.size() == 0 || adv.completedDailyChallengeIds[0] is string))) &&
+        (!('activeXpBoost' in adv) || adv.activeXpBoost == null || isValidAdventureXpBoost(adv.activeXpBoost)) &&
+        (!('equippedAvatarId' in adv) || (adv.equippedAvatarId is string && adv.equippedAvatarId.size() <= 64)) &&
+        (!('updatedAt' in adv) || (adv.updatedAt is string && adv.updatedAt.size() <= 64)) &&
+        (!('consecutiveHighAccuracyCount' in adv) || (adv.consecutiveHighAccuracyCount is number && adv.consecutiveHighAccuracyCount >= 0 && adv.consecutiveHighAccuracyCount <= 500)) &&
+        (!('totalStars' in adv) || (adv.totalStars is number && adv.totalStars >= 0 && adv.totalStars <= 150)) &&
+        (!('adventureXpEarned' in adv) || (adv.adventureXpEarned is number && adv.adventureXpEarned >= 0 && adv.adventureXpEarned <= 50000)) &&
+        (!('adventureCoinsEarned' in adv) || (adv.adventureCoinsEarned is number && adv.adventureCoinsEarned >= 0 && adv.adventureCoinsEarned <= 10000));
+    }
+
+    function isValidXpUpdate(oldData, newData) {
+      return !('stats' in newData) || (
+        newData.stats is map &&
+        (!('totalXp' in newData.stats) || (
+          newData.stats.totalXp is number &&
+          newData.stats.totalXp >= 0 &&
+          newData.stats.totalXp <= 2000000 &&
+          (
+            !('stats' in oldData) ||
+            !(oldData.stats is map) ||
+            !('totalXp' in oldData.stats) ||
+            !(oldData.stats.totalXp is number) ||
+            (newData.stats.totalXp - oldData.stats.totalXp) <= 5000
+          )
+        )) &&
+        (!('weeklyXp' in newData.stats) || (newData.stats.weeklyXp is number && newData.stats.weeklyXp >= 0 && newData.stats.weeklyXp <= 500000))
+      );
+    }
+
+    function isValidAdventureDelta(oldData, newData) {
+      return !('englishAdventure' in newData) || (
+        isValidEnglishAdventure(newData.englishAdventure) &&
+        (
+          !('englishAdventure' in oldData) || !(oldData.englishAdventure is map)
+            ? (
+                (!('adventureXpEarned' in newData.englishAdventure) || newData.englishAdventure.adventureXpEarned <= 1500) &&
+                (!('adventureCoinsEarned' in newData.englishAdventure) || newData.englishAdventure.adventureCoinsEarned <= 100) &&
+                (!('totalStars' in newData.englishAdventure) || newData.englishAdventure.totalStars <= 15)
+              )
+            : (
+                (
+                  !('adventureXpEarned' in oldData.englishAdventure) ||
+                  !('adventureXpEarned' in newData.englishAdventure) ||
+                  (
+                    newData.englishAdventure.adventureXpEarned >= oldData.englishAdventure.adventureXpEarned &&
+                    (newData.englishAdventure.adventureXpEarned - oldData.englishAdventure.adventureXpEarned) <= 1500
+                  )
+                ) &&
+                (
+                  !('adventureCoinsEarned' in oldData.englishAdventure) ||
+                  !('adventureCoinsEarned' in newData.englishAdventure) ||
+                  (
+                    newData.englishAdventure.adventureCoinsEarned >= oldData.englishAdventure.adventureCoinsEarned &&
+                    (newData.englishAdventure.adventureCoinsEarned - oldData.englishAdventure.adventureCoinsEarned) <= 100
+                  )
+                ) &&
+                (
+                  !('totalStars' in oldData.englishAdventure) ||
+                  !('totalStars' in newData.englishAdventure) ||
+                  (
+                    newData.englishAdventure.totalStars >= oldData.englishAdventure.totalStars &&
+                    (newData.englishAdventure.totalStars - oldData.englishAdventure.totalStars) <= 15
+                  )
+                )
+              )
+        )
+      );
     }
 
     function isValidAttemptPayload(data) {
@@ -51,7 +144,7 @@ service cloud.firestore {
         (!('moduleType' in data) || data.moduleType in [
           'dictation', 'flashcard', 'quiz', 'speaking', 'daily_challenge',
           'grammar', 'reading', 'writing', 'escape_room', 'listening_cinema',
-          'grammar_battle', 'tutor', 'dialogue', 'city_map', 'arcade'
+          'grammar_battle', 'tutor', 'dialogue', 'city_map', 'arcade', 'adventure'
         ]);
     }
 
@@ -75,6 +168,17 @@ service cloud.firestore {
         data.completedAt is string && data.completedAt.size() <= 64 &&
         (!('strengths' in data) || (data.strengths is list && data.strengths.size() <= 10)) &&
         (!('weaknessesIdentified' in data) || (data.weaknessesIdentified is list && data.weaknessesIdentified.size() <= 15));
+    }
+
+    function isValidAdventureClaimPayload(data, claimId) {
+      return data.keys().hasAll(['claimId', 'xpAwarded', 'coinsAwarded', 'accuracy', 'claimedAt']) &&
+        data.claimId is string && data.claimId == claimId && data.claimId.size() >= 1 && data.claimId.size() <= 128 &&
+        data.xpAwarded is number && data.xpAwarded >= 0 && data.xpAwarded <= 350 &&
+        data.coinsAwarded is number && data.coinsAwarded >= 0 && data.coinsAwarded <= 100 &&
+        data.accuracy is number && data.accuracy >= 0 && data.accuracy <= 100 &&
+        data.claimedAt is string && data.claimedAt.size() <= 64 &&
+        (!('missionId' in data) || (data.missionId is string && data.missionId.size() <= 80)) &&
+        (!('islandId' in data) || (data.islandId is string && data.islandId.size() <= 80));
     }
 
     // Default deny catch-all
@@ -103,7 +207,9 @@ service cloud.firestore {
         (!('favoriteLessonIds' in request.resource.data) || (request.resource.data.favoriteLessonIds is list && request.resource.data.favoriteLessonIds.size() <= 200)) &&
         (!('chartAnnotations' in request.resource.data) || (request.resource.data.chartAnnotations is list && request.resource.data.chartAnnotations.size() <= 60)) &&
         (!('tutorSavedNotes' in request.resource.data) || (request.resource.data.tutorSavedNotes is list && request.resource.data.tutorSavedNotes.size() <= 40)) &&
-        (!('tutorWeaknesses' in request.resource.data) || (request.resource.data.tutorWeaknesses is list && request.resource.data.tutorWeaknesses.size() <= 30));
+        (!('tutorWeaknesses' in request.resource.data) || (request.resource.data.tutorWeaknesses is list && request.resource.data.tutorWeaknesses.size() <= 30)) &&
+        isValidXpUpdate(resource.data, request.resource.data) &&
+        isValidAdventureDelta(resource.data, request.resource.data);
       allow delete: if isOwner(userId);
 
       // Private learning attempts subcollection
@@ -125,6 +231,13 @@ service cloud.firestore {
         allow read: if isOwner(userId);
         allow create, update: if isOwner(userId) && isValidId(sessionId) && isValidTutorSessionPayload(request.resource.data);
         allow delete: if isOwner(userId);
+      }
+
+      // Write-once immutable English Adventure reward claims ledger (prevents duplicate claims)
+      match /adventureClaims/{claimId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(claimId) && isValidAdventureClaimPayload(request.resource.data, claimId);
+        allow update, delete: if false;
       }
     }
   }

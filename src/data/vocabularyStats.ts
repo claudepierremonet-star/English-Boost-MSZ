@@ -30,6 +30,7 @@ export interface CEFRLevelDistribution {
 export interface VocabularyMasterySummary {
   sevenDays: VocabularyDataPoint[];
   thirtyDays: VocabularyDataPoint[];
+  thirtyDaysDaily: VocabularyDataPoint[];
   twelveWeeks: VocabularyDataPoint[];
   stats: {
     totalMastered: number;
@@ -118,7 +119,7 @@ export async function getVocabularyMasterySummary(
     });
   }
 
-  // 3. Generate 30-Day Curve (6 milestone points)
+  // 3. Generate 30-Day Curve (6 milestone points for compact chart + full 30 daily points for D3)
   const thirtyDays: VocabularyDataPoint[] = [];
   const intervals = [30, 24, 18, 12, 6, 0];
   intervals.forEach((daysAgo, idx) => {
@@ -141,6 +142,74 @@ export async function getVocabularyMasterySummary(
       newWordsAcquired: newW
     });
   });
+
+  // Full 30 consecutive days for D3 interactive curve visualization
+  const monthShorts = ['jan', 'fév', 'mar', 'avr', 'mai', 'jun', 'jul', 'aoû', 'sep', 'oct', 'nov', 'déc'];
+  const fullDayNames = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+  const thirtyDaysDaily: VocabularyDataPoint[] = [];
+  const startMastered30 = Math.max(40, Math.round(baseMastered * 0.64));
+  const startLearning30 = Math.max(18, Math.round(baseInReview * 0.72));
+
+  // Bucket real saved flashcard review dates across the last 30 days if available
+  const cardActivityByDate = new Map<string, number>();
+  savedCards.forEach((card) => {
+    if (card.nextReviewDate) {
+      const reviewDate = new Date(card.nextReviewDate);
+      if (!Number.isNaN(reviewDate.getTime())) {
+        const estReviewed = new Date(reviewDate);
+        estReviewed.setDate(estReviewed.getDate() - Math.max(1, card.intervalDays || 1));
+        const key = estReviewed.toISOString().split('T')[0];
+        cardActivityByDate.set(key, (cardActivityByDate.get(key) || 0) + 1);
+      }
+    }
+  });
+
+  for (let daysAgo = 29; daysAgo >= 0; daysAgo--) {
+    const d = new Date();
+    d.setDate(d.getDate() - daysAgo);
+    const dateKey = d.toISOString().split('T')[0];
+    const progressRatio = (29 - daysAgo) / 29; // 0 to 1
+    // Smooth S-curve progression with subtle realistic study cadence modulation
+    const smoothCurve = 0.5 - 0.5 * Math.cos(Math.PI * progressRatio);
+    const waveMod = Math.sin((29 - daysAgo) * 0.65) * 2.5;
+    const realBoost = cardActivityByDate.get(dateKey) || 0;
+
+    const mWords =
+      daysAgo === 0
+        ? baseMastered
+        : Math.max(
+            startMastered30,
+            Math.round(startMastered30 + (baseMastered - startMastered30) * (0.28 * progressRatio + 0.72 * smoothCurve) + waveMod + realBoost)
+          );
+    const lWords =
+      daysAgo === 0
+        ? baseInReview
+        : Math.max(
+            12,
+            Math.round(startLearning30 + (baseInReview - startLearning30) * progressRatio + Math.cos((29 - daysAgo) * 0.85) * 4 + realBoost * 0.5)
+          );
+    const retRate = parseFloat(
+      Math.min(
+        99,
+        Math.max(74, 81.5 + (currentRetention - 81.5) * smoothCurve + Math.sin((29 - daysAgo) * 0.9) * 1.1)
+      ).toFixed(1)
+    );
+    const newW = Math.max(2, Math.round(3 + (daysAgo % 5 === 0 ? 5 : (daysAgo * 3) % 4) + realBoost));
+
+    thirtyDaysDaily.push({
+      period: daysAgo === 0 ? 'Auj.' : `${d.getDate()} ${monthShorts[d.getMonth()]}`,
+      fullLabel:
+        daysAgo === 0
+          ? "Aujourd'hui"
+          : `${fullDayNames[d.getDay()]} ${d.getDate()} ${monthShorts[d.getMonth()]}`,
+      dateKey,
+      masteredWords: mWords,
+      learningWords: lWords,
+      totalActiveWords: mWords + lWords,
+      retentionRate: retRate,
+      newWordsAcquired: newW
+    });
+  }
 
   // 4. Generate 12-Week Long-Term Trajectory
   const twelveWeeks: VocabularyDataPoint[] = [];
@@ -204,6 +273,7 @@ export async function getVocabularyMasterySummary(
   return {
     sevenDays,
     thirtyDays,
+    thirtyDaysDaily,
     twelveWeeks,
     stats: {
       totalMastered: baseMastered,

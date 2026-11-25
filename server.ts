@@ -72,9 +72,34 @@ function getHttpStatusFromError(err: unknown): { status: number; message: string
       message: 'Quota API Google Gemini temporairement atteint. Réessayez dans quelques instants.'
     };
   }
+  if (
+    lower.includes('unavailable') ||
+    lower.includes('high demand') ||
+    lower.includes('"code":503') ||
+    lower.includes('503')
+  ) {
+    return {
+      status: 503,
+      message:
+        'Le service Google Gemini connaît actuellement une forte affluence. Réessayez dans quelques instants.'
+    };
+  }
+
+  let cleanMessage = rawMessage;
+  if (rawMessage.trim().startsWith('{')) {
+    try {
+      const parsedErr = JSON.parse(rawMessage);
+      if (typeof parsedErr?.error?.message === 'string') {
+        cleanMessage = parsedErr.error.message;
+      }
+    } catch {
+      // Keep rawMessage
+    }
+  }
+
   return {
     status: 502,
-    message: rawMessage || 'Erreur de communication avec l’API Google Gemini.'
+    message: cleanMessage || 'Erreur de communication avec l’API Google Gemini.'
   };
 }
 
@@ -776,6 +801,306 @@ Return valid JSON strictly matching the schema.`;
         targetedWeaknessesCount: recurringWeaknesses.length + vocabWeaknesses.length,
         explanationFr: typeof parsed.explanationFr === 'string' ? parsed.explanationFr.trim() : '',
         questions: validQuestions
+      });
+    } catch (err) {
+      const { status, message } = getHttpStatusFromError(err);
+      res.status(status).json({ error: message });
+    }
+  });
+
+  app.post('/api/gemini/chesterfield-quote', async (req: Request, res: Response) => {
+    const body = (req.body || {}) as { excludeQuotes?: unknown };
+    const excludeQuotes = Array.isArray(body.excludeQuotes)
+      ? body.excludeQuotes
+          .filter((q): q is string => typeof q === 'string' && q.trim().length > 0)
+          .map((q) => q.trim().slice(0, 280))
+          .slice(-12)
+      : [];
+
+    const ai = createGeminiClient();
+    if (!ai) {
+      res.status(503).json({
+        error: 'Clé API Google Gemini non configurée côté serveur. Ajoutez GEMINI_API_KEY dans Settings > Secrets.'
+      });
+      return;
+    }
+
+    const topics = [
+      'eloquence and clarity of speech',
+      'discipline, focus, and daily habits',
+      'courtesy, tact, and listening to others',
+      'intellectual curiosity and reading widely',
+      'composure under pressure and self-mastery',
+      'style, grace, and precision of thought',
+      'diplomacy and observation of human character'
+    ];
+    const pickedTopic = topics[Math.floor(Math.random() * topics.length)];
+    const exclusionText =
+      excludeQuotes.length > 0
+        ? `\n\nDo NOT repeat or closely paraphrase any of these quotes already shown:\n${excludeQuotes.map((q) => `- "${q}"`).join('\n')}`
+        : '';
+
+    try {
+      let response: Awaited<ReturnType<typeof ai.models.generateContent>> | null = null;
+      let lastGenErr: unknown;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          response = await ai.models.generateContent({
+            model: MODEL_NAME,
+            contents: `Generate a refined Lord Chesterfield epistolary quote in 18th-century English prose on the theme of "${pickedTopic}", along with a literary French translation and brief UK/US phonetic tips referencing actual words in your generated English quote.${exclusionText}`,
+            config: {
+              systemInstruction:
+                "You are a bilingual Oxford philologist and specialist in 18th-century English epistolary literature (Philip Stanhope, 4th Earl of Chesterfield). Produce an authentic or faithfully styled Lord Chesterfield maxim in eloquent English (10-26 words, no outer quotes), its polished literary French translation (no outer quotes), attribution metadata, and two concise French phonetic observations (one for British RP and one for General American) referencing exact words present in the generated English quote.",
+              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  quoteEn: {
+                    type: Type.STRING,
+                    description: 'Eloquent English sentence by Lord Chesterfield (10 to 26 words, without outer quotation marks).'
+                  },
+                  quoteFr: {
+                    type: Type.STRING,
+                    description: 'Polished literary French translation (without outer guillemets or quotation marks).'
+                  },
+                  sourceWork: {
+                    type: Type.STRING,
+                    description: 'Short historical source title, e.g. Letters to his Son or Maxims on Manners & Rhetoric.'
+                  },
+                  year: {
+                    type: Type.STRING,
+                    description: 'Four-digit historical year between 1746 and 1777, e.g. 1751 or 1774.'
+                  },
+                  cefrFocus: {
+                    type: Type.STRING,
+                    description: 'Short CEFR badge in French, e.g. CEFR C1/C2 Rhétorique or CEFR C2 Éloquence.'
+                  },
+                  phoneticNoteUk: {
+                    type: Type.STRING,
+                    description: 'Concise French observation on British RP pronunciation of a specific word in quoteEn.'
+                  },
+                  phoneticNoteUs: {
+                    type: Type.STRING,
+                    description: 'Concise French observation on General American pronunciation of a specific word in quoteEn.'
+                  }
+                },
+                required: ['quoteEn', 'quoteFr', 'sourceWork', 'year', 'cefrFocus', 'phoneticNoteUk', 'phoneticNoteUs']
+              }
+            }
+          });
+          break;
+        } catch (err) {
+          lastGenErr = err;
+          const msg = err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase();
+          if (attempt === 0 && (msg.includes('503') || msg.includes('unavailable'))) {
+            await new Promise((resolve) => setTimeout(resolve, 650));
+            continue;
+          }
+          throw err;
+        }
+      }
+      if (!response) {
+        throw lastGenErr ?? new Error('Réponse Gemini vide.');
+      }
+
+      const parsed = JSON.parse((response.text ?? '').trim());
+      const stripOuterQuotes = (value: unknown) =>
+        typeof value === 'string'
+          ? value
+              .trim()
+              .replace(/^[«“"'`]+|[»”"'`]+$/g, '')
+              .trim()
+          : '';
+
+      const quoteEn = stripOuterQuotes(parsed?.quoteEn);
+      const quoteFr = stripOuterQuotes(parsed?.quoteFr);
+
+      if (quoteEn.length < 12 || quoteFr.length < 12) {
+        throw new Error('Citation générée incomplète ou invalide.');
+      }
+
+      res.json({
+        source: 'google_gemini',
+        quoteEn,
+        quoteFr,
+        sourceWork:
+          typeof parsed?.sourceWork === 'string' && parsed.sourceWork.trim()
+            ? parsed.sourceWork.trim().slice(0, 80)
+            : 'Letters to his Son',
+        year:
+          typeof parsed?.year === 'string' && /^\d{4}$/.test(parsed.year.trim())
+            ? parsed.year.trim()
+            : '1774',
+        cefrFocus:
+          typeof parsed?.cefrFocus === 'string' && parsed.cefrFocus.trim()
+            ? parsed.cefrFocus.trim().slice(0, 48)
+            : 'CEFR C2 Rhétorique',
+        phoneticNoteUk:
+          typeof parsed?.phoneticNoteUk === 'string' && parsed.phoneticNoteUk.trim()
+            ? parsed.phoneticNoteUk.trim().slice(0, 140)
+            : 'Articulation britannique nette et voyelles longues non-rhôtiques.',
+        phoneticNoteUs:
+          typeof parsed?.phoneticNoteUs === 'string' && parsed.phoneticNoteUs.trim()
+            ? parsed.phoneticNoteUs.trim().slice(0, 140)
+            : 'Rhotisme rétroflexe marqué sur les /r/ et cadence fluide américaine.'
+      });
+    } catch (err) {
+      const { status, message } = getHttpStatusFromError(err);
+      res.status(status).json({ error: message });
+    }
+  });
+
+  app.post('/api/gemini/chesterfield-rhetoric', async (req: Request, res: Response) => {
+    const body = (req.body || {}) as {
+      quoteEn?: unknown;
+      quoteFr?: unknown;
+      sourceWork?: unknown;
+      year?: unknown;
+    };
+
+    const quoteEn = typeof body.quoteEn === 'string' ? body.quoteEn.trim().slice(0, 500) : '';
+    const quoteFr = typeof body.quoteFr === 'string' ? body.quoteFr.trim().slice(0, 500) : '';
+    const sourceWork =
+      typeof body.sourceWork === 'string' && body.sourceWork.trim()
+        ? body.sourceWork.trim().slice(0, 100)
+        : 'Letters to his Son';
+    const year = typeof body.year === 'string' && body.year.trim() ? body.year.trim().slice(0, 16) : '1774';
+
+    if (quoteEn.length < 8) {
+      res.status(400).json({ error: 'Citation anglaise trop courte ou manquante pour l’analyse rhétorique.' });
+      return;
+    }
+
+    const ai = createGeminiClient();
+    if (!ai) {
+      res.status(503).json({
+        error: 'Clé API Google Gemini non configurée côté serveur. Ajoutez GEMINI_API_KEY dans Settings > Secrets.'
+      });
+      return;
+    }
+
+    try {
+      let response: Awaited<ReturnType<typeof ai.models.generateContent>> | null = null;
+      let lastErr: unknown;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          response = await ai.models.generateContent({
+            model: MODEL_NAME,
+            contents: `Analyse la rhétorique de cette citation de Lord Chesterfield (${sourceWork}, ${year}) :\nAnglais : "${quoteEn}"${quoteFr ? `\nTraduction française : "${quoteFr}"` : ''}`,
+            config: {
+              systemInstruction:
+                "Tu es professeur agrégé de stylistique anglaise et rhétorique du XVIIIe siècle (Lord Chesterfield). Fournis en français une analyse concise, rigoureuse et accessible pour des lycéens et étudiants : identifie le style général, les figures de style précises présentes dans la phrase anglaise (ex : antithèse, parallélisme, métaphore, litote, chiasme, cadence binaire) en citant les extraits anglais exacts, précise le registre de langue et donne un conseil pratique pour réutiliser ce procédé à l'écrit ou à l'oral.",
+              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  registerLabel: {
+                    type: Type.STRING,
+                    description: 'Étiquette courte du registre de langue en français, ex: Soutenu • Prose épistolaire classique.'
+                  },
+                  styleOverviewFr: {
+                    type: Type.STRING,
+                    description: 'Explication concise en français (2 phrases max) du style et du ton employés.'
+                  },
+                  figuresOfSpeech: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        name: {
+                          type: Type.STRING,
+                          description: 'Nom de la figure de style en français (ex: Antithèse, Parallélisme).'
+                        },
+                        excerpt: {
+                          type: Type.STRING,
+                          description: 'Court extrait anglais tiré de la citation illustrant cette figure.'
+                        },
+                        explanationFr: {
+                          type: Type.STRING,
+                          description: 'Courte explication pédagogique en français (1 à 2 phrases).'
+                        }
+                      },
+                      required: ['name', 'excerpt', 'explanationFr']
+                    }
+                  },
+                  registerAnalysisFr: {
+                    type: Type.STRING,
+                    description: 'Analyse brève en français du registre de langue, du choix lexical et de son effet.'
+                  },
+                  keyTakeawayFr: {
+                    type: Type.STRING,
+                    description: 'Une astuce concrète en français pour réinvestir ce style en anglais.'
+                  }
+                },
+                required: [
+                  'registerLabel',
+                  'styleOverviewFr',
+                  'figuresOfSpeech',
+                  'registerAnalysisFr',
+                  'keyTakeawayFr'
+                ]
+              }
+            }
+          });
+          break;
+        } catch (err) {
+          lastErr = err;
+          const msg = err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase();
+          if (attempt === 0 && (msg.includes('503') || msg.includes('unavailable'))) {
+            await new Promise((resolve) => setTimeout(resolve, 650));
+            continue;
+          }
+          throw err;
+        }
+      }
+
+      if (!response) {
+        throw lastErr ?? new Error('Réponse Gemini vide.');
+      }
+
+      const parsed = JSON.parse((response.text ?? '').trim());
+      if (
+        !parsed ||
+        typeof parsed.styleOverviewFr !== 'string' ||
+        !parsed.styleOverviewFr.trim() ||
+        typeof parsed.registerAnalysisFr !== 'string'
+      ) {
+        throw new Error('Analyse rhétorique IA incomplète.');
+      }
+
+      const figures = Array.isArray(parsed.figuresOfSpeech)
+        ? parsed.figuresOfSpeech
+            .filter(
+              (f: any) =>
+                f &&
+                typeof f.name === 'string' &&
+                f.name.trim() &&
+                typeof f.explanationFr === 'string' &&
+                f.explanationFr.trim()
+            )
+            .slice(0, 4)
+            .map((f: any) => ({
+              name: f.name.trim().slice(0, 60),
+              excerpt: typeof f.excerpt === 'string' ? f.excerpt.trim().slice(0, 140) : '',
+              explanationFr: f.explanationFr.trim().slice(0, 280)
+            }))
+        : [];
+
+      res.json({
+        source: 'google_gemini',
+        registerLabel:
+          typeof parsed.registerLabel === 'string' && parsed.registerLabel.trim()
+            ? parsed.registerLabel.trim().slice(0, 90)
+            : 'Soutenu • Prose épistolaire classique',
+        styleOverviewFr: parsed.styleOverviewFr.trim().slice(0, 450),
+        figuresOfSpeech: figures,
+        registerAnalysisFr: parsed.registerAnalysisFr.trim().slice(0, 400),
+        keyTakeawayFr:
+          typeof parsed.keyTakeawayFr === 'string' && parsed.keyTakeawayFr.trim()
+            ? parsed.keyTakeawayFr.trim().slice(0, 260)
+            : ''
       });
     } catch (err) {
       const { status, message } = getHttpStatusFromError(err);

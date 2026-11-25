@@ -17,6 +17,7 @@ import {
   type VocabularyMasterySummary as VocabSummaryType,
   type VocabularyDataPoint
 } from '../data/vocabularyStats';
+import { ChartSectionSkeleton, MotionShimmerBlock } from './SkeletonLoaders';
 
 interface VocabularyMasterySummaryProps {
   user: UserProfile;
@@ -201,65 +202,80 @@ export const VocabularyMasterySummary: React.FC<VocabularyMasterySummaryProps> =
 
       {/* KPI Stats Ribbon */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1 relative z-10">
-        {/* KPI 1: Total Lexèmes Mobilisables */}
-        <div className="p-3 rounded-xl bg-[#151b2b] border border-[#232a3a] flex flex-col gap-0.5">
-          <span className="text-[10px] uppercase font-mono text-[#d0c5af] tracking-wider">
-            Lexique Actif Total
-          </span>
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-lg font-bold text-white font-mono">
-              {summaryData ? (summaryData.stats.totalActiveLexicon ?? 0) : (isLoading ? '—' : 0)}
-            </span>
-            <span className="text-[11px] text-emerald-400 font-mono font-semibold">
-              {summaryData ? `${wordsGrowth >= 0 ? '+' : ''}${wordsGrowth}` : ''}
-            </span>
-          </div>
-          <span className="text-[10px] text-[#99907c]">mots assimilés</span>
-        </div>
+        {isLoading && !summaryData ? (
+          Array.from({ length: 4 }).map((_, idx) => (
+            <div
+              key={idx}
+              className="p-3 rounded-xl bg-[#151b2b] border border-[#232a3a] flex flex-col gap-1.5"
+            >
+              <MotionShimmerBlock className="h-2.5 w-24" surface="base" delay={idx * 0.05} />
+              <MotionShimmerBlock className="h-5 w-16" surface={idx === 1 ? 'gold' : 'elevated'} delay={idx * 0.07} />
+              <MotionShimmerBlock className="h-2.5 w-28" surface="base" delay={idx * 0.09} />
+            </div>
+          ))
+        ) : (
+          <>
+            {/* KPI 1: Total Lexèmes Mobilisables */}
+            <div className="p-3 rounded-xl bg-[#151b2b] border border-[#232a3a] flex flex-col gap-0.5">
+              <span className="text-[10px] uppercase font-mono text-[#d0c5af] tracking-wider">
+                Lexique Actif Total
+              </span>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-lg font-bold text-white font-mono">
+                  {summaryData ? (summaryData.stats.totalActiveLexicon ?? 0) : 0}
+                </span>
+                <span className="text-[11px] text-emerald-400 font-mono font-semibold">
+                  {summaryData ? `${wordsGrowth >= 0 ? '+' : ''}${wordsGrowth}` : ''}
+                </span>
+              </div>
+              <span className="text-[10px] text-[#99907c]">mots assimilés</span>
+            </div>
 
-        {/* KPI 2: Lexèmes Consolidés (Mastered) */}
-        <div className="p-3 rounded-xl bg-[#151b2b] border border-[#232a3a] flex flex-col gap-0.5">
-          <span className="text-[10px] uppercase font-mono text-[#d0c5af] tracking-wider">
-            Consolidés (Long Terme)
-          </span>
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-lg font-bold text-[#f2ca50] font-mono">
-              {summaryData ? (summaryData.stats.totalMastered ?? 0) : (isLoading ? '—' : 0)}
-            </span>
-            <span className="text-[10px] text-[#99907c]">lexèmes</span>
-          </div>
-          <span className="text-[10px] text-[#d4c78f]">Rétention &gt; 30 jours</span>
-        </div>
+            {/* KPI 2: Lexèmes Consolidés (Mastered) */}
+            <div className="p-3 rounded-xl bg-[#151b2b] border border-[#232a3a] flex flex-col gap-0.5">
+              <span className="text-[10px] uppercase font-mono text-[#d0c5af] tracking-wider">
+                Consolidés (Long Terme)
+              </span>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-lg font-bold text-[#f2ca50] font-mono">
+                  {summaryData ? (summaryData.stats.totalMastered ?? 0) : 0}
+                </span>
+                <span className="text-[10px] text-[#99907c]">lexèmes</span>
+              </div>
+              <span className="text-[10px] text-[#d4c78f]">Rétention &gt; 30 jours</span>
+            </div>
 
-        {/* KPI 3: Taux de Rétention SM-2 */}
-        <div className="p-3 rounded-xl bg-[#151b2b] border border-[#232a3a] flex flex-col gap-0.5">
-          <span className="text-[10px] uppercase font-mono text-[#d0c5af] tracking-wider">
-            Rétention SM-2
-          </span>
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-lg font-bold text-emerald-400 font-mono">
-              {summaryData ? `${(summaryData.stats.overallRetentionRate ?? 0).toFixed(1)}%` : (isLoading ? '—' : '0.0%')}
-            </span>
-            <span className="text-[10px] text-emerald-300 font-mono">
-              {summaryData && summaryData.stats.overallRetentionRate >= 85 ? 'Élite' : ''}
-            </span>
-          </div>
-          <span className="text-[10px] text-[#99907c]">Intervalle moyen validé</span>
-        </div>
+            {/* KPI 3: Taux de Rétention SM-2 */}
+            <div className="p-3 rounded-xl bg-[#151b2b] border border-[#232a3a] flex flex-col gap-0.5">
+              <span className="text-[10px] uppercase font-mono text-[#d0c5af] tracking-wider">
+                Rétention SM-2
+              </span>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-lg font-bold text-emerald-400 font-mono">
+                  {summaryData ? `${(summaryData.stats.overallRetentionRate ?? 0).toFixed(1)}%` : '0.0%'}
+                </span>
+                <span className="text-[10px] text-emerald-300 font-mono">
+                  {summaryData && summaryData.stats.overallRetentionRate >= 85 ? 'Élite' : ''}
+                </span>
+              </div>
+              <span className="text-[10px] text-[#99907c]">Intervalle moyen validé</span>
+            </div>
 
-        {/* KPI 4: Stabilité Mnésique */}
-        <div className="p-3 rounded-xl bg-[#151b2b] border border-[#232a3a] flex flex-col gap-0.5">
-          <span className="text-[10px] uppercase font-mono text-[#d0c5af] tracking-wider">
-            Stabilité Mémoire
-          </span>
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-lg font-bold text-[#38bdf8] font-mono">
-              {summaryData ? (summaryData.stats.memoryStabilityIndex ?? 0) : (isLoading ? '—' : 0)}
-            </span>
-            <span className="text-[11px] text-[#99907c]">/ 10</span>
-          </div>
-          <span className="text-[10px] text-[#99907c]">Courbe d'oubli amortie</span>
-        </div>
+            {/* KPI 4: Stabilité Mnésique */}
+            <div className="p-3 rounded-xl bg-[#151b2b] border border-[#232a3a] flex flex-col gap-0.5">
+              <span className="text-[10px] uppercase font-mono text-[#d0c5af] tracking-wider">
+                Stabilité Mémoire
+              </span>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-lg font-bold text-[#38bdf8] font-mono">
+                  {summaryData ? (summaryData.stats.memoryStabilityIndex ?? 0) : 0}
+                </span>
+                <span className="text-[11px] text-[#99907c]">/ 10</span>
+              </div>
+              <span className="text-[10px] text-[#99907c]">Courbe d'oubli amortie</span>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Visual Metric Switcher & Chart Header */}
@@ -314,7 +330,14 @@ export const VocabularyMasterySummary: React.FC<VocabularyMasterySummaryProps> =
       {/* Recharts Chart Stage with Framer Motion Entrance */}
       <div className="w-full h-52 sm:h-56 relative z-10">
         <AnimatePresence mode="wait">
-          {metricView === 'volume' ? (
+          {isLoading && !summaryData ? (
+            <ChartSectionSkeleton
+              key="vocab-chart-skeleton"
+              heightClass="h-52 sm:h-56"
+              variant="curve"
+              label="Chargement de la maîtrise lexicale"
+            />
+          ) : metricView === 'volume' ? (
             <motion.div
               key={`volume-${timeframe}`}
               initial={{ opacity: 0, y: 12 }}

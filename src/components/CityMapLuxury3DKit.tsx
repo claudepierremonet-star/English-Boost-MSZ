@@ -30,63 +30,75 @@ export const LuxuryCornerBrackets: React.FC<{ accentHex?: string }> = ({
 /**
  * Panorama architectural 3D isométrique pour la bannière maîtresse de la Cité
  */
-export const LuxurySkyline3DSvg: React.FC<{ accentHex?: string }> = ({
-  accentHex = '#f2ca50'
-}) => (
-  <svg
-    viewBox="0 0 1200 160"
-    className="w-full h-24 sm:h-32 opacity-45 pointer-events-none select-none"
-    preserveAspectRatio="none"
-    aria-hidden="true"
-  >
-    <defs>
-      <linearGradient id="lux-sky-glow" x1="0" y1="0" x2="1" y2="0">
-        <stop offset="0%" stopColor={accentHex} stopOpacity="0.06" />
-        <stop offset="50%" stopColor={accentHex} stopOpacity="0.38" />
-        <stop offset="100%" stopColor={accentHex} stopOpacity="0.06" />
-      </linearGradient>
-      <linearGradient id="lux-face-left" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stopColor="#26314c" stopOpacity="0.7" />
-        <stop offset="100%" stopColor="#0d1424" stopOpacity="0.85" />
-      </linearGradient>
-      <linearGradient id="lux-face-right" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stopColor="#141b2e" stopOpacity="0.85" />
-        <stop offset="100%" stopColor="#070c17" stopOpacity="0.95" />
-      </linearGradient>
-    </defs>
+export const LuxurySkyline3DSvg: React.FC<{
+  accentHex?: string;
+  variant?: 'dark' | 'light';
+}> = ({ accentHex = '#f2ca50', variant = 'dark' }) => {
+  const isLight = variant === 'light';
+  const strokeHex = isLight ? '#8c6210' : accentHex;
+  const faceLeftTop = isLight ? '#cbd5e1' : '#26314c';
+  const faceLeftBottom = isLight ? '#e2e8f0' : '#0d1424';
+  const faceRightTop = isLight ? '#94a3b8' : '#141b2e';
+  const faceRightBottom = isLight ? '#cbd5e1' : '#070c17';
 
-    {/* Horizon horizon hairline */}
-    <line x1="0" y1="148" x2="1200" y2="148" stroke="url(#lux-sky-glow)" strokeWidth="1.2" />
+  return (
+    <svg
+      viewBox="0 0 1200 160"
+      className={`w-full h-24 sm:h-32 pointer-events-none select-none ${
+        isLight ? 'opacity-35' : 'opacity-40'
+      }`}
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
+      <defs>
+        <linearGradient id={`lux-sky-glow-${variant}`} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor={strokeHex} stopOpacity="0.06" />
+          <stop offset="50%" stopColor={strokeHex} stopOpacity={isLight ? '0.28' : '0.38'} />
+          <stop offset="100%" stopColor={strokeHex} stopOpacity="0.06" />
+        </linearGradient>
+        <linearGradient id={`lux-face-left-${variant}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={faceLeftTop} stopOpacity={isLight ? '0.55' : '0.7'} />
+          <stop offset="100%" stopColor={faceLeftBottom} stopOpacity={isLight ? '0.35' : '0.85'} />
+        </linearGradient>
+        <linearGradient id={`lux-face-right-${variant}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={faceRightTop} stopOpacity={isLight ? '0.5' : '0.85'} />
+          <stop offset="100%" stopColor={faceRightBottom} stopOpacity={isLight ? '0.3' : '0.95'} />
+        </linearGradient>
+      </defs>
 
-    {/* Extruded 3D Architectural Towers & Cupolas */}
-    {/* Left Wing Observatory */}
-    <polygon points="90,148 90,88 122,74 122,148" fill="url(#lux-face-left)" />
-    <polygon points="122,148 122,74 156,90 156,148" fill="url(#lux-face-right)" />
-    <polyline points="90,88 122,74 156,90" fill="none" stroke={accentHex} strokeOpacity="0.45" strokeWidth="1" />
+      {/* Horizon hairline */}
+      <line x1="0" y1="148" x2="1200" y2="148" stroke={`url(#lux-sky-glow-${variant})`} strokeWidth="1.2" />
 
-    {/* Westminster-Inspired Clock Spire */}
-    <polygon points="274,148 274,48 294,38 294,148" fill="url(#lux-face-left)" />
-    <polygon points="294,148 294,38 314,48 314,148" fill="url(#lux-face-right)" />
-    <polygon points="276,48 294,12 312,48 294,38" fill={accentHex} fillOpacity="0.22" stroke={accentHex} strokeOpacity="0.55" strokeWidth="0.9" />
-    <circle cx="284" cy="64" r="4.5" fill="none" stroke={accentHex} strokeOpacity="0.75" strokeWidth="1" />
+      {/* Extruded 3D Architectural Towers & Cupolas */}
+      {/* Left Wing Observatory */}
+      <polygon points="90,148 90,88 122,74 122,148" fill={`url(#lux-face-left-${variant})`} />
+      <polygon points="122,148 122,74 156,90 156,148" fill={`url(#lux-face-right-${variant})`} />
+      <polyline points="90,88 122,74 156,90" fill="none" stroke={strokeHex} strokeOpacity="0.45" strokeWidth="1" />
 
-    {/* Central Oxford Grand Dome */}
-    <polygon points="535,148 535,76 595,58 595,148" fill="url(#lux-face-left)" />
-    <polygon points="595,148 595,58 655,76 655,148" fill="url(#lux-face-right)" />
-    <path d="M555 68 Q595 18 635 68" fill={accentHex} fillOpacity="0.14" stroke={accentHex} strokeOpacity="0.55" strokeWidth="1.1" />
-    <line x1="595" y1="42" x2="595" y2="18" stroke={accentHex} strokeOpacity="0.75" strokeWidth="1.2" />
+      {/* Westminster-Inspired Clock Spire */}
+      <polygon points="274,148 274,48 294,38 294,148" fill={`url(#lux-face-left-${variant})`} />
+      <polygon points="294,148 294,38 314,48 314,148" fill={`url(#lux-face-right-${variant})`} />
+      <polygon points="276,48 294,12 312,48 294,38" fill={strokeHex} fillOpacity="0.22" stroke={strokeHex} strokeOpacity="0.55" strokeWidth="0.9" />
+      <circle cx="284" cy="64" r="4.5" fill="none" stroke={strokeHex} strokeOpacity="0.75" strokeWidth="1" />
 
-    {/* Modern Glass & Brass Citadel */}
-    <polygon points="840,148 840,56 876,42 876,148" fill="url(#lux-face-left)" />
-    <polygon points="876,148 876,42 912,58 912,148" fill="url(#lux-face-right)" />
-    <polyline points="840,56 876,42 912,58" fill="none" stroke={accentHex} strokeOpacity="0.5" strokeWidth="1" />
+      {/* Central Oxford Grand Dome */}
+      <polygon points="535,148 535,76 595,58 595,148" fill={`url(#lux-face-left-${variant})`} />
+      <polygon points="595,148 595,58 655,76 655,148" fill={`url(#lux-face-right-${variant})`} />
+      <path d="M555 68 Q595 18 635 68" fill={strokeHex} fillOpacity="0.14" stroke={strokeHex} strokeOpacity="0.55" strokeWidth="1.1" />
+      <line x1="595" y1="42" x2="595" y2="18" stroke={strokeHex} strokeOpacity="0.75" strokeWidth="1.2" />
 
-    {/* Right Pavilion */}
-    <polygon points="1030,148 1030,92 1068,78 1068,148" fill="url(#lux-face-left)" />
-    <polygon points="1068,148 1068,78 1106,92 1106,148" fill="url(#lux-face-right)" />
-    <polyline points="1030,92 1068,78 1106,92" fill="none" stroke={accentHex} strokeOpacity="0.4" strokeWidth="1" />
-  </svg>
-);
+      {/* Modern Glass & Brass Citadel */}
+      <polygon points="840,148 840,56 876,42 876,148" fill={`url(#lux-face-left-${variant})`} />
+      <polygon points="876,148 876,42 912,58 912,148" fill={`url(#lux-face-right-${variant})`} />
+      <polyline points="840,56 876,42 912,58" fill="none" stroke={strokeHex} strokeOpacity="0.5" strokeWidth="1" />
+
+      {/* Right Pavilion */}
+      <polygon points="1030,148 1030,92 1068,78 1068,148" fill={`url(#lux-face-left-${variant})`} />
+      <polygon points="1068,148 1068,78 1106,92 1106,148" fill={`url(#lux-face-right-${variant})`} />
+      <polyline points="1030,92 1068,78 1106,92" fill="none" stroke={strokeHex} strokeOpacity="0.4" strokeWidth="1" />
+    </svg>
+  );
+};
 
 /**
  * Rose des vents horlogère 3D avec cadran gradué et aiguille dorée
@@ -95,37 +107,57 @@ export const LuxuryCompassDial3D: React.FC<{
   accentHex?: string;
   tiltX?: number;
   tiltY?: number;
-}> = ({ accentHex = '#f2ca50', tiltX = 0, tiltY = 0 }) => (
-  <div
-    className="relative w-12 h-12 sm:w-14 sm:h-14 pointer-events-none select-none shrink-0"
-    style={{
-      transform: `perspective(400px) rotateX(${tiltX * 1.4}deg) rotateY(${tiltY * 1.4}deg)`,
-      transition: 'transform 180ms cubic-bezier(0.16, 1, 0.3, 1)'
-    }}
-    aria-hidden="true"
-  >
-    <svg viewBox="0 0 72 72" className="w-full h-full drop-shadow-[0_4px_10px_rgba(0,0,0,0.6)]">
-      <defs>
-        <radialGradient id="compass-bezel-grad" cx="35%" cy="30%" r="70%">
-          <stop offset="0%" stopColor="#26314c" stopOpacity="0.95" />
-          <stop offset="100%" stopColor="#090e1a" stopOpacity="0.98" />
-        </radialGradient>
-      </defs>
-      <circle cx="36" cy="36" r="32" fill="url(#compass-bezel-grad)" stroke={accentHex} strokeOpacity="0.45" strokeWidth="1.2" />
-      <circle cx="36" cy="36" r="27" fill="none" stroke={accentHex} strokeOpacity="0.3" strokeWidth="0.8" strokeDasharray="2 3" />
-      <circle cx="36" cy="36" r="20" fill="none" stroke={accentHex} strokeOpacity="0.2" strokeWidth="0.6" />
-      {/* Cardinal Diamond Needles */}
-      <polygon points="36,9 40,32 36,28 32,32" fill={accentHex} fillOpacity="0.95" />
-      <polygon points="36,63 40,40 36,44 32,40" fill="#94a3b8" fillOpacity="0.4" />
-      <polygon points="63,36 40,40 44,36 40,32" fill={accentHex} fillOpacity="0.55" />
-      <polygon points="9,36 32,40 28,36 32,32" fill={accentHex} fillOpacity="0.55" />
-      <circle cx="36" cy="36" r="3.5" fill="#0c1322" stroke={accentHex} strokeWidth="1.4" />
-      <text x="36" y="7.5" textAnchor="middle" fontSize="6.5" fill={accentHex} fontFamily="monospace" fontWeight="800">
-        N
-      </text>
-    </svg>
-  </div>
-);
+  variant?: 'dark' | 'light';
+}> = ({ accentHex = '#f2ca50', tiltX = 0, tiltY = 0, variant = 'dark' }) => {
+  const isLight = variant === 'light';
+  const strokeHex = isLight ? '#9a6b0c' : accentHex;
+  return (
+    <div
+      className="relative w-12 h-12 sm:w-14 sm:h-14 pointer-events-none select-none shrink-0"
+      style={{
+        transform: `perspective(400px) rotateX(${tiltX * 1.4}deg) rotateY(${tiltY * 1.4}deg)`,
+        transition: 'transform 180ms cubic-bezier(0.16, 1, 0.3, 1)'
+      }}
+      aria-hidden="true"
+    >
+      <svg
+        viewBox="0 0 72 72"
+        className={`w-full h-full ${
+          isLight
+            ? 'drop-shadow-[0_4px_10px_rgba(30,41,59,0.16)]'
+            : 'drop-shadow-[0_4px_10px_rgba(0,0,0,0.6)]'
+        }`}
+      >
+        <defs>
+          <radialGradient id={`compass-bezel-grad-${variant}`} cx="35%" cy="30%" r="70%">
+            <stop offset="0%" stopColor={isLight ? '#fffdf7' : '#26314c'} stopOpacity="0.98" />
+            <stop offset="100%" stopColor={isLight ? '#e8dec8' : '#090e1a'} stopOpacity="0.98" />
+          </radialGradient>
+        </defs>
+        <circle
+          cx="36"
+          cy="36"
+          r="32"
+          fill={`url(#compass-bezel-grad-${variant})`}
+          stroke={strokeHex}
+          strokeOpacity={isLight ? '0.65' : '0.45'}
+          strokeWidth="1.3"
+        />
+        <circle cx="36" cy="36" r="27" fill="none" stroke={strokeHex} strokeOpacity="0.35" strokeWidth="0.8" strokeDasharray="2 3" />
+        <circle cx="36" cy="36" r="20" fill="none" stroke={strokeHex} strokeOpacity="0.22" strokeWidth="0.6" />
+        {/* Cardinal Diamond Needles */}
+        <polygon points="36,9 40,32 36,28 32,32" fill={strokeHex} fillOpacity="0.95" />
+        <polygon points="36,63 40,40 36,44 32,40" fill={isLight ? '#64748b' : '#94a3b8'} fillOpacity="0.45" />
+        <polygon points="63,36 40,40 44,36 40,32" fill={strokeHex} fillOpacity="0.58" />
+        <polygon points="9,36 32,40 28,36 32,32" fill={strokeHex} fillOpacity="0.58" />
+        <circle cx="36" cy="36" r="3.5" fill={isLight ? '#fffdf7' : '#0c1322'} stroke={strokeHex} strokeWidth="1.4" />
+        <text x="36" y="7.5" textAnchor="middle" fontSize="6.5" fill={strokeHex} fontFamily="monospace" fontWeight="800">
+          N
+        </text>
+      </svg>
+    </div>
+  );
+};
 
 /**
  * Calque SVG architectural 3D isométrique :
@@ -533,7 +565,7 @@ export const City3DMaquetteViewport: React.FC<City3DMaquetteViewportProps> = ({
       ref={stageRef}
       onPointerMove={handlePointerMove}
       onPointerLeave={handlePointerLeave}
-      className="relative w-full overflow-hidden bg-[#060a14] px-2 py-4 sm:px-5 sm:py-6"
+      className="preserve-dark-surface relative w-full overflow-hidden bg-[#060a14] px-2 py-4 sm:px-5 sm:py-6"
       style={{
         perspective: is3DView ? '1450px' : 'none',
         backgroundImage: `radial-gradient(ellipse at 50% 18%, ${accentHex}14 0%, rgba(12,19,34,0.9) 48%, #050811 100%)`

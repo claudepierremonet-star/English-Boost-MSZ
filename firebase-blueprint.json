@@ -48,6 +48,10 @@
           "type": "object",
           "description": "600-level City Map quiz progression"
         },
+        "englishAdventure": {
+          "type": "object",
+          "description": "English Adventure 7-island world progression, adaptive difficulty tiers, CEFR-calibrated dual-skill daily challenges (completedDailyChallengeIds), temporary XP multiplier boosts (activeXpBoost), stars, trophies, collectible cards, avatars, themes, and idempotent reward claim ledger"
+        },
         "adaptiveProfile": {
           "type": "object",
           "description": "Centralized 7-skill adaptive evaluation profile (vocabulary, grammar, listening, reading, writing, speaking, pronunciation, speed, retention, balance)"
@@ -110,7 +114,7 @@
     },
     "LearningAttempt": {
       "title": "LearningAttempt",
-      "description": "A completed exercise, escape room, listening cinema, grammar battle, AI tutor, dictation, quiz, or speaking attempt.",
+      "description": "A completed exercise, escape room, listening cinema, grammar battle, AI tutor, English Adventure mission, dictation, quiz, or speaking attempt.",
       "type": "object",
       "properties": {
         "attemptId": { "type": "string", "description": "Unique attempt identifier" },
@@ -132,7 +136,8 @@
             "tutor",
             "dialogue",
             "city_map",
-            "arcade"
+            "arcade",
+            "adventure"
           ],
           "description": "Exercise modality"
         },
@@ -198,16 +203,31 @@
         "completedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["sessionId", "mode", "turnsCount", "fluencyScore", "completedAt"]
+    },
+    "AdventureClaim": {
+      "title": "AdventureClaim",
+      "description": "Write-once immutable reward claim ledger entry preventing duplicate XP, coins, trophy, card, avatar, or theme claims in English Adventure.",
+      "type": "object",
+      "properties": {
+        "claimId": { "type": "string", "description": "Deterministic idempotent reward claim key" },
+        "islandId": { "type": "string", "description": "Origin territory ID" },
+        "missionId": { "type": "string", "description": "Origin mission or milestone ID" },
+        "xpAwarded": { "type": "number", "description": "XP credited for this specific claim (0-350)" },
+        "coinsAwarded": { "type": "number", "description": "Coins credited for this specific claim (0-100)" },
+        "accuracy": { "type": "number", "description": "Accuracy percentage achieved (0-100)" },
+        "claimedAt": { "type": "string", "format": "date-time", "description": "Claim timestamp" }
+      },
+      "required": ["claimId", "xpAwarded", "coinsAwarded", "accuracy", "claimedAt"]
     }
   },
   "firestore": {
     "/users/{userId}": {
       "schema": "UserProfile",
-      "description": "User profile document storing academic grade, CEFR level, adaptive skill profile, daily missions, tutor weaknesses, and study cadence"
+      "description": "User profile document storing academic grade, CEFR level, adaptive skill profile, daily missions, English Adventure progression, tutor weaknesses, and study cadence"
     },
     "/users/{userId}/attempts/{attemptId}": {
       "schema": "LearningAttempt",
-      "description": "Individual learning exercise attempts across all 12 ecosystem modules"
+      "description": "Individual learning exercise attempts across all ecosystem modules including English Adventure"
     },
     "/users/{userId}/flashcardProgress/{cardId}": {
       "schema": "FlashcardProgress",
@@ -216,6 +236,10 @@
     "/users/{userId}/tutorSessions/{sessionId}": {
       "schema": "TutorSession",
       "description": "AI English Tutor session summaries and adaptive coaching diagnostics"
+    },
+    "/users/{userId}/adventureClaims/{claimId}": {
+      "schema": "AdventureClaim",
+      "description": "Write-once immutable reward claim ledger for English Adventure anti-duplication & XP fraud prevention"
     }
   }
 }

@@ -20,6 +20,7 @@ import {
 import { useAdaptiveProfile } from '../hooks/useAdaptiveProfile';
 import { BadgesSection } from './BadgesSection';
 import { LinguisticRadarSection } from './LinguisticRadarSection';
+import { FavoriteQuotesSection } from './FavoriteQuotesSection';
 import { computeUserBadges } from '../data/badges';
 import { BadgeUnlockModal } from './BadgeUnlockModal';
 import { ErrorJournalModal } from './ErrorJournalModal';
@@ -34,6 +35,8 @@ import {
   type OwnedCardInstance
 } from '../utils/mszCoinsManager';
 import { MSZ_CHARACTERS } from '../data/mszShopData';
+import { ADVENTURE_AVATARS, ADVENTURE_THEMES } from '../data/englishAdventureData';
+import { getEnglishAdventureState } from '../utils/englishAdventureManager';
 import { getErrorJournal } from '../utils/errorJournal';
 import {
   getAutoPlayOnDisplay,
@@ -678,6 +681,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           </div>
         </div>
 
+        {/* Section 'Mes Citations Favorites de Lord Chesterfield' */}
+        <FavoriteQuotesSection />
+
         {/* Academic Badges & Distinctions */}
         <BadgesSection user={user} />
 
@@ -697,37 +703,80 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
                 ? 'Claire'
                 : theme === 'dark-floral'
                 ? 'Sombre Florale'
-                : 'Claire Florale'}
+                : theme === 'light-floral'
+                ? 'Claire Florale'
+                : ADVENTURE_THEMES.find((t) => t.id === theme)?.name || theme}
             </span>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
             {[
-              { id: 'dark', label: 'Sombre Classique', icon: 'dark_mode' },
-              { id: 'light', label: 'Claire Albâtre', icon: 'light_mode' },
-              { id: 'dark-floral', label: 'Sombre Florale', icon: 'local_florist' },
-              { id: 'light-floral', label: 'Claire Florale', icon: 'local_florist' }
+              { id: 'dark', label: 'Sombre Classique', icon: 'dark_mode', locked: false },
+              { id: 'light', label: 'Claire Albâtre', icon: 'light_mode', locked: false },
+              { id: 'dark-floral', label: 'Sombre Florale', icon: 'local_florist', locked: false },
+              { id: 'light-floral', label: 'Claire Florale', icon: 'local_florist', locked: false },
+              ...ADVENTURE_THEMES.map((th) => ({
+                id: th.id,
+                label: th.name,
+                icon: 'auto_awesome',
+                locked: !getEnglishAdventureState(user).unlockedThemeIds.includes(th.id)
+              }))
             ].map((skin) => (
               <button
                 key={skin.id}
                 type="button"
-                onClick={() => setTheme(skin.id as AppTheme)}
+                disabled={skin.locked}
+                onClick={() => !skin.locked && setTheme(skin.id as AppTheme)}
                 className={`py-2.5 px-3 rounded-xl border text-xs font-semibold flex items-center justify-between transition-all ${
-                  theme === skin.id
-                    ? 'bg-[#f2ca50] text-[#3c2f00] border-[#f2ca50] shadow-md font-bold'
-                    : 'bg-[#232a3a] text-[#dce2f8] border-[#4d4635]/30 hover:bg-[#2e3545]'
+                  skin.locked
+                    ? 'bg-[#121929] text-[#717b94] border-[#232a3a] opacity-55 cursor-not-allowed'
+                    : theme === skin.id
+                    ? 'bg-[#f2ca50] text-[#3c2f00] border-[#f2ca50] shadow-md font-bold cursor-pointer'
+                    : 'bg-[#232a3a] text-[#dce2f8] border-[#4d4635]/30 hover:bg-[#2e3545] cursor-pointer'
                 }`}
+                title={
+                  skin.locked
+                    ? ADVENTURE_THEMES.find((t) => t.id === skin.id)?.unlockRequirementFr
+                    : skin.label
+                }
               >
                 <div className="flex items-center gap-1.5 truncate">
-                  <span className="material-symbols-outlined text-sm">{skin.icon}</span>
+                  <span className="material-symbols-outlined text-sm">
+                    {skin.locked ? 'lock' : skin.icon}
+                  </span>
                   <span className="truncate">{skin.label}</span>
                 </div>
-                {theme === skin.id && (
+                {theme === skin.id && !skin.locked && (
                   <span className="material-symbols-outlined text-sm">check</span>
                 )}
               </button>
             ))}
           </div>
+
+          {/* English Adventure Equipped Avatar Crest */}
+          {(() => {
+            const adv = getEnglishAdventureState(user);
+            const advAv =
+              ADVENTURE_AVATARS.find((a) => a.id === adv.equippedAvatarId) || ADVENTURE_AVATARS[0];
+            return (
+              <div className="pt-2 border-t border-[#232a3a] flex items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span
+                    className="material-symbols-outlined text-base shrink-0"
+                    style={{ color: advAv.accentHex }}
+                  >
+                    {advAv.icon}
+                  </span>
+                  <span className="text-[#d0c5af] truncate">
+                    Emblème Aventure : <strong className="text-[#dce2f8]">{advAv.name}</strong>
+                  </span>
+                </div>
+                <span className="text-[10px] font-mono text-[#f2ca50] shrink-0">
+                  {adv.bossDefeatedIslandIds.length}/7 Îles · {adv.unlockedTrophyIds.length} Trophées
+                </span>
+              </div>
+            );
+          })()}
 
           {/* Floral border thickness selector (0.5cm à 1cm) */}
           {(theme === 'dark-floral' || theme === 'light-floral') && (

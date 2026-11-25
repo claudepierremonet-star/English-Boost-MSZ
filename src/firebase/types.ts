@@ -258,6 +258,56 @@ export interface ProgressChartAnnotation {
   updatedAt?: string;
 }
 
+export type AdventureIslandId =
+  | 'vocabulary_kingdom'
+  | 'grammar_castle'
+  | 'listening_ocean'
+  | 'speaking_city'
+  | 'reading_forest'
+  | 'writing_academy'
+  | 'advanced_universe';
+
+export type AdventureDifficultyTier = 'scaffolded' | 'standard' | 'mastery';
+
+export type AdventureThemeUnlockId =
+  | 'emerald-grove'
+  | 'sapphire-ocean'
+  | 'obsidian-imperial'
+  | 'parchment-royal';
+
+export interface AdventureXpMultiplierBoost {
+  multiplier: number;
+  sourceChallengeId: string;
+  sourceChallengeTitle: string;
+  skillPairLabelFr: string;
+  cefrLevel: CEFRLevel;
+  activatedAt: string;
+  expiresAt: string;
+}
+
+export interface EnglishAdventureState {
+  unlockedIslandIds: AdventureIslandId[];
+  completedMissionIds: string[];
+  bossDefeatedIslandIds: AdventureIslandId[];
+  missionBestAccuracy: Record<string, number>;
+  missionStars: Record<string, number>;
+  missionAttemptsCount: Record<string, number>;
+  claimedRewardIds: string[];
+  unlockedTrophyIds: string[];
+  unlockedAvatarIds: string[];
+  equippedAvatarId?: string;
+  unlockedThemeIds: string[];
+  unlockedCardIds: string[];
+  difficultyTierByIsland: Record<string, AdventureDifficultyTier>;
+  consecutiveHighAccuracyCount: number;
+  totalStars: number;
+  adventureXpEarned: number;
+  adventureCoinsEarned: number;
+  completedDailyChallengeIds?: string[];
+  activeXpBoost?: AdventureXpMultiplierBoost | null;
+  updatedAt: string;
+}
+
 export interface UserProfile {
   uid: string;
   displayName: string;
@@ -271,6 +321,7 @@ export interface UserProfile {
   unlockedBadgeIds?: string[];
   arcadeProgression?: ArcadeProgressionState;
   cityMapProgression?: CityMapProgressionState;
+  englishAdventure?: EnglishAdventureState;
   mszCoinsBalance?: number;
   ownedCardInstances?: Array<{
     characterId: string;
@@ -308,7 +359,8 @@ export type AttemptModuleType =
   | 'tutor'
   | 'dialogue'
   | 'city_map'
-  | 'arcade';
+  | 'arcade'
+  | 'adventure';
 
 export interface LearningAttempt {
   attemptId: string;

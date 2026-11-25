@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import type { UserProfile, CEFRLevel, LeaderboardEntry, LeagueTier } from '../firebase/types';
 import { fetchWeeklyLeaderboard, sendPeerCheer } from '../firebase/client';
 import {
@@ -11,6 +12,7 @@ import {
 import { LessonDetailModal } from './LessonDetailModal';
 import confetti from 'canvas-confetti';
 import { GlassSlidingCapsule } from './GlassSlidingCapsule';
+import { LeaderboardSkeleton } from './SkeletonLoaders';
 
 interface LeaderboardViewProps {
   user: UserProfile;
@@ -245,6 +247,8 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
 }) => {
   // Navigation: Main Tab (Global Weekly Leaderboard vs Private Group Challenges)
   const [viewSection, setViewSection] = useState<'global' | 'groups'>('global');
+
+  const shouldReduceMotion = useReducedMotion();
 
   // Global Leaderboard State
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
@@ -996,7 +1000,19 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
       {/* SECTION 2: CLASSEMENT GÉNÉRAL HEBDOMADAIRE (LIGUE D'OXFORD) */}
       {/* ========================================================================= */}
       {viewSection === 'global' && (
-        <section className="space-y-6 animate-fadeIn">
+        <section className="space-y-6">
+          <AnimatePresence mode="wait">
+            {loading ? (
+              <LeaderboardSkeleton key="leaderboard-skeleton" rowCount={6} />
+            ) : (
+              <motion.div
+                key={`leaderboard-content-${metricFilter}-${levelFilter}`}
+                initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }}
+                animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+                exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
+                transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                className="space-y-6"
+              >
           {/* User Current Standing Callout Banner */}
           {currentUserEntry && (
             <section className="relative overflow-hidden rounded-xl bg-gradient-to-r from-[#172554]/90 via-[#0f172a] to-[#1e1b4b]/80 border-2 border-[#f2ca50]/50 p-4 sm:p-5 shadow-xl">
@@ -1197,6 +1213,9 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
               })}
             </div>
           </section>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </section>
       )}
 

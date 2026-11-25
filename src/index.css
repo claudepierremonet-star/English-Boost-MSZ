@@ -151,6 +151,170 @@ html[data-theme="light-floral"] .text-\[\#d4c78f\] {
   color: #785b24 !important;
 }
 
+/* Protect intentionally dark showcase dioramas & photo overlays from light-theme ink inversion */
+html.light .preserve-dark-surface .bg-\[\#0c1322\],
+html[data-theme="light"] .preserve-dark-surface .bg-\[\#0c1322\],
+html[data-theme="light-floral"] .preserve-dark-surface .bg-\[\#0c1322\],
+html[data-theme="parchment-royal"] .preserve-dark-surface .bg-\[\#0c1322\] {
+  background-color: #0c1322 !important;
+}
+
+html.light .preserve-dark-surface .bg-\[\#151b2b\],
+html[data-theme="light"] .preserve-dark-surface .bg-\[\#151b2b\],
+html[data-theme="light-floral"] .preserve-dark-surface .bg-\[\#151b2b\],
+html[data-theme="parchment-royal"] .preserve-dark-surface .bg-\[\#151b2b\] {
+  background-color: #151b2b !important;
+}
+
+html.light .preserve-dark-surface .bg-\[\#191f2f\],
+html[data-theme="light"] .preserve-dark-surface .bg-\[\#191f2f\],
+html[data-theme="light-floral"] .preserve-dark-surface .bg-\[\#191f2f\],
+html[data-theme="parchment-royal"] .preserve-dark-surface .bg-\[\#191f2f\] {
+  background-color: #191f2f !important;
+}
+
+html.light .preserve-dark-surface .text-\[\#dce2f8\],
+html[data-theme="light"] .preserve-dark-surface .text-\[\#dce2f8\],
+html[data-theme="light-floral"] .preserve-dark-surface .text-\[\#dce2f8\],
+html[data-theme="parchment-royal"] .preserve-dark-surface .text-\[\#dce2f8\] {
+  color: #eef2ff !important;
+}
+
+html.light .preserve-dark-surface .text-\[\#d0c5af\],
+html[data-theme="light"] .preserve-dark-surface .text-\[\#d0c5af\],
+html[data-theme="light-floral"] .preserve-dark-surface .text-\[\#d0c5af\],
+html[data-theme="parchment-royal"] .preserve-dark-surface .text-\[\#d0c5af\] {
+  color: #cbd5e1 !important;
+}
+
+html.light .preserve-dark-surface .text-\[\#d4c78f\],
+html[data-theme="light"] .preserve-dark-surface .text-\[\#d4c78f\],
+html[data-theme="light-floral"] .preserve-dark-surface .text-\[\#d4c78f\],
+html[data-theme="parchment-royal"] .preserve-dark-surface .text-\[\#d4c78f\] {
+  color: #e7d8a8 !important;
+}
+
+/* ============================================================================
+   ENGLISH ADVENTURE GLOBAL THEME (.ea-theme-root)
+   Uses @theme CSS variables from index.css with WCAG AA/AAA (>= 6.8:1)
+   gold (#f2ca50) & cream (#dce2f8) typography across all surfaces.
+   ============================================================================ */
+.ea-theme-root {
+  --ea-bg-deep: var(--color-surface-container-lowest);
+  --ea-bg-surface: var(--color-surface);
+  --ea-bg-card: var(--color-surface-container-low);
+  --ea-bg-elevated: var(--color-surface-container);
+  --ea-bg-interactive: var(--color-surface-container-high);
+  --ea-bg-highest: var(--color-surface-container-highest);
+  --ea-border: rgba(242, 202, 80, 0.34);
+  --ea-border-subtle: #26314a;
+  --ea-border-gold: rgba(242, 202, 80, 0.58);
+
+  /* Typography Hierarchy (WCAG AAA/AA on deep obsidian/sapphire surfaces) */
+  --ea-text-cream: var(--color-on-surface);               /* #dce2f8 (14.3:1 on #0c1322) */
+  --ea-text-cream-muted: var(--color-on-surface-variant); /* #d0c5af (10.7:1 on #0c1322) */
+  --ea-text-gold: var(--color-primary);                   /* #f2ca50 (11.4:1 on #0c1322) */
+  --ea-text-gold-bright: #ffe088;                         /* #ffe088 (13.5:1 on #0c1322) */
+  --ea-text-gold-soft: var(--color-secondary);            /* #d4c78f (11.1:1 on #0c1322) */
+  --ea-text-on-gold: var(--color-on-primary);             /* #3c2f00 (9.6:1 on #f2ca50) */
+  color: var(--ea-text-cream);
+}
+
+html[data-theme="emerald-grove"] .ea-theme-root {
+  --ea-bg-deep: #040d0b;
+  --ea-bg-surface: #061411;
+  --ea-bg-card: #0b201b;
+  --ea-bg-elevated: #102a24;
+  --ea-bg-interactive: #16362e;
+  --ea-border-subtle: rgba(52, 211, 153, 0.28);
+}
+
+html[data-theme="sapphire-ocean"] .ea-theme-root {
+  --ea-bg-deep: #040b18;
+  --ea-bg-surface: #061124;
+  --ea-bg-card: #0b1c38;
+  --ea-bg-elevated: #10264a;
+  --ea-bg-interactive: #16325e;
+  --ea-border-subtle: rgba(56, 189, 248, 0.28);
+}
+
+html[data-theme="obsidian-imperial"] .ea-theme-root {
+  --ea-bg-deep: #070510;
+  --ea-bg-surface: #0c0918;
+  --ea-bg-card: #161029;
+  --ea-bg-elevated: #1e1636;
+  --ea-bg-interactive: #271e45;
+  --ea-border-subtle: rgba(167, 139, 250, 0.30);
+}
+
+/* Protect .ea-theme-root from global light/parchment !important inversions */
+html.light .ea-theme-root .bg-\[\#0c1322\],
+html[data-theme="light"] .ea-theme-root .bg-\[\#0c1322\],
+html[data-theme="light-floral"] .ea-theme-root .bg-\[\#0c1322\],
+html[data-theme="parchment-royal"] .ea-theme-root .bg-\[\#0c1322\] {
+  background-color: var(--ea-bg-surface) !important;
+}
+
+html.light .ea-theme-root .bg-\[\#070e1d\],
+html[data-theme="light"] .ea-theme-root .bg-\[\#070e1d\],
+html[data-theme="light-floral"] .ea-theme-root .bg-\[\#070e1d\],
+html[data-theme="parchment-royal"] .ea-theme-root .bg-\[\#070e1d\] {
+  background-color: var(--ea-bg-deep) !important;
+}
+
+html.light .ea-theme-root .bg-\[\#151b2b\],
+html[data-theme="light"] .ea-theme-root .bg-\[\#151b2b\],
+html[data-theme="light-floral"] .ea-theme-root .bg-\[\#151b2b\],
+html[data-theme="parchment-royal"] .ea-theme-root .bg-\[\#151b2b\] {
+  background-color: var(--ea-bg-card) !important;
+  border-color: var(--ea-border-subtle) !important;
+}
+
+html.light .ea-theme-root .bg-\[\#191f2f\],
+html[data-theme="light"] .ea-theme-root .bg-\[\#191f2f\],
+html[data-theme="light-floral"] .ea-theme-root .bg-\[\#191f2f\],
+html[data-theme="parchment-royal"] .ea-theme-root .bg-\[\#191f2f\] {
+  background-color: var(--ea-bg-elevated) !important;
+  border-color: var(--ea-border-subtle) !important;
+}
+
+html.light .ea-theme-root .bg-\[\#232a3a\],
+html[data-theme="light"] .ea-theme-root .bg-\[\#232a3a\],
+html[data-theme="light-floral"] .ea-theme-root .bg-\[\#232a3a\],
+html[data-theme="parchment-royal"] .ea-theme-root .bg-\[\#232a3a\] {
+  background-color: var(--ea-bg-interactive) !important;
+  color: var(--ea-text-cream) !important;
+}
+
+html.light .ea-theme-root .text-\[\#dce2f8\],
+html[data-theme="light"] .ea-theme-root .text-\[\#dce2f8\],
+html[data-theme="light-floral"] .ea-theme-root .text-\[\#dce2f8\],
+html[data-theme="parchment-royal"] .ea-theme-root .text-\[\#dce2f8\] {
+  color: var(--ea-text-cream) !important;
+}
+
+html.light .ea-theme-root .text-\[\#d0c5af\],
+html[data-theme="light"] .ea-theme-root .text-\[\#d0c5af\],
+html[data-theme="light-floral"] .ea-theme-root .text-\[\#d0c5af\],
+html[data-theme="parchment-royal"] .ea-theme-root .text-\[\#d0c5af\] {
+  color: var(--ea-text-cream-muted) !important;
+}
+
+html.light .ea-theme-root .text-\[\#d4c78f\],
+html[data-theme="light"] .ea-theme-root .text-\[\#d4c78f\],
+html[data-theme="light-floral"] .ea-theme-root .text-\[\#d4c78f\],
+html[data-theme="parchment-royal"] .ea-theme-root .text-\[\#d4c78f\] {
+  color: var(--ea-text-gold-soft) !important;
+}
+
+html.light .ea-theme-root .glass-capsule-active-text,
+html[data-theme="light"] .ea-theme-root .glass-capsule-active-text,
+html[data-theme="light-floral"] .ea-theme-root .glass-capsule-active-text,
+html[data-theme="parchment-royal"] .ea-theme-root .glass-capsule-active-text {
+  color: #ffe89e !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.32) !important;
+}
+
 /* Monumental Cut-Out Title with live photo fill */
 .monumental-clip-text {
   -webkit-background-clip: text;
@@ -340,8 +504,91 @@ html[data-theme="light-floral"] .glass-capsule-pill:not([data-glass-tone="dark"]
 
 html.light .glass-capsule-active-text:not([data-glass-tone="dark"]),
 html[data-theme="light"] .glass-capsule-active-text:not([data-glass-tone="dark"]),
-html[data-theme="light-floral"] .glass-capsule-active-text:not([data-glass-tone="dark"]) {
+html[data-theme="light-floral"] .glass-capsule-active-text:not([data-glass-tone="dark"]),
+html[data-theme="parchment-royal"] .glass-capsule-active-text:not([data-glass-tone="dark"]) {
   color: #6b4b06;
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.75);
 }
+
+/* Unlockable English Adventure Themes */
+html[data-theme="emerald-grove"],
+html[data-theme="emerald-grove"] body {
+  background-color: #061411 !important;
+}
+html[data-theme="emerald-grove"] .bg-\[\#0c1322\] {
+  background-color: #061411 !important;
+}
+html[data-theme="emerald-grove"] .bg-\[\#151b2b\] {
+  background-color: #0b201b !important;
+  border-color: rgba(52, 211, 153, 0.25) !important;
+}
+
+html[data-theme="sapphire-ocean"],
+html[data-theme="sapphire-ocean"] body {
+  background-color: #061124 !important;
+}
+html[data-theme="sapphire-ocean"] .bg-\[\#0c1322\] {
+  background-color: #061124 !important;
+}
+html[data-theme="sapphire-ocean"] .bg-\[\#151b2b\] {
+  background-color: #0b1c38 !important;
+  border-color: rgba(56, 189, 248, 0.26) !important;
+}
+
+html[data-theme="obsidian-imperial"],
+html[data-theme="obsidian-imperial"] body {
+  background-color: #0c0918 !important;
+}
+html[data-theme="obsidian-imperial"] .bg-\[\#0c1322\] {
+  background-color: #0c0918 !important;
+}
+html[data-theme="obsidian-imperial"] .bg-\[\#151b2b\] {
+  background-color: #161029 !important;
+  border-color: rgba(167, 139, 250, 0.28) !important;
+}
+
+html[data-theme="parchment-royal"],
+html[data-theme="parchment-royal"] body {
+  background-color: #f4efe3 !important;
+  color: #1c1917 !important;
+}
+html[data-theme="parchment-royal"] header,
+html[data-theme="parchment-royal"] nav {
+  background-color: rgba(244, 239, 227, 0.94) !important;
+  border-color: rgba(180, 146, 74, 0.35) !important;
+}
+html[data-theme="parchment-royal"] .bg-\[\#0c1322\] {
+  background-color: #f4efe3 !important;
+}
+html[data-theme="parchment-royal"] .bg-\[\#070e1d\] {
+  background-color: #e8e0ce !important;
+}
+html[data-theme="parchment-royal"] .bg-\[\#151b2b\],
+html[data-theme="parchment-royal"] .bg-\[\#191f2f\] {
+  background-color: #fffdf7 !important;
+  border-color: #d6c5a3 !important;
+}
+html[data-theme="parchment-royal"] .text-\[\#dce2f8\] {
+  color: #1c1917 !important;
+}
+html[data-theme="parchment-royal"] .text-\[\#d0c5af\] {
+  color: #57534e !important;
+}
+html[data-theme="parchment-royal"] .text-\[\#d4c78f\] {
+  color: #785b24 !important;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 

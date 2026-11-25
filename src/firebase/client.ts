@@ -45,7 +45,11 @@ import type {
   LeagueTier,
   CityMapProgressionState,
   ProgressChartAnnotation,
-  ChartAnnotationCategory
+  ChartAnnotationCategory,
+  EnglishAdventureState,
+  AdventureIslandId,
+  AdventureDifficultyTier,
+  AdventureXpMultiplierBoost
 } from './types';
 import { recordDailyMissionActivity } from '../utils/dailyMissionsManager';
 import { inferGradeFromCefr } from '../services/adaptiveEngine';
@@ -166,6 +170,7 @@ const LOCAL_ATTEMPTS_KEY = 'eb_msz_attempts';
 const LOCAL_CARDS_KEY = 'eb_msz_cards_progress';
 export const LOCAL_FAVORITES_KEY = 'eb_msz_favorite_lessons';
 export const LOCAL_CITY_MAP_KEY = 'eb_msz_city_map_progression_v1';
+export const LOCAL_ADVENTURE_KEY = 'eb_msz_adventure_state_v1';
 export const LOCAL_CHART_ANNOTATIONS_KEY = 'eb_msz_chart_annotations_v1';
 export const LOCAL_TUTOR_SESSIONS_KEY = 'eb_msz_tutor_sessions_v1';
 
@@ -288,6 +293,195 @@ export function mergeCityMapProgression(
   };
 }
 
+export const DEFAULT_ENGLISH_ADVENTURE_STATE: EnglishAdventureState = {
+  unlockedIslandIds: ['vocabulary_kingdom'],
+  completedMissionIds: [],
+  bossDefeatedIslandIds: [],
+  missionBestAccuracy: {},
+  missionStars: {},
+  missionAttemptsCount: {},
+  claimedRewardIds: [],
+  unlockedTrophyIds: [],
+  unlockedAvatarIds: ['avatar_scholar_initiate'],
+  equippedAvatarId: 'avatar_scholar_initiate',
+  unlockedThemeIds: [],
+  unlockedCardIds: [],
+  difficultyTierByIsland: {
+    vocabulary_kingdom: 'standard',
+    grammar_castle: 'standard',
+    listening_ocean: 'standard',
+    speaking_city: 'standard',
+    reading_forest: 'standard',
+    writing_academy: 'standard',
+    advanced_universe: 'standard'
+  },
+  consecutiveHighAccuracyCount: 0,
+  totalStars: 0,
+  adventureXpEarned: 0,
+  adventureCoinsEarned: 0,
+  completedDailyChallengeIds: [],
+  activeXpBoost: null,
+  updatedAt: new Date().toISOString()
+};
+
+const VALID_ISLAND_ORDER: AdventureIslandId[] = [
+  'vocabulary_kingdom',
+  'grammar_castle',
+  'listening_ocean',
+  'speaking_city',
+  'reading_forest',
+  'writing_academy',
+  'advanced_universe'
+];
+
+export function mergeEnglishAdventureState(
+  local?: Partial<EnglishAdventureState> | null,
+  remote?: Partial<EnglishAdventureState> | null
+): EnglishAdventureState {
+  const unionStrings = (a?: string[], b?: string[], limitCount = 200): string[] => {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const v of [...(b || []), ...(a || [])]) {
+      if (typeof v === 'string' && v.length > 0 && !seen.has(v)) {
+        seen.add(v);
+        out.push(v);
+        if (out.length >= limitCount) break;
+      }
+    }
+    return out;
+  };
+
+  const bossSet = new Set<AdventureIslandId>(
+    unionStrings(local?.bossDefeatedIslandIds, remote?.bossDefeatedIslandIds, 7).filter((id): id is AdventureIslandId =>
+      VALID_ISLAND_ORDER.includes(id as AdventureIslandId)
+    )
+  );
+  const unlockedSet = new Set<AdventureIslandId>([
+    'vocabulary_kingdom',
+    ...unionStrings(local?.unlockedIslandIds, remote?.unlockedIslandIds, 7).filter((id): id is AdventureIslandId =>
+      VALID_ISLAND_ORDER.includes(id as AdventureIslandId)
+    )
+  ]);
+  for (let i = 0; i < VALID_ISLAND_ORDER.length - 1; i++) {
+    if (bossSet.has(VALID_ISLAND_ORDER[i])) {
+      unlockedSet.add(VALID_ISLAND_ORDER[i + 1]);
+    }
+  }
+
+  const missionBestAccuracy: Record<string, number> = {};
+  for (const src of [remote?.missionBestAccuracy, local?.missionBestAccuracy]) {
+    if (!src || typeof src !== 'object') continue;
+    for (const [k, v] of Object.entries(src)) {
+      missionBestAccuracy[k] = Math.min(100, Math.max(missionBestAccuracy[k] || 0, Number(v) || 0));
+    }
+  }
+
+  const missionStars: Record<string, number> = {};
+  for (const src of [remote?.missionStars, local?.missionStars]) {
+    if (!src || typeof src !== 'object') continue;
+    for (const [k, v] of Object.entries(src)) {
+      missionStars[k] = Math.min(3, Math.max(missionStars[k] || 0, Number(v) || 0));
+    }
+  }
+
+  const missionAttemptsCount: Record<string, number> = {};
+  for (const src of [remote?.missionAttemptsCount, local?.missionAttemptsCount]) {
+    if (!src || typeof src !== 'object') continue;
+    for (const [k, v] of Object.entries(src)) {
+      missionAttemptsCount[k] = Math.max(missionAttemptsCount[k] || 0, Number(v) || 0);
+    }
+  }
+
+  const totalStars = Object.values(missionStars).reduce((acc, s) => acc + (Number(s) || 0), 0);
+
+  const localUpdated = local?.updatedAt || '';
+  const remoteUpdated = remote?.updatedAt || '';
+  const primaryDiff = localUpdated >= remoteUpdated ? local?.difficultyTierByIsland : remote?.difficultyTierByIsland;
+  const fallbackDiff = localUpdated >= remoteUpdated ? remote?.difficultyTierByIsland : local?.difficultyTierByIsland;
+  const difficultyTierByIsland: Record<string, AdventureDifficultyTier> = {
+    ...DEFAULT_ENGLISH_ADVENTURE_STATE.difficultyTierByIsland,
+    ...(fallbackDiff || {}),
+    ...(primaryDiff || {})
+  };
+
+  const unlockedAvatarIds = Array.from(
+    new Set(['avatar_scholar_initiate', ...unionStrings(local?.unlockedAvatarIds, remote?.unlockedAvatarIds, 20)])
+  );
+
+  const preferredEquipped =
+    localUpdated >= remoteUpdated
+      ? local?.equippedAvatarId || remote?.equippedAvatarId
+      : remote?.equippedAvatarId || local?.equippedAvatarId;
+
+  const sanitizeBoost = (b?: AdventureXpMultiplierBoost | null): AdventureXpMultiplierBoost | null => {
+    if (!b || typeof b !== 'object' || typeof b.expiresAt !== 'string') return null;
+    const exp = Date.parse(b.expiresAt);
+    if (!Number.isFinite(exp) || exp <= Date.now()) return null;
+    const mult = Math.min(2.0, Math.max(1.0, Math.round((Number(b.multiplier) || 1) * 100) / 100));
+    if (mult <= 1.0) return null;
+    const sourceChallengeId = String(b.sourceChallengeId || '').trim().slice(0, 100);
+    const sourceChallengeTitle = String(b.sourceChallengeTitle || '').trim().slice(0, 140);
+    const skillPairLabelFr = String(b.skillPairLabelFr || '').trim().slice(0, 100);
+    if (!sourceChallengeId || !sourceChallengeTitle || !skillPairLabelFr) return null;
+    const validLevels: CEFRLevel[] = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+    const cefrLevel: CEFRLevel = validLevels.includes(b.cefrLevel) ? b.cefrLevel : 'B1';
+    return {
+      multiplier: mult,
+      sourceChallengeId,
+      sourceChallengeTitle,
+      skillPairLabelFr,
+      cefrLevel,
+      activatedAt: String(b.activatedAt || new Date().toISOString()).slice(0, 64),
+      expiresAt: String(b.expiresAt).slice(0, 64)
+    };
+  };
+
+  const localBoost = sanitizeBoost(local?.activeXpBoost);
+  const remoteBoost = sanitizeBoost(remote?.activeXpBoost);
+  let mergedBoost: AdventureXpMultiplierBoost | null = null;
+  if (localBoost && remoteBoost) {
+    mergedBoost =
+      Date.parse(localBoost.expiresAt) >= Date.parse(remoteBoost.expiresAt)
+        ? { ...localBoost, multiplier: Math.max(localBoost.multiplier, remoteBoost.multiplier) }
+        : { ...remoteBoost, multiplier: Math.max(localBoost.multiplier, remoteBoost.multiplier) };
+  } else {
+    mergedBoost = localBoost || remoteBoost;
+  }
+
+  return {
+    unlockedIslandIds: VALID_ISLAND_ORDER.filter((id) => unlockedSet.has(id)),
+    completedMissionIds: unionStrings(local?.completedMissionIds, remote?.completedMissionIds, 64),
+    bossDefeatedIslandIds: VALID_ISLAND_ORDER.filter((id) => bossSet.has(id)),
+    missionBestAccuracy,
+    missionStars,
+    missionAttemptsCount,
+    claimedRewardIds: unionStrings(local?.claimedRewardIds, remote?.claimedRewardIds, 180),
+    unlockedTrophyIds: unionStrings(local?.unlockedTrophyIds, remote?.unlockedTrophyIds, 30),
+    unlockedAvatarIds,
+    equippedAvatarId:
+      preferredEquipped && unlockedAvatarIds.includes(preferredEquipped)
+        ? preferredEquipped
+        : 'avatar_scholar_initiate',
+    unlockedThemeIds: unionStrings(local?.unlockedThemeIds, remote?.unlockedThemeIds, 12),
+    unlockedCardIds: unionStrings(local?.unlockedCardIds, remote?.unlockedCardIds, 30),
+    difficultyTierByIsland,
+    consecutiveHighAccuracyCount: Math.max(
+      local?.consecutiveHighAccuracyCount || 0,
+      remote?.consecutiveHighAccuracyCount || 0
+    ),
+    totalStars,
+    adventureXpEarned: Math.max(local?.adventureXpEarned || 0, remote?.adventureXpEarned || 0),
+    adventureCoinsEarned: Math.max(local?.adventureCoinsEarned || 0, remote?.adventureCoinsEarned || 0),
+    completedDailyChallengeIds: unionStrings(
+      local?.completedDailyChallengeIds,
+      remote?.completedDailyChallengeIds,
+      60
+    ),
+    activeXpBoost: mergedBoost,
+    updatedAt: new Date().toISOString()
+  };
+}
+
 // Default guest profile
 export const DEFAULT_USER_PROFILE: UserProfile = {
   uid: 'lord_chesterfield_scholar',
@@ -314,7 +508,8 @@ export const DEFAULT_USER_PROFILE: UserProfile = {
     unlockedMaxGameNumber: 1,
     completedGames: []
   },
-  cityMapProgression: DEFAULT_CITY_MAP_PROGRESSION
+  cityMapProgression: DEFAULT_CITY_MAP_PROGRESSION,
+  englishAdventure: DEFAULT_ENGLISH_ADVENTURE_STATE
 };
 
 /**
@@ -371,6 +566,15 @@ export function getLocalUserProfile(): UserProfile {
       } else if (!parsed.cityMapProgression) {
         parsed.cityMapProgression = { ...DEFAULT_CITY_MAP_PROGRESSION };
       }
+      const advRaw = localStorage.getItem(LOCAL_ADVENTURE_KEY);
+      if (advRaw) {
+        try {
+          const parsedAdv = JSON.parse(advRaw) as EnglishAdventureState;
+          parsed.englishAdventure = mergeEnglishAdventureState(parsedAdv, parsed.englishAdventure);
+        } catch {}
+      } else if (!parsed.englishAdventure) {
+        parsed.englishAdventure = { ...DEFAULT_ENGLISH_ADVENTURE_STATE };
+      }
       return parsed;
     }
   } catch (e) {
@@ -401,6 +605,11 @@ export function getLocalUserProfile(): UserProfile {
       const parsedCity = JSON.parse(cityMapRaw) as CityMapProgressionState;
       defaultProf.cityMapProgression = mergeCityMapProgression(parsedCity, DEFAULT_CITY_MAP_PROGRESSION);
     }
+    const advRaw = localStorage.getItem(LOCAL_ADVENTURE_KEY);
+    if (advRaw) {
+      const parsedAdv = JSON.parse(advRaw) as EnglishAdventureState;
+      defaultProf.englishAdventure = mergeEnglishAdventureState(parsedAdv, DEFAULT_ENGLISH_ADVENTURE_STATE);
+    }
   } catch (e) {}
   return defaultProf;
 }
@@ -416,6 +625,9 @@ export function saveLocalUserProfile(profile: UserProfile): void {
     }
     if (profile.cityMapProgression) {
       localStorage.setItem(LOCAL_CITY_MAP_KEY, JSON.stringify(profile.cityMapProgression));
+    }
+    if (profile.englishAdventure) {
+      localStorage.setItem(LOCAL_ADVENTURE_KEY, JSON.stringify(profile.englishAdventure));
     }
     if (typeof profile.mszCoinsBalance === 'number') {
       localStorage.setItem('eb_msz_coins_balance', profile.mszCoinsBalance.toString());
@@ -672,6 +884,16 @@ export async function signInWithGoogle(): Promise<UserProfile> {
           mergedCityMap.totalStars > (profile.cityMapProgression?.totalStars || 0);
         profile.cityMapProgression = mergedCityMap;
 
+        const mergedAdv = mergeEnglishAdventureState(
+          currentLocal?.englishAdventure,
+          profile.englishAdventure
+        );
+        const advChanged =
+          mergedAdv.adventureXpEarned > (profile.englishAdventure?.adventureXpEarned || 0) ||
+          mergedAdv.completedMissionIds.length > (profile.englishAdventure?.completedMissionIds?.length || 0) ||
+          mergedAdv.claimedRewardIds.length > (profile.englishAdventure?.claimedRewardIds?.length || 0);
+        profile.englishAdventure = mergedAdv;
+
         const mergedAnnotations = mergeChartAnnotations(
           currentLocal?.chartAnnotations || getChartAnnotations(),
           profile.chartAnnotations
@@ -692,12 +914,14 @@ export async function signInWithGoogle(): Promise<UserProfile> {
             stats: profile.stats,
             favoriteLessonIds: mergedFavs,
             cityMapProgression: mergedCityMap,
+            englishAdventure: mergedAdv,
             chartAnnotations: mergedAnnotations
           });
-        } else if (favsChanged || cityMapChanged || annotationsChanged) {
+        } else if (favsChanged || cityMapChanged || advChanged || annotationsChanged) {
           await updateDoc(userRef, {
             favoriteLessonIds: mergedFavs,
             cityMapProgression: mergedCityMap,
+            englishAdventure: mergedAdv,
             chartAnnotations: mergedAnnotations
           });
         }
@@ -717,6 +941,7 @@ export async function signInWithGoogle(): Promise<UserProfile> {
           },
           favoriteLessonIds: currentLocal.favoriteLessonIds || [],
           cityMapProgression: currentLocal.cityMapProgression || DEFAULT_CITY_MAP_PROGRESSION,
+          englishAdventure: currentLocal.englishAdventure || DEFAULT_ENGLISH_ADVENTURE_STATE,
           chartAnnotations: currentLocal.chartAnnotations || getChartAnnotations()
         };
         await setDoc(userRef, profile);
@@ -884,6 +1109,17 @@ export function subscribeToAuthState(callback: (profile: UserProfile | null) => 
               (mergedCityMap.seenAnswerHashes?.length || 0) > remoteSeenA;
             data.cityMapProgression = mergedCityMap;
 
+            const mergedAdv = mergeEnglishAdventureState(
+              currentLocal.englishAdventure,
+              data.englishAdventure
+            );
+            const advNeedsSync =
+              mergedAdv.adventureXpEarned > (data.englishAdventure?.adventureXpEarned || 0) ||
+              mergedAdv.completedMissionIds.length > (data.englishAdventure?.completedMissionIds?.length || 0) ||
+              mergedAdv.claimedRewardIds.length > (data.englishAdventure?.claimedRewardIds?.length || 0) ||
+              mergedAdv.totalStars > (data.englishAdventure?.totalStars || 0);
+            data.englishAdventure = mergedAdv;
+
             const mergedTutorWeaknesses = mergeTutorWeaknesses(
               currentLocal.tutorWeaknesses,
               data.tutorWeaknesses
@@ -903,6 +1139,7 @@ export function subscribeToAuthState(callback: (profile: UserProfile | null) => 
               localBalance > firestoreBalance ||
               annotationsNeedSync ||
               cityNeedsSync ||
+              advNeedsSync ||
               weaknessesNeedSync;
 
             if (needsSync) {
@@ -911,6 +1148,7 @@ export function subscribeToAuthState(callback: (profile: UserProfile | null) => 
                 {
                   arcadeProgression: data.arcadeProgression,
                   cityMapProgression: data.cityMapProgression,
+                  englishAdventure: data.englishAdventure,
                   stats: data.stats,
                   ownedCardInstances: data.ownedCardInstances,
                   mszCoinsBalance: data.mszCoinsBalance,
@@ -952,7 +1190,8 @@ export async function updateUserProfile(profile: Partial<UserProfile>): Promise<
       ...(profile.stats || {})
     },
     arcadeProgression: profile.arcadeProgression || current.arcadeProgression,
-    cityMapProgression: profile.cityMapProgression || current.cityMapProgression
+    cityMapProgression: profile.cityMapProgression || current.cityMapProgression,
+    englishAdventure: profile.englishAdventure || current.englishAdventure
   };
   saveLocalUserProfile(updated);
   saveProfileToIndexedDB(updated).catch(console.warn);
@@ -982,7 +1221,10 @@ export async function updateUserProfile(profile: Partial<UserProfile>): Promise<
  * Save an exercise / dictation / quiz attempt
  * Target: IndexedDB (persistent) + Cloud Firestore (users/{uid}/attempts/{attemptId})
  */
-export async function recordAttempt(attempt: Omit<LearningAttempt, 'attemptId' | 'completedAt'>): Promise<LearningAttempt> {
+export async function recordAttempt(
+  attempt: Omit<LearningAttempt, 'attemptId' | 'completedAt'>,
+  options?: { skipXpIncrement?: boolean }
+): Promise<LearningAttempt> {
   const newAttempt: LearningAttempt = {
     ...attempt,
     attemptId: 'att_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
@@ -1004,8 +1246,10 @@ export async function recordAttempt(attempt: Omit<LearningAttempt, 'attemptId' |
 
   // 3. Update user stats & daily missions locally and in IndexedDB
   const profile = getLocalUserProfile();
-  profile.stats.weeklyXp += 50;
-  profile.stats.totalXp += 50;
+  if (!options?.skipXpIncrement) {
+    profile.stats.weeklyXp += 50;
+    profile.stats.totalXp += 50;
+  }
   profile.stats.completedModules = Math.min(profile.stats.totalModules, profile.stats.completedModules + 1);
   profile.stats.masteryPercentage = Math.round((profile.stats.completedModules / profile.stats.totalModules) * 100);
 
@@ -1025,7 +1269,8 @@ export async function recordAttempt(attempt: Omit<LearningAttempt, 'attemptId' |
     dialogue: ['speaking'],
     daily_challenge: ['vocabulary', 'reading'],
     city_map: ['grammar'],
-    arcade: ['vocabulary']
+    arcade: ['vocabulary'],
+    adventure: ['vocabulary', 'grammar', 'reading']
   };
   const catsToAdvance = missionCatsMap[newAttempt.moduleType] || ['reading'];
   const nextDailyState = recordDailyMissionActivity(
@@ -1063,6 +1308,61 @@ export async function recordAttempt(attempt: Omit<LearningAttempt, 'attemptId' |
   }
 
   return newAttempt;
+}
+
+/**
+ * Write an immutable English Adventure reward claim document to Cloud Firestore (`users/{uid}/adventureClaims/{claimId}`).
+ * Security rules enforce write-once (`allow create`, `allow update, delete: if false`).
+ * Returns false if already claimed on server, true otherwise.
+ */
+export async function recordImmutableAdventureClaim(payload: {
+  claimId: string;
+  missionId?: string;
+  islandId?: string;
+  xpAwarded: number;
+  coinsAwarded: number;
+  accuracy: number;
+  claimedAt: string;
+}): Promise<boolean> {
+  const safeId = payload.claimId.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 120);
+  if (!safeId) return false;
+
+  if (!navigator.onLine || !isFirebaseConfigured || !db || !auth?.currentUser) {
+    return true;
+  }
+
+  const uid = auth.currentUser.uid;
+  const claimPath = `users/${uid}/adventureClaims/${safeId}`;
+  const claimRef = doc(db, 'users', uid, 'adventureClaims', safeId);
+
+  try {
+    const existing = await getDoc(claimRef);
+    if (existing.exists()) {
+      return false;
+    }
+    await setDoc(claimRef, {
+      claimId: safeId,
+      missionId: (payload.missionId || '').slice(0, 80),
+      islandId: (payload.islandId || '').slice(0, 80),
+      xpAwarded: Math.max(0, Math.min(350, Math.round(payload.xpAwarded || 0))),
+      coinsAwarded: Math.max(0, Math.min(100, Math.round(payload.coinsAwarded || 0))),
+      accuracy: Math.max(0, Math.min(100, Math.round(payload.accuracy || 0))),
+      claimedAt: (payload.claimedAt || new Date().toISOString()).slice(0, 64)
+    });
+    return true;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('Missing or insufficient permissions')) {
+      // Because adventureClaims disallow update, an already-existing claim would raise permission error if race occurred.
+      try {
+        const recheck = await getDoc(claimRef);
+        if (recheck.exists()) return false;
+      } catch {}
+      handleFirestoreError(err, OperationType.CREATE, claimPath);
+    }
+    console.warn('Adventure claim ledger sync deferred:', err);
+    return true;
+  }
 }
 
 /**
@@ -2304,6 +2604,11 @@ export async function reconcileUserProfileWithFirestore(): Promise<ReconcileFire
     remoteData?.cityMapProgression
   );
 
+  const mergedEnglishAdventure = mergeEnglishAdventureState(
+    localProfile.englishAdventure,
+    remoteData?.englishAdventure
+  );
+
   const validLevels: CEFRLevel[] = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
   const resolvedLevel: CEFRLevel = validLevels.includes(localProfile.level)
     ? localProfile.level
@@ -2359,6 +2664,7 @@ export async function reconcileUserProfileWithFirestore(): Promise<ReconcileFire
       activeSession: localProfile.arcadeProgression?.activeSession || remoteData?.arcadeProgression?.activeSession || null
     },
     cityMapProgression: mergedCityMap,
+    englishAdventure: mergedEnglishAdventure,
     ownedCardInstances: mergedInstances,
     mszCoinsBalance: Math.max(
       typeof remoteData?.mszCoinsBalance === 'number' ? remoteData.mszCoinsBalance : 0,

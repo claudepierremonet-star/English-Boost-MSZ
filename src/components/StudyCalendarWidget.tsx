@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion';
 import type { UserProfile, LearningAttempt } from '../firebase/types';
 import { getUserLearningAttempts } from '../firebase/client';
+import { MotionShimmerBlock } from './SkeletonLoaders';
 
 interface StudyCalendarWidgetProps {
   user: UserProfile;
@@ -581,20 +582,30 @@ export const StudyCalendarWidget: React.FC<StudyCalendarWidgetProps> = ({
 
             {/* Monthly Key Metrics Chips */}
             <div className="flex items-center gap-2 flex-wrap font-mono text-xs">
-              <span className="px-2.5 py-1 rounded-lg bg-[#0c1322] border border-[#232a3a] text-[#dce2f8] flex items-center gap-1.5">
-                <span className="text-[#f2ca50] font-bold">✓ {monthStats.studiedDays}</span>
-                <span className="text-[#99907c]">jours actifs</span>
-              </span>
+              {isLoadingAttempts ? (
+                <>
+                  <MotionShimmerBlock className="h-7 w-28" surface="gold" />
+                  <MotionShimmerBlock className="h-7 w-24" surface="base" delay={0.05} />
+                  <MotionShimmerBlock className="h-7 w-20" surface="gold" delay={0.1} />
+                </>
+              ) : (
+                <>
+                  <span className="px-2.5 py-1 rounded-lg bg-[#0c1322] border border-[#232a3a] text-[#dce2f8] flex items-center gap-1.5">
+                    <span className="text-[#f2ca50] font-bold">✓ {monthStats.studiedDays}</span>
+                    <span className="text-[#99907c]">jours actifs</span>
+                  </span>
 
-              <span className="px-2.5 py-1 rounded-lg bg-[#0c1322] border border-[#232a3a] text-[#dce2f8] flex items-center gap-1.5">
-                <span className="text-emerald-400 font-bold">{monthStats.regularity}%</span>
-                <span className="text-[#99907c]">régularité</span>
-              </span>
+                  <span className="px-2.5 py-1 rounded-lg bg-[#0c1322] border border-[#232a3a] text-[#dce2f8] flex items-center gap-1.5">
+                    <span className="text-emerald-400 font-bold">{monthStats.regularity}%</span>
+                    <span className="text-[#99907c]">régularité</span>
+                  </span>
 
-              <span className="px-2.5 py-1 rounded-lg bg-[#0c1322] border border-[#232a3a] text-[#dce2f8] flex items-center gap-1.5">
-                <span className="text-[#f2ca50] font-bold">+{monthStats.totalMonthXp}</span>
-                <span className="text-[#99907c]">XP</span>
-              </span>
+                  <span className="px-2.5 py-1 rounded-lg bg-[#0c1322] border border-[#232a3a] text-[#dce2f8] flex items-center gap-1.5">
+                    <span className="text-[#f2ca50] font-bold">+{monthStats.totalMonthXp}</span>
+                    <span className="text-[#99907c]">XP</span>
+                  </span>
+                </>
+              )}
             </div>
           </div>
 
@@ -617,7 +628,17 @@ export const StudyCalendarWidget: React.FC<StudyCalendarWidgetProps> = ({
               ))}
 
               {/* Day cells */}
-              {daysGrid.map((day) => {
+              {isLoadingAttempts
+                ? daysGrid.map((day, idx) => (
+                    <MotionShimmerBlock
+                      key={`cal-skel-${day.dateStr}`}
+                      className="h-12 sm:h-14 w-full"
+                      rounded="rounded-xl"
+                      surface={idx % 7 === 0 ? 'gold' : 'base'}
+                      delay={(idx % 10) * 0.03}
+                    />
+                  ))
+                : daysGrid.map((day) => {
                 const isSelected = selectedDayDetail?.dateStr === day.dateStr;
 
                 // Color tint depending on XP earned

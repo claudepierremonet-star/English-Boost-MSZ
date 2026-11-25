@@ -17,6 +17,7 @@ import {
 import { speakText } from '../services/speechService';
 import { playSelectCue } from '../utils/soundEffects';
 import { lookupLocalWord, type LocalVocabEntry } from '../data/localVocabularyDb';
+import { DictionaryLookupSkeleton } from './SkeletonLoaders';
 
 interface AnchorRect {
   top: number;
@@ -726,12 +727,7 @@ export const LessonDictionaryProvider: React.FC<LessonDictionaryProviderProps> =
               {/* Modal Body */}
               <div className="p-4 overflow-y-auto space-y-3.5 text-sm">
                 {isLoadingBase && !lookupResult ? (
-                  <div className="flex items-center gap-3 py-8 justify-center text-[#d4c78f] text-xs font-mono">
-                    <span className="material-symbols-outlined text-lg animate-spin text-[#f2ca50]">
-                      progress_activity
-                    </span>
-                    <span>Analyse instantanée via l&apos;API Google...</span>
-                  </div>
+                  <DictionaryLookupSkeleton />
                 ) : (
                   <>
                     {/* 1. DEFINITION (FR & EN) */}

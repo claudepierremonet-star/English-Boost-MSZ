@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import type { SchoolLesson } from '../data/schoolCurriculum';
+import { useReadingMode } from '../context/ReadingModeContext';
 
 interface FloatingSpeakingStudioShortcutProps {
   activeLesson: SchoolLesson;
@@ -13,6 +14,8 @@ export const FloatingSpeakingStudioShortcut: React.FC<FloatingSpeakingStudioShor
   onOpenSpeakingStudio,
   onDismiss
 }) => {
+  const { isReadingMode } = useReadingMode();
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.55, y: 40 }}
@@ -29,13 +32,17 @@ export const FloatingSpeakingStudioShortcut: React.FC<FloatingSpeakingStudioShor
         damping: 16,
         mass: 0.85
       }}
-      className="fixed bottom-24 right-4 sm:bottom-8 sm:right-8 z-40 select-none"
+      className={`fixed bottom-24 right-4 sm:bottom-8 sm:right-8 z-40 select-none transition-opacity duration-300 ${
+        isReadingMode ? 'opacity-15 hover:opacity-95 focus-within:opacity-100' : 'opacity-100'
+      }`}
       role="region"
       aria-label="Raccourci Studio d'Élocution pour la leçon active"
     >
       <div className="relative flex items-center group">
-        {/* Golden ambient ping halo */}
-        <span className="absolute -inset-1 rounded-full bg-[#f2ca50]/25 animate-ping pointer-events-none" />
+        {/* Golden ambient ping halo (suppressed in Reading Mode) */}
+        {!isReadingMode && (
+          <span className="absolute -inset-1 rounded-full bg-[#f2ca50]/25 animate-ping pointer-events-none" />
+        )}
 
         {/* Main Floating Action Pill */}
         <motion.button

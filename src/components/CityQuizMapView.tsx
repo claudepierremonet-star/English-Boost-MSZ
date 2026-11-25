@@ -28,6 +28,7 @@ import {
   LuxurySkyline3DSvg
 } from './CityMapLuxury3DKit';
 import { GlassSlidingCapsule } from './GlassSlidingCapsule';
+import { useAppTheme } from '../theme/ThemeContext';
 
 const CITY_NAV_PREFS_KEY = 'eb_msz_city_nav_prefs_v1';
 
@@ -118,6 +119,8 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
   onXpEarned,
   onProgressionUpdated
 }) => {
+  const { isDark, theme } = useAppTheme();
+  const isParchment = theme === 'parchment-royal';
   const unlockedLevel = Math.max(1, Math.min(MAX_CITY_LEVEL, progression.unlockedLevel || 1));
   const activeDistrictMeta = useMemo(() => getDistrictForLevel(unlockedLevel), [unlockedLevel]);
   const activeSectorMeta = useMemo(() => getSectorForLevel(unlockedLevel), [unlockedLevel]);
@@ -416,38 +419,99 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
       <div className="flex flex-col w-full max-w-5xl mx-auto px-4 sm:px-6 pb-24 gap-5 select-none">
         {/* ATLAS ARCHITECTURAL HERO BANNER (600 NIVEAUX) */}
         <section
-          className="relative rounded-3xl bg-gradient-to-br from-[#191f2f] via-[#121828] to-[#080d1a] border border-[#f2ca50]/45 overflow-hidden p-5 sm:p-8"
+          className={`relative rounded-3xl border overflow-hidden p-5 sm:p-8 transition-colors duration-300 ${
+            isDark
+              ? 'bg-gradient-to-br from-[#131c31] via-[#0c1424] to-[#070b16] border-[#e8c55b]/40'
+              : isParchment
+              ? 'bg-gradient-to-br from-[#fffdf7] via-[#f9f3e4] to-[#efe5cf] border-[#b48a34]/45'
+              : 'bg-gradient-to-br from-[#ffffff] via-[#faf7f0] to-[#f1ece0] border-[#c4a150]/45'
+          }`}
           style={{
-            boxShadow:
-              '0 24px 55px -16px rgba(0, 0, 0, 0.78), inset 0 1px 0 rgba(255, 240, 185, 0.14)'
+            boxShadow: isDark
+              ? '0 24px 55px -16px rgba(0, 0, 0, 0.78), inset 0 1px 0 rgba(255, 240, 185, 0.14)'
+              : '0 20px 44px -16px rgba(30, 41, 59, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.9)'
           }}
         >
-          <LuxuryCornerBrackets accentHex="#f2ca50" />
+          <LuxuryCornerBrackets accentHex={isDark ? '#f2ca50' : '#9a6b0c'} />
           <div
-            className="pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 w-[520px] h-52 rounded-full opacity-25 blur-3xl"
-            style={{ background: 'radial-gradient(circle, #f2ca50 0%, transparent 70%)' }}
+            className={`pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 w-[520px] h-52 rounded-full blur-3xl ${
+              isDark ? 'opacity-20' : 'opacity-15'
+            }`}
+            style={{
+              background: isDark
+                ? 'radial-gradient(circle, #f2ca50 0%, transparent 70%)'
+                : 'radial-gradient(circle, #d4a024 0%, transparent 70%)'
+            }}
             aria-hidden="true"
           />
           <div className="absolute inset-x-0 bottom-0 pointer-events-none">
-            <LuxurySkyline3DSvg accentHex="#f2ca50" />
+            <LuxurySkyline3DSvg
+              accentHex={isDark ? '#f2ca50' : '#9a6b0c'}
+              variant={isDark ? 'dark' : 'light'}
+            />
+            <div
+              className={`absolute inset-0 bg-gradient-to-t ${
+                isDark
+                  ? 'from-[#070b16]/95 via-[#0c1424]/55 to-transparent'
+                  : isParchment
+                  ? 'from-[#efe5cf]/90 via-[#f9f3e4]/45 to-transparent'
+                  : 'from-[#f1ece0]/90 via-[#faf7f0]/45 to-transparent'
+              }`}
+              aria-hidden="true"
+            />
           </div>
 
           <div className="relative z-10 flex flex-col gap-5">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-              <div className="flex flex-col gap-1.5 max-w-2xl">
-                <div className="flex items-center gap-2 text-xs font-mono text-[#d4c78f] tabular-nums">
-                  <span className="text-[#f2ca50] font-semibold">Atlas Architectural</span>
-                  <span aria-hidden="true">·</span>
-                  <span>{MAX_CITY_LEVEL} Niveaux</span>
-                  <span aria-hidden="true">·</span>
-                  <span>6 000 Chapitres</span>
+              <div className="flex flex-col gap-2 max-w-2xl">
+                <div className="flex flex-wrap items-center gap-2 text-xs font-mono tabular-nums">
+                  <span
+                    className={`font-bold tracking-wide uppercase ${
+                      isDark ? 'text-[#f5cf5e]' : 'text-[#8c5e08]'
+                    }`}
+                  >
+                    Atlas Architectural
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className={isDark ? 'text-[#64748b]' : 'text-[#94a3b8]'}
+                  >
+                    ·
+                  </span>
+                  <span className={isDark ? 'text-[#cbd5e1]' : 'text-[#475569]'}>
+                    {MAX_CITY_LEVEL} Niveaux
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className={isDark ? 'text-[#64748b]' : 'text-[#94a3b8]'}
+                  >
+                    ·
+                  </span>
+                  <span className={isDark ? 'text-[#cbd5e1]' : 'text-[#475569]'}>
+                    6 000 Chapitres
+                  </span>
                 </div>
-                <h1 className="font-serif text-2xl sm:text-3xl font-bold text-[#dce2f8] leading-tight text-balance">
+                <h1
+                  className={`font-serif text-2xl sm:text-3xl font-bold leading-tight tracking-tight text-balance ${
+                    isDark ? 'text-[#f8fafc]' : 'text-[#0f172a]'
+                  }`}
+                >
                   La Cité d&apos;English Boost MSZ
                 </h1>
-                <p className="text-xs sm:text-sm text-[#d0c5af] leading-relaxed">
-                  Parcours progressif de la <strong className="text-[#dce2f8]">6e</strong> à la{' '}
-                  <strong className="text-[#dce2f8]">Terminale (C1/C2)</strong>. Sélectionnez une classe ou une tranche de niveaux ci-dessous pour afficher uniquement votre secteur sans encombrer la carte.
+                <p
+                  className={`text-xs sm:text-sm leading-relaxed ${
+                    isDark ? 'text-[#cbd5e1]' : 'text-[#334155]'
+                  }`}
+                >
+                  Parcours progressif de la{' '}
+                  <strong className={isDark ? 'text-[#f8fafc] font-semibold' : 'text-[#0f172a] font-semibold'}>
+                    6e
+                  </strong>{' '}
+                  à la{' '}
+                  <strong className={isDark ? 'text-[#f8fafc] font-semibold' : 'text-[#0f172a] font-semibold'}>
+                    Terminale (C1/C2)
+                  </strong>
+                  . Sélectionnez une classe ou une tranche de niveaux ci-dessous pour afficher uniquement votre secteur sans encombrer la carte.
                 </p>
               </div>
 
@@ -457,19 +521,33 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
                   onClick={() => setShowGlobalRangeIndex((prev) => !prev)}
                   className={`px-3.5 py-3 rounded-xl border font-semibold text-xs whitespace-nowrap shrink-0 flex items-center gap-1.5 transition-colors cursor-pointer ${
                     showGlobalRangeIndex
-                      ? 'bg-[#232a3a] border-[#f2ca50] text-[#f2ca50]'
-                      : 'bg-[#0c1322]/90 hover:bg-[#232a3a] text-[#dce2f8] border-[#232a3a]'
+                      ? isDark
+                        ? 'bg-[#1f2c48] border-[#f5cf5e] text-[#f5cf5e]'
+                        : 'bg-[#f6ecd6] border-[#9a6b0c] text-[#784e05]'
+                      : isDark
+                      ? 'bg-[#11192d]/90 hover:bg-[#1b2742] text-[#f1f5f9] border-[#334155]'
+                      : 'bg-white/95 hover:bg-[#f6efe0] text-[#1e293b] border-[#cbd5e1] shadow-sm'
                   }`}
                   title="Ouvrir l'index complet des plages de niveaux (1 à 600)"
                 >
-                  <span className="material-symbols-outlined text-base text-[#f2ca50]">toc</span>
+                  <span
+                    className={`material-symbols-outlined text-base ${
+                      isDark ? 'text-[#f5cf5e]' : 'text-[#8c5e08]'
+                    }`}
+                  >
+                    toc
+                  </span>
                   <span>Index 1–{MAX_CITY_LEVEL}</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => scrollToLevelNode(unlockedLevel, { delayMs: 60 })}
-                  className="px-3.5 py-3 rounded-xl bg-[#0c1322]/90 hover:bg-[#232a3a] text-[#f2ca50] border border-[#f2ca50]/35 font-semibold text-xs whitespace-nowrap shrink-0 flex items-center gap-1.5 transition-colors cursor-pointer"
+                  className={`px-3.5 py-3 rounded-xl border font-semibold text-xs whitespace-nowrap shrink-0 flex items-center gap-1.5 transition-colors cursor-pointer ${
+                    isDark
+                      ? 'bg-[#11192d]/90 hover:bg-[#1b2742] text-[#f5cf5e] border-[#f5cf5e]/40'
+                      : 'bg-white/95 hover:bg-[#f6efe0] text-[#8c5e08] border-[#b48a34]/45 shadow-sm'
+                  }`}
                   title={`Centrer la carte sur le Niveau ${unlockedLevel}`}
                 >
                   <span className="material-symbols-outlined text-base">my_location</span>
@@ -479,7 +557,7 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setActiveLevelModal(unlockedLevel)}
-                  className="px-4 sm:px-5 py-3 rounded-xl bg-[#f2ca50] hover:bg-[#ffe088] text-[#3c2f00] font-bold text-xs sm:text-sm whitespace-nowrap shrink-0 shadow-lg flex items-center gap-2 transition-colors cursor-pointer"
+                  className="px-4 sm:px-5 py-3 rounded-xl bg-gradient-to-r from-[#e6b83a] via-[#f2ca50] to-[#f8d86b] hover:brightness-105 text-[#2b1f00] font-bold text-xs sm:text-sm whitespace-nowrap shrink-0 shadow-lg flex items-center gap-2 transition-all cursor-pointer border border-[#b48a34]/40"
                 >
                   <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>
                     explore
@@ -490,73 +568,121 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
             </div>
 
             {/* Clean Architectural Telemetry Strip */}
-            <div className="pt-4 border-t border-[#232a3a] grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
-              <div className="flex items-baseline justify-between sm:justify-start sm:gap-3">
-                <span className="text-xs text-[#d0c5af]">Niveaux conquis</span>
+            <div
+              className={`pt-4 border-t grid grid-cols-1 sm:grid-cols-3 gap-3 items-center ${
+                isDark ? 'border-white/10' : 'border-[#cbbd9f]/70'
+              }`}
+            >
+              <div
+                className={`px-3.5 py-2.5 rounded-xl border flex items-baseline justify-between gap-3 ${
+                  isDark
+                    ? 'bg-[#0a101f]/80 border-white/10'
+                    : 'bg-white/80 border-[#d6c9ae]/80 shadow-xs'
+                }`}
+              >
+                <span className={`text-xs font-medium ${isDark ? 'text-[#cbd5e1]' : 'text-[#475569]'}`}>
+                  Niveaux conquis
+                </span>
                 <div className="font-mono tabular-nums flex items-baseline gap-1">
                   <motion.span
                     key={conqueredSet.size}
                     initial={{ scale: 1.15 }}
                     animate={{ scale: 1 }}
                     transition={{ type: 'spring', stiffness: 260, damping: 18 }}
-                    className="text-xl font-bold text-[#f2ca50]"
+                    className={`text-xl font-bold ${isDark ? 'text-[#f5cf5e]' : 'text-[#8c5e08]'}`}
                   >
                     {conqueredSet.size}
                   </motion.span>
-                  <span className="text-xs text-[#99907c]">/ {MAX_CITY_LEVEL}</span>
+                  <span className={`text-xs ${isDark ? 'text-[#94a3b8]' : 'text-[#64748b]'}`}>
+                    / {MAX_CITY_LEVEL}
+                  </span>
                 </div>
               </div>
 
-              <div className="flex items-baseline justify-between sm:justify-start sm:gap-3">
-                <span className="text-xs text-[#d0c5af]">Chapitres validés</span>
+              <div
+                className={`px-3.5 py-2.5 rounded-xl border flex items-baseline justify-between gap-3 ${
+                  isDark
+                    ? 'bg-[#0a101f]/80 border-white/10'
+                    : 'bg-white/80 border-[#d6c9ae]/80 shadow-xs'
+                }`}
+              >
+                <span className={`text-xs font-medium ${isDark ? 'text-[#cbd5e1]' : 'text-[#475569]'}`}>
+                  Chapitres validés
+                </span>
                 <div className="font-mono tabular-nums flex items-baseline gap-1">
                   <motion.span
                     key={totalChaptersDone}
                     initial={{ scale: 1.15 }}
                     animate={{ scale: 1 }}
                     transition={{ type: 'spring', stiffness: 260, damping: 18 }}
-                    className="text-xl font-bold text-emerald-400"
+                    className={`text-xl font-bold ${isDark ? 'text-[#34d399]' : 'text-[#047857]'}`}
                   >
                     {totalChaptersDone}
                   </motion.span>
-                  <span className="text-xs text-[#99907c]">/ {TOTAL_CITY_CHAPTERS.toLocaleString('fr-FR')}</span>
+                  <span className={`text-xs ${isDark ? 'text-[#94a3b8]' : 'text-[#64748b]'}`}>
+                    / {TOTAL_CITY_CHAPTERS.toLocaleString('fr-FR')}
+                  </span>
                 </div>
               </div>
 
-              <div className="flex items-baseline justify-between sm:justify-end sm:gap-3">
-                <span className="text-xs text-[#d0c5af]">Étoiles urbaines</span>
+              <div
+                className={`px-3.5 py-2.5 rounded-xl border flex items-baseline justify-between gap-3 ${
+                  isDark
+                    ? 'bg-[#0a101f]/80 border-white/10'
+                    : 'bg-white/80 border-[#d6c9ae]/80 shadow-xs'
+                }`}
+              >
+                <span className={`text-xs font-medium ${isDark ? 'text-[#cbd5e1]' : 'text-[#475569]'}`}>
+                  Étoiles urbaines
+                </span>
                 <div className="font-mono tabular-nums flex items-baseline gap-1">
-                  <span className="text-xl font-bold text-[#ffe088]">{progression.totalStars || 0}</span>
-                  <span className="text-xs text-[#f2ca50]">★</span>
+                  <span className={`text-xl font-bold ${isDark ? 'text-[#fde68a]' : 'text-[#a16207]'}`}>
+                    {progression.totalStars || 0}
+                  </span>
+                  <span className={`text-xs ${isDark ? 'text-[#f5cf5e]' : 'text-[#b45309]'}`}>★</span>
                 </div>
               </div>
             </div>
 
             {/* Overall Route Progress */}
             <div className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between text-xs text-[#d0c5af]">
+              <div
+                className={`flex flex-wrap items-center justify-between gap-2 text-xs ${
+                  isDark ? 'text-[#cbd5e1]' : 'text-[#334155]'
+                }`}
+              >
                 <span>
                   Quartier actif :{' '}
-                  <strong className="text-[#f2ca50]">
+                  <strong className={isDark ? 'text-[#f5cf5e]' : 'text-[#8c5e08]'}>
                     {activeDistrictMeta.classLabel} · {activeSectorMeta.title}
                   </strong>
                 </span>
-                <span className="font-mono tabular-nums font-semibold text-[#f2ca50]">
+                <span
+                  className={`font-mono tabular-nums font-semibold ${
+                    isDark ? 'text-[#f5cf5e]' : 'text-[#8c5e08]'
+                  }`}
+                >
                   Étape {unlockedLevel} / {MAX_CITY_LEVEL}
                 </span>
               </div>
-              <div className="w-full h-2 rounded-full bg-[#070e1d] border border-[#232a3a] overflow-hidden p-0.5">
+              <div
+                className={`w-full h-2.5 rounded-full border overflow-hidden p-0.5 ${
+                  isDark
+                    ? 'bg-[#090e1c] border-white/10'
+                    : 'bg-[#e6decb] border-[#cbbd9f]'
+                }`}
+              >
                 <motion.div
                   initial={{ width: 0 }}
                   animate={{ width: `${Math.max(1.5, (conqueredSet.size / MAX_CITY_LEVEL) * 100)}%` }}
                   transition={{ type: 'spring', stiffness: 90, damping: 18 }}
-                  className="h-full rounded-full bg-gradient-to-r from-[#d4af37] via-[#f2ca50] to-[#ffe088] relative overflow-hidden"
+                  className="h-full rounded-full bg-gradient-to-r from-[#b8891b] via-[#e6b83a] to-[#f8d86b] relative overflow-hidden"
                 >
                   <motion.div
                     initial={{ x: '-100%' }}
                     animate={{ x: '220%' }}
                     transition={{ repeat: Infinity, duration: 2.8, ease: 'easeInOut', repeatDelay: 1.6 }}
-                    className="absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-white/35 to-transparent"
+                    className="absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-white/40 to-transparent"
                   />
                 </motion.div>
               </div>
@@ -788,16 +914,26 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
                 </button>
               </div>
 
-              <div className="flex items-center gap-2 text-xs font-mono tabular-nums text-[#d4c78f]">
+              <div
+                className={`flex items-center gap-2 text-xs font-mono tabular-nums ${
+                  isDark ? 'text-[#cbd5e1]' : 'text-[#475569]'
+                }`}
+              >
                 <span>Plage active :</span>
-                <strong className="text-[#f2ca50]">{activeBlock50Meta.rangeLabel}</strong>
+                <strong className={isDark ? 'text-[#f5cf5e]' : 'text-[#8c5e08]'}>
+                  {activeBlock50Meta.rangeLabel}
+                </strong>
                 <button
                   type="button"
                   onClick={() => {
                     setNavMode('blocks_50');
                     expandSingleBlock50(activeBlock50Meta.id);
                   }}
-                  className="ml-1 px-2.5 py-1 rounded-lg bg-[#0c1322] border border-[#232a3a] text-[#dce2f8] hover:border-[#f2ca50]/50 hover:text-[#f2ca50] font-sans font-semibold cursor-pointer transition-colors whitespace-nowrap"
+                  className={`ml-1 px-2.5 py-1 rounded-lg border font-sans font-semibold cursor-pointer transition-colors whitespace-nowrap ${
+                    isDark
+                      ? 'bg-[#0f172a] border-[#334155] text-[#f1f5f9] hover:border-[#f5cf5e]/60 hover:text-[#f5cf5e]'
+                      : 'bg-white border-[#cbd5e1] text-[#1e293b] hover:border-[#9a6b0c] hover:text-[#8c5e08]'
+                  }`}
                   title={`Ouvrir uniquement la plage active ${activeBlock50Meta.rangeLabel}`}
                 >
                   Centrer
@@ -1006,14 +1142,32 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
                     }
                   }}
                   aria-expanded={isExpanded}
-                  className="relative bg-gradient-to-r from-[#191f2f] via-[#151b2b] to-[#0c1322] border-b border-[#232a3a] px-5 py-4 sm:px-6 sm:py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer hover:bg-[#191f2f]/80 transition-colors"
+                  className={`relative border-b px-5 py-4 sm:px-6 sm:py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer transition-colors ${
+                    isDark
+                      ? 'bg-gradient-to-r from-[#172036] via-[#131b2e] to-[#0c1322] border-[#26314a] hover:brightness-110'
+                      : 'bg-gradient-to-r from-[#fffdf8] via-[#f9f4e7] to-[#f1ead9] border-[#d6c9ae] hover:bg-[#f6efe0]'
+                  }`}
                 >
                   <div className="flex items-start gap-3.5 min-w-0">
                     <div
-                      className="w-11 h-11 rounded-2xl bg-[#0c1322] border flex items-center justify-center shrink-0"
+                      className={`w-11 h-11 rounded-2xl border flex items-center justify-center shrink-0 ${
+                        isDark ? 'bg-[#0b1222]' : 'bg-white shadow-xs'
+                      }`}
                       style={{
-                        borderColor: isDistStarted ? district.accentHex : '#232a3a',
-                        color: isDistStarted ? district.accentHex : '#99907c'
+                        borderColor: isDistStarted
+                          ? isDark
+                            ? district.accentHex
+                            : '#9a6b0c'
+                          : isDark
+                          ? '#26314a'
+                          : '#cbd5e1',
+                        color: isDistStarted
+                          ? isDark
+                            ? district.accentHex
+                            : '#8c5e08'
+                          : isDark
+                          ? '#94a3b8'
+                          : '#64748b'
                       }}
                     >
                       <span
@@ -1025,19 +1179,36 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
                     </div>
 
                     <div className="flex flex-col min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap text-xs font-mono tabular-nums text-[#d0c5af]">
-                        <span style={{ color: district.accentHex }} className="font-bold">
+                      <div
+                        className={`flex items-center gap-2 flex-wrap text-xs font-mono tabular-nums ${
+                          isDark ? 'text-[#cbd5e1]' : 'text-[#475569]'
+                        }`}
+                      >
+                        <span
+                          style={{ color: isDark ? district.accentHex : '#8c5e08' }}
+                          className="font-bold"
+                        >
                           Classe de {district.classLabel}
                         </span>
                         <span aria-hidden="true">·</span>
                         <span>{district.cefrLabel}</span>
                         <span aria-hidden="true">·</span>
-                        <span className="text-[#f2ca50] font-semibold">{district.badgeText}</span>
+                        <span className={`font-semibold ${isDark ? 'text-[#f5cf5e]' : 'text-[#784e05]'}`}>
+                          {district.badgeText}
+                        </span>
                       </div>
-                      <h2 className="font-serif text-xl sm:text-2xl font-bold text-[#dce2f8] mt-0.5 truncate">
+                      <h2
+                        className={`font-serif text-xl sm:text-2xl font-bold mt-0.5 truncate ${
+                          isDark ? 'text-[#f8fafc]' : 'text-[#0f172a]'
+                        }`}
+                      >
                         {district.name}
                       </h2>
-                      <p className="text-xs text-[#d0c5af]/85 mt-0.5 max-w-xl line-clamp-2">
+                      <p
+                        className={`text-xs mt-0.5 max-w-xl line-clamp-2 ${
+                          isDark ? 'text-[#cbd5e1]' : 'text-[#334155]'
+                        }`}
+                      >
                         {district.description}
                       </p>
                     </div>
@@ -1045,10 +1216,14 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
 
                   <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
                     <div className="flex flex-col sm:items-end text-xs font-mono tabular-nums">
-                      <span className="font-bold text-[#f2ca50]">
+                      <span className={`font-bold ${isDark ? 'text-[#f5cf5e]' : 'text-[#8c5e08]'}`}>
                         {conqueredInDist} / {districtLevels.length} Monuments
                       </span>
-                      <span className="text-[11px] text-[#d0c5af]/75 font-sans mt-0.5">
+                      <span
+                        className={`text-[11px] font-sans mt-0.5 ${
+                          isDark ? 'text-[#94a3b8]' : 'text-[#475569]'
+                        }`}
+                      >
                         {isExpanded ? activeSector.title : 'Secteur rétracté · Appuyez pour déplier'}
                       </span>
                     </div>
@@ -1056,8 +1231,12 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
                     <span
                       className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-colors ${
                         isExpanded
-                          ? 'bg-[#f2ca50]/15 border-[#f2ca50]/50 text-[#f2ca50]'
-                          : 'bg-[#0c1322] border-[#232a3a] text-[#d0c5af]'
+                          ? isDark
+                            ? 'bg-[#f5cf5e]/15 border-[#f5cf5e]/50 text-[#f5cf5e]'
+                            : 'bg-[#f6ecd6] border-[#9a6b0c]/50 text-[#8c5e08]'
+                          : isDark
+                          ? 'bg-[#0b1222] border-[#26314a] text-[#cbd5e1]'
+                          : 'bg-white border-[#cbd5e1] text-[#334155]'
                       }`}
                       title={isExpanded ? 'Rétracter cette classe' : 'Déplier cette classe'}
                     >
@@ -1402,27 +1581,43 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
 
                       {/* CARTOGRAPHIC WAYPOINT INSPECTOR FOOTER BAR */}
                       {focusedLevelInSector && (
-                        <footer className="px-5 py-3.5 sm:px-6 bg-[#191f2f]/90 border-t border-[#232a3a] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <footer
+                          className={`px-5 py-3.5 sm:px-6 border-t flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                            isDark
+                              ? 'bg-[#12192c] border-[#26314a]'
+                              : 'bg-[#f8f4ea] border-[#d6c9ae]'
+                          }`}
+                        >
                           <div className="flex items-center gap-3 min-w-0">
                             <span
-                              className="material-symbols-outlined text-xl shrink-0 text-[#f2ca50]"
+                              className={`material-symbols-outlined text-xl shrink-0 ${
+                                isDark ? 'text-[#f5cf5e]' : 'text-[#8c5e08]'
+                              }`}
                               style={{ fontVariationSettings: "'FILL' 1" }}
                             >
                               {focusedLevelInSector.icon}
                             </span>
                             <div className="flex flex-col min-w-0">
-                              <div className="flex items-center gap-2 text-[11px] font-mono tabular-nums text-[#d4c78f]">
+                              <div
+                                className={`flex items-center gap-2 text-[11px] font-mono tabular-nums ${
+                                  isDark ? 'text-[#cbd5e1]' : 'text-[#475569]'
+                                }`}
+                              >
                                 <span>Monument {focusedLevelInSector.levelNumber}</span>
                                 <span aria-hidden="true">·</span>
                                 <span>{focusedLevelInSector.classLabel}</span>
                                 <span aria-hidden="true">·</span>
                                 <span>{focusedChapters.length}/10 chapitres</span>
                               </div>
-                              <div className="text-xs sm:text-sm text-[#dce2f8] font-medium truncate">
-                                <strong className="font-serif text-[#f2ca50]">
+                              <div
+                                className={`text-xs sm:text-sm font-medium truncate ${
+                                  isDark ? 'text-[#f8fafc]' : 'text-[#0f172a]'
+                                }`}
+                              >
+                                <strong className={`font-serif ${isDark ? 'text-[#f5cf5e]' : 'text-[#8c5e08]'}`}>
                                   {focusedLevelInSector.landmarkTitle}
                                 </strong>{' '}
-                                <span className="text-[#d0c5af]">
+                                <span className={isDark ? 'text-[#cbd5e1]' : 'text-[#334155]'}>
                                   — {focusedLevelInSector.themeFocus}
                                 </span>
                               </div>
@@ -1433,7 +1628,11 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
                             <button
                               type="button"
                               onClick={() => toggleDistrictExpanded(district.id)}
-                              className="px-3 py-2 rounded-xl bg-[#0c1322] border border-[#232a3a] text-[#d0c5af] hover:text-[#f2ca50] text-xs font-semibold whitespace-nowrap cursor-pointer"
+                              className={`px-3 py-2 rounded-xl border text-xs font-semibold whitespace-nowrap cursor-pointer ${
+                                isDark
+                                  ? 'bg-[#0b1222] border-[#334155] text-[#cbd5e1] hover:text-[#f5cf5e]'
+                                  : 'bg-white border-[#cbd5e1] text-[#334155] hover:text-[#8c5e08]'
+                              }`}
                             >
                               Rétracter
                             </button>
@@ -1442,8 +1641,10 @@ export const CityQuizMapView: React.FC<CityQuizMapViewProps> = ({
                               onClick={() => handleOpenLevel(focusedLevelInSector)}
                               className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
                                 focusedLevelInSector.levelNumber <= unlockedLevel
-                                  ? 'bg-[#f2ca50] hover:bg-[#ffe088] text-[#3c2f00]'
-                                  : 'bg-[#232a3a] text-[#99907c]'
+                                  ? 'bg-[#f2ca50] hover:bg-[#ffe088] text-[#2b1f00]'
+                                  : isDark
+                                  ? 'bg-[#1e293b] text-[#94a3b8]'
+                                  : 'bg-[#e2e8f0] text-[#475569]'
                               }`}
                             >
                               {focusedLevelInSector.levelNumber <= unlockedLevel

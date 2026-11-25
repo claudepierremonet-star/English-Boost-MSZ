@@ -14,6 +14,8 @@ import { completeSchoolLessonForCityProgress } from '../utils/cityMapManager';
 import { LessonDictionaryProvider, useLessonDictionary } from './LessonDictionaryContext';
 import { InteractiveHighlightText } from './InteractiveHighlightText';
 import { normalizeSelectionQuery } from '../services/dictionaryService';
+import { useReadingMode } from '../context/ReadingModeContext';
+import { ReadingModeToggleButton } from './ReadingModeToggleButton';
 import {
   speakText as speakNaturalText,
   speakFrenchText,
@@ -183,6 +185,7 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
   isFavorite,
   onToggleFavorite
 }) => {
+  const { isReadingMode } = useReadingMode();
   const [internalFavIds, setInternalFavIds] = useState<string[]>(() => getFavoriteLessonIds());
   useEffect(() => {
     const onFavUpdate = (e: Event) => {
@@ -813,17 +816,21 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
       voiceAccent={voiceAccent}
     >
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-fadeIn"
+        className={`fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 backdrop-blur-md animate-fadeIn transition-colors duration-300 ${
+          isReadingMode ? 'bg-black/92' : 'bg-black/80'
+        }`}
         onClick={onClose}
       >
         <div
-          className="w-full max-w-4xl max-h-[92vh] rounded-2xl bg-[#0c1322] border border-[#f2ca50]/40 text-[#dce2f8] shadow-2xl flex flex-col overflow-hidden"
+          className={`w-full max-w-4xl max-h-[92vh] rounded-2xl bg-[#0c1322] border text-[#dce2f8] shadow-2xl flex flex-col overflow-hidden transition-all duration-300 ${
+            isReadingMode ? 'border-[#f2ca50]/55' : 'border-[#f2ca50]/40'
+          }`}
           onClick={(e) => e.stopPropagation()}
         >
         {/* MODAL HEADER */}
         <header className="p-4 sm:p-5 border-b border-[#232a3a] bg-[#151b2b] flex flex-col gap-3">
           <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 min-w-0">
               <div className="w-12 h-12 rounded-xl bg-[#232a3a] border border-[#f2ca50]/40 flex items-center justify-center text-[#f2ca50] shadow-md shrink-0">
                 <span className="material-symbols-outlined text-2xl">{lesson.theme_icon}</span>
               </div>
@@ -848,16 +855,25 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
-              {/* Auto-Audio Natural TTS Toggle */}
-              <button
-                type="button"
-                onClick={handleToggleAutoAudio}
-                className={`px-2.5 py-2 rounded-xl border text-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 ${
-                  isAutoAudioEnabled
-                    ? 'bg-[#f2ca50]/15 border-[#f2ca50]/60 text-[#f2ca50] shadow-sm shadow-[#f2ca50]/10'
-                    : 'bg-[#0c1322] border-[#232a3a] text-[#99907c] hover:text-[#dce2f8]'
+            <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+              {/* Reading Mode Toggle (always 100% visible) */}
+              <ReadingModeToggleButton variant="modal" />
+
+              {/* Secondary modal controls (dimmed during Reading Mode) */}
+              <div
+                className={`flex items-center gap-2 transition-opacity duration-300 ${
+                  isReadingMode ? 'opacity-25 hover:opacity-100 focus-within:opacity-100' : 'opacity-100'
                 }`}
+              >
+                {/* Auto-Audio Natural TTS Toggle */}
+                <button
+                  type="button"
+                  onClick={handleToggleAutoAudio}
+                  className={`px-2.5 py-2 rounded-xl border text-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 ${
+                    isAutoAudioEnabled
+                      ? 'bg-[#f2ca50]/15 border-[#f2ca50]/60 text-[#f2ca50] shadow-sm shadow-[#f2ca50]/10'
+                      : 'bg-[#0c1322] border-[#232a3a] text-[#99907c] hover:text-[#dce2f8]'
+                  }`}
                 title={
                   isAutoAudioEnabled
                     ? 'Lecture Audio Automatique activée (cliquez pour désactiver)'
@@ -935,6 +951,7 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                   {currentIsFavorite ? 'favorite' : 'favorite_border'}
                 </span>
               </button>
+              </div>
 
               <button
                 type="button"
@@ -943,6 +960,7 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                   onClose();
                 }}
                 className="w-9 h-9 rounded-xl bg-[#232a3a] text-[#d0c5af] hover:text-[#f2ca50] flex items-center justify-center transition-colors"
+                aria-label="Fermer la leçon"
               >
                 <span className="material-symbols-outlined text-lg">close</span>
               </button>
@@ -950,7 +968,13 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
           </div>
 
           {/* ANIMATED 10-CHAPTER MASTERY PROGRESS BAR FOR CURRENT LEVEL */}
-          <ChapterMasteryProgressBar />
+          <div
+            className={`transition-opacity duration-300 ${
+              isReadingMode ? 'opacity-20 hover:opacity-95' : 'opacity-100'
+            }`}
+          >
+            <ChapterMasteryProgressBar />
+          </div>
 
           {/* NAVIGATION TABS */}
           <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pt-1">
@@ -999,7 +1023,11 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
           )}
 
           {/* SUBTLE IN-CONTEXT DICTIONARY HINT */}
-          <div className="flex items-center gap-2 text-[11px] text-[#d4c78f]/90 pt-0.5">
+          <div
+            className={`flex items-center gap-2 text-[11px] text-[#d4c78f]/90 pt-0.5 transition-opacity duration-300 ${
+              isReadingMode ? 'opacity-20 hover:opacity-95' : 'opacity-100'
+            }`}
+          >
             <span className="material-symbols-outlined text-sm text-[#f2ca50] shrink-0">translate</span>
             <span>
               <strong>Double-cliquez</strong> sur n&apos;importe quel mot pour afficher son infobulle éphémère (traduction + phonétique IPA locale), ou <strong>pression longue / sélection</strong> pour le dictionnaire complet.
@@ -1009,6 +1037,7 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
 
         {/* MODAL BODY */}
         <LessonSelectionBody>
+          <div className={isReadingMode ? 'max-w-3xl mx-auto space-y-5 leading-relaxed' : 'space-y-5'}>
           {/* TAB 1: OVERVIEW & MODEL PHRASES */}
           {activeTab === 'overview' && (
             <div className="space-y-4 animate-fadeIn">
@@ -1827,10 +1856,15 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
               <RhetoricalAnalyzerView initialLessonId={lesson.id} />
             </div>
           )}
+          </div>
         </LessonSelectionBody>
 
         {/* MODAL FOOTER */}
-        <footer className="p-3 sm:p-4 border-t border-[#232a3a] bg-[#151b2b] flex items-center justify-between text-xs text-[#99907c]">
+        <footer
+          className={`p-3 sm:p-4 border-t border-[#232a3a] bg-[#151b2b] flex items-center justify-between text-xs text-[#99907c] transition-opacity duration-300 ${
+            isReadingMode ? 'opacity-25 hover:opacity-100' : 'opacity-100'
+          }`}
+        >
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-400" />
             <span>Fiche certifiée English Boost MZ • Conforme aux programmes</span>

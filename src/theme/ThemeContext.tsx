@@ -1,7 +1,26 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
-export type AppTheme = 'dark' | 'light' | 'dark-floral' | 'light-floral';
+export type AppTheme =
+  | 'dark'
+  | 'light'
+  | 'dark-floral'
+  | 'light-floral'
+  | 'emerald-grove'
+  | 'sapphire-ocean'
+  | 'obsidian-imperial'
+  | 'parchment-royal';
 export type FloralBorderWidth = '0.5cm' | '0.75cm' | '1cm';
+
+const ALL_THEMES: AppTheme[] = [
+  'dark',
+  'light',
+  'dark-floral',
+  'light-floral',
+  'emerald-grove',
+  'sapphire-ocean',
+  'obsidian-imperial',
+  'parchment-royal'
+];
 
 interface ThemeContextType {
   theme: AppTheme;
@@ -21,7 +40,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [theme, setThemeState] = useState<AppTheme>(() => {
     try {
       const saved = localStorage.getItem(THEME_STORAGE_KEY) as AppTheme;
-      if (['dark', 'light', 'dark-floral', 'light-floral'].includes(saved)) {
+      if (ALL_THEMES.includes(saved)) {
         return saved;
       }
     } catch (e) {
@@ -60,7 +79,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
-  const isDark = theme === 'dark' || theme === 'dark-floral';
+  const isDark = theme !== 'light' && theme !== 'light-floral' && theme !== 'parchment-royal';
   const isFloral = theme === 'dark-floral' || theme === 'light-floral';
 
   useEffect(() => {

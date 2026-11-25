@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useEffect, useRef, useMemo, useCallback, useTransition, useDeferredValue } from 'react';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
   ALL_200_LESSONS,
   CURRICULUM_200_STRUCTURE,
@@ -37,6 +37,9 @@ import { getFavoriteLessonIds, toggleFavoriteLesson, getLocalUserProfile } from 
 import { LessonDictionaryProvider } from './LessonDictionaryContext';
 import { useAdaptiveProfile } from '../hooks/useAdaptiveProfile';
 import { AdaptiveGlobalBanner } from './AdaptiveGlobalBanner';
+import { useReadingMode } from '../context/ReadingModeContext';
+import { ReadingModeToggleButton } from './ReadingModeToggleButton';
+import { LessonListSkeleton } from './SkeletonLoaders';
 
 interface SchoolCurriculumViewProps {
   onLessonCompleted?: (lessonId: string, xpEarned: number) => void;
@@ -61,6 +64,8 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
   onCityXpEarned,
   onCityProgressionUpdated
 }) => {
+  const { isReadingMode } = useReadingMode();
+  const shouldReduceMotion = useReducedMotion();
   const [selectedGrade, setSelectedGrade] = useState<SchoolGrade>(() => {
     try {
       return getLocalUserProfile().schoolGrade || '6e';
@@ -77,9 +82,37 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
   const [selectedThemeId, setSelectedThemeId] = useState<string>('all');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [viewMode, setViewMode] = useState<'themes_sections' | 'compact_grid'>('themes_sections');
   const [activeLesson, setActiveLesson] = useState<SchoolLesson | null>(null);
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
+
+  // Non-blocking lesson list hydration & filter transition state for perceived speed
+  const [isLessonsLoading, setIsLessonsLoading] = useState<boolean>(true);
+  const [isPendingListTransition, startListTransition] = useTransition();
+  const lessonSkeletonTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const triggerLessonListTransition = useCallback((durationMs = 190) => {
+    if (lessonSkeletonTimerRef.current) {
+      clearTimeout(lessonSkeletonTimerRef.current);
+    }
+    setIsLessonsLoading(true);
+    lessonSkeletonTimerRef.current = setTimeout(() => {
+      setIsLessonsLoading(false);
+    }, durationMs);
+  }, []);
+
+  useEffect(() => {
+    const rafId = requestAnimationFrame(() => {
+      triggerLessonListTransition(210);
+    });
+    return () => {
+      cancelAnimationFrame(rafId);
+      if (lessonSkeletonTimerRef.current) {
+        clearTimeout(lessonSkeletonTimerRef.current);
+      }
+    };
+  }, [triggerLessonListTransition]);
 
   // 600-level progression & 50-level CollapsibleLevelGroup state
   const [internalCityProgression, setInternalCityProgression] = useState<CityMapProgressionState>(() =>
@@ -212,7 +245,7 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
 
   const filteredLessons = sourcePool.filter((lesson) => {
     const matchesTheme = showFavoritesOnly || selectedThemeId === 'all' || lesson.theme_id === selectedThemeId;
-    const query = searchQuery.trim().toLowerCase();
+    const query = deferredSearchQuery.trim().toLowerCase();
     if (!query) return matchesTheme;
 
     const matchesQuery =
@@ -501,8 +534,12 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
 
   return (
     <div className="flex flex-col w-full px-4 sm:px-6 pb-24 gap-5 select-none">
-      {/* HERO BANNER & PACK DOWNLOAD CTA */}
-      <section className="relative w-full rounded-2xl bg-[#191f2f] p-5 sm:p-6 shadow-xl border border-[#4d4635]/40 overflow-hidden backdrop-blur-md">
+      {/* HERO BANNER & PACK DOWNLOAD CTA (dimmed in Reading Mode) */}
+      <section
+        className={`relative w-full rounded-2xl bg-[#191f2f] p-5 sm:p-6 shadow-xl border border-[#4d4635]/40 overflow-hidden backdrop-blur-md transition-opacity duration-300 ${
+          isReadingMode ? 'opacity-20 hover:opacity-95 focus-within:opacity-100' : 'opacity-100'
+        }`}
+      >
         <div className="absolute -top-12 -right-12 w-48 h-48 rounded-full bg-[#f2ca50]/10 blur-3xl pointer-events-none" />
 
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
@@ -563,26 +600,34 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
       </section>
 
       {/* GLOBAL ADAPTIVE LEARNING ENGINE BANNER (CURSUS CONTEXT) */}
-      <AdaptiveGlobalBanner
-        context="cursus"
-        onPrimaryAction={() => {
-          const recGrade = adaptiveAssessment.modulePlans.cursus.recommendedGrade;
-          if (recGrade !== selectedGrade) {
-            setSelectedGrade(recGrade);
-            setSelectedThemeId('all');
-            setShowFavoritesOnly(false);
-          }
-          const topLesson = adaptiveAssessment.recommendedLessons[0] || allGradeLessons[0];
-          if (topLesson) {
-            handleSelectLessonAndOpen(topLesson);
-          }
-        }}
-      />
+      <div
+        className={`transition-opacity duration-300 ${
+          isReadingMode ? 'opacity-20 hover:opacity-95 focus-within:opacity-100' : 'opacity-100'
+        }`}
+      >
+        <AdaptiveGlobalBanner
+          context="cursus"
+          onPrimaryAction={() => {
+            const recGrade = adaptiveAssessment.modulePlans.cursus.recommendedGrade;
+            if (recGrade !== selectedGrade) {
+              setSelectedGrade(recGrade);
+              setSelectedThemeId('all');
+              setShowFavoritesOnly(false);
+            }
+            const topLesson = adaptiveAssessment.recommendedLessons[0] || allGradeLessons[0];
+            if (topLesson) {
+              handleSelectLessonAndOpen(topLesson);
+            }
+          }}
+        />
+      </div>
 
       {/* 600 LEVELS GROUPED BY 50 USING LEVEL GROUP NAVIGATOR */}
       <section
         aria-label="Parcours des 600 niveaux regroupés par blocs de 50"
-        className="p-4 sm:p-5 rounded-2xl bg-[#151b2b]/95 border border-[#232a3a] shadow-lg flex flex-col gap-3.5"
+        className={`p-4 sm:p-5 rounded-2xl bg-[#151b2b]/95 border border-[#232a3a] shadow-lg flex flex-col gap-3.5 transition-opacity duration-300 ${
+          isReadingMode ? 'opacity-20 hover:opacity-95 focus-within:opacity-100' : 'opacity-100'
+        }`}
       >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#232a3a] pb-3">
           <div className="flex flex-col gap-0.5">
@@ -667,8 +712,13 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
                 key={lev.id}
                 type="button"
                 onClick={() => {
-                  setSelectedGrade(lev.id);
-                  setSelectedThemeId('all');
+                  if (selectedGrade !== lev.id) {
+                    triggerLessonListTransition(180);
+                    startListTransition(() => {
+                      setSelectedGrade(lev.id);
+                      setSelectedThemeId('all');
+                    });
+                  }
                 }}
                 className={`py-2.5 px-2 rounded-xl text-center border transition-all relative flex flex-col items-center justify-center gap-0.5 active:scale-95 cursor-pointer ${
                   isSelected
@@ -806,39 +856,57 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
                 )}
               </div>
 
-              {/* View Layout Switcher */}
-              <div className="flex items-center gap-1 p-1 rounded-xl bg-[#151b2b] border border-[#232a3a] shrink-0 self-end sm:self-auto">
-                <button
-                  type="button"
-                  onClick={() => setViewMode('themes_sections')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                    viewMode === 'themes_sections'
-                      ? 'bg-[#f2ca50] text-[#3c2f00] font-bold shadow-sm'
-                      : 'text-[#d0c5af] hover:text-white'
-                  }`}
-                  title="Affichage groupé par les 10 thèmes"
-                >
-                  <span className="material-symbols-outlined text-sm">view_agenda</span>
-                  <span>Par Thèmes</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode('compact_grid')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                    viewMode === 'compact_grid'
-                      ? 'bg-[#f2ca50] text-[#3c2f00] font-bold shadow-sm'
-                      : 'text-[#d0c5af] hover:text-white'
-                  }`}
-                  title="Affichage en grille continue"
-                >
-                  <span className="material-symbols-outlined text-sm">grid_view</span>
-                  <span>Grille Rapide</span>
-                </button>
+              {/* View Layout Switcher & Mode Lecture Toggle */}
+              <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto flex-wrap justify-end">
+                <ReadingModeToggleButton variant="toolbar" />
+
+                <div className="flex items-center gap-1 p-1 rounded-xl bg-[#151b2b] border border-[#232a3a]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (viewMode !== 'themes_sections') {
+                        triggerLessonListTransition(150);
+                        startListTransition(() => setViewMode('themes_sections'));
+                      }
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      viewMode === 'themes_sections'
+                        ? 'bg-[#f2ca50] text-[#3c2f00] font-bold shadow-sm'
+                        : 'text-[#d0c5af] hover:text-white'
+                    }`}
+                    title="Affichage groupé par les 10 thèmes"
+                  >
+                    <span className="material-symbols-outlined text-sm">view_agenda</span>
+                    <span>Par Thèmes</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (viewMode !== 'compact_grid') {
+                        triggerLessonListTransition(150);
+                        startListTransition(() => setViewMode('compact_grid'));
+                      }
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      viewMode === 'compact_grid'
+                        ? 'bg-[#f2ca50] text-[#3c2f00] font-bold shadow-sm'
+                        : 'text-[#d0c5af] hover:text-white'
+                    }`}
+                    title="Affichage en grille continue"
+                  >
+                    <span className="material-symbols-outlined text-sm">grid_view</span>
+                    <span>Grille Rapide</span>
+                  </button>
+                </div>
               </div>
             </div>
 
             {/* QUICK AUDIO BAR: SELECT ANY LESSON & GENERATE AUDIO SUMMARY */}
-            <div className="p-3 rounded-xl bg-[#151b2b] border border-[#f2ca50]/30 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-md">
+            <div
+              className={`p-3 rounded-xl bg-[#151b2b] border border-[#f2ca50]/30 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-md transition-opacity duration-300 ${
+                isReadingMode ? 'opacity-25 hover:opacity-95 focus-within:opacity-100' : 'opacity-100'
+              }`}
+            >
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-[#232a3a] border border-[#f2ca50]/40 text-[#f2ca50] flex items-center justify-center shrink-0">
                   <span className="material-symbols-outlined text-lg">headphones</span>
@@ -919,10 +987,13 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  setShowFavoritesOnly(!showFavoritesOnly);
-                  if (!showFavoritesOnly) {
-                    setSelectedThemeId('all');
-                  }
+                  triggerLessonListTransition(150);
+                  startListTransition(() => {
+                    setShowFavoritesOnly(!showFavoritesOnly);
+                    if (!showFavoritesOnly) {
+                      setSelectedThemeId('all');
+                    }
+                  });
                 }}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shrink-0 transition-all cursor-pointer border ${
                   showFavoritesOnly
@@ -952,8 +1023,11 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  setShowFavoritesOnly(false);
-                  setSelectedThemeId('all');
+                  triggerLessonListTransition(140);
+                  startListTransition(() => {
+                    setShowFavoritesOnly(false);
+                    setSelectedThemeId('all');
+                  });
                 }}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 transition-all cursor-pointer ${
                   !showFavoritesOnly && selectedThemeId === 'all'
@@ -971,8 +1045,11 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
                     key={themeGroup.themeId}
                     type="button"
                     onClick={() => {
-                      setShowFavoritesOnly(false);
-                      setSelectedThemeId(themeGroup.themeId);
+                      triggerLessonListTransition(140);
+                      startListTransition(() => {
+                        setShowFavoritesOnly(false);
+                        setSelectedThemeId(themeGroup.themeId);
+                      });
                     }}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shrink-0 transition-all cursor-pointer ${
                       isSelected
@@ -1001,6 +1078,22 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
 
           {/* DYNAMIC LESSONS LIST */}
           <section className="space-y-4">
+            <AnimatePresence mode="wait">
+              {(isLessonsLoading || isPendingListTransition) ? (
+                <LessonListSkeleton
+                  key={`lesson-skeleton-${selectedGrade}-${viewMode}-${showFavoritesOnly ? 'fav' : 'all'}`}
+                  mode={showFavoritesOnly || viewMode === 'compact_grid' ? 'compact_grid' : 'themes_sections'}
+                  cardCount={showFavoritesOnly || viewMode === 'compact_grid' ? 4 : 6}
+                />
+              ) : (
+                <motion.div
+                  key={`lesson-content-${selectedGrade}-${selectedThemeId}-${viewMode}-${showFavoritesOnly ? 'fav' : 'all'}`}
+                  initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
+                  animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+                  exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
+                  transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+                  className="space-y-4"
+                >
             <div className="flex items-center justify-between text-xs text-[#99907c] flex-wrap gap-2">
               {showFavoritesOnly ? (
                 <span className="flex items-center gap-1.5 text-rose-200">
@@ -1138,6 +1231,9 @@ export const SchoolCurriculumView: React.FC<SchoolCurriculumViewProps> = ({
                 ))}
               </div>
             ) : null}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </section>
         </>
       )}

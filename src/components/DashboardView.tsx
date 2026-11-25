@@ -15,7 +15,14 @@ import {
   CartesianGrid,
   ReferenceLine
 } from 'recharts';
-import { motion, AnimatePresence, useReducedMotion, type Variants } from 'framer-motion';
+import {
+  motion,
+  AnimatePresence,
+  animate,
+  useMotionValue,
+  useReducedMotion,
+  type Variants
+} from 'framer-motion';
 import { useSyncStatus } from '../offline/useSyncStatus';
 import { VocabularyMasterySummary } from './VocabularyMasterySummary';
 import { StudyCalendarWidget } from './StudyCalendarWidget';
@@ -29,6 +36,8 @@ import { AppNoticeModal } from './AppNoticeModal';
 import { LinguisticRadarSection } from './LinguisticRadarSection';
 import type { EcosystemLaunchTarget } from './SmartEcosystemHub';
 import { GlassSlidingCapsule } from './GlassSlidingCapsule';
+import { LexicalMasteryD3Chart } from './LexicalMasteryD3Chart';
+import { MotionTooltip } from './MotionTooltip';
 
 interface CustomTooltipProps {
   active?: boolean;
@@ -119,41 +128,122 @@ const CustomXpTooltip: React.FC<CustomTooltipProps> = ({ active, payload }) => {
   return null;
 };
 
-// Smooth interpolated counter hook for luxury statistics presentation
-const useAnimatedCounter = (target: number, duration: number = 850): number => {
-  const [count, setCount] = useState<number>(0);
+const luxuryEase: [number, number, number, number] = [0.16, 1, 0.3, 1];
+
+const ODOMETER_DIGITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+
+interface FramerRollingCounterProps {
+  value: number;
+  prefix?: string;
+  suffix?: string;
+  formatLocale?: boolean;
+  delayStep?: number;
+  className?: string;
+}
+
+/**
+ * Compteur numérique dynamique propulsé par Framer Motion :
+ * - Chaque chiffre possède un tambour vertical (0..9) animé par ressort GPU
+ * - Préserve le défilement fluide lors des incréments d'XP et de minutes d'étude en direct
+ */
+const FramerRollingCounter: React.FC<FramerRollingCounterProps> = ({
+  value,
+  prefix = '',
+  suffix = '',
+  formatLocale = false,
+  delayStep = 0.04,
+  className = ''
+}) => {
+  const shouldReduceMotion = useReducedMotion();
+  const safeValue = Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
+  const formatted = formatLocale ? safeValue.toLocaleString('fr-FR') : String(safeValue);
+  const chars = Array.from(formatted);
+
+  const pulseScale = useMotionValue(1);
+  const hasMountedRef = useRef(false);
 
   useEffect(() => {
-    if (target <= 0) {
-      setCount(0);
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
       return;
     }
+    if (shouldReduceMotion) return;
+    const ctrl = animate(pulseScale, [1, 1.08, 1], {
+      duration: 0.38,
+      ease: luxuryEase
+    });
+    return () => ctrl.stop();
+  }, [safeValue, shouldReduceMotion, pulseScale]);
 
-    let startTime: number | null = null;
-    let animationFrameId: number;
+  let digitOrdinal = 0;
 
-    const animate = (currentTime: number) => {
-      if (!startTime) startTime = currentTime;
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      // Ease out cubic deceleration
-      const easeVal = 1 - Math.pow(1 - progress, 3);
-      setCount(Math.round(target * easeVal));
+  return (
+    <motion.span
+      style={shouldReduceMotion ? undefined : { scale: pulseScale }}
+      aria-label={`${prefix}${formatted}${suffix}`}
+      className={`inline-flex items-baseline tabular-nums will-change-transform ${className}`}
+    >
+      {prefix && (
+        <span aria-hidden="true" className="whitespace-pre">
+          {prefix}
+        </span>
+      )}
 
-      if (progress < 1) {
-        animationFrameId = requestAnimationFrame(animate);
-      }
-    };
+      {chars.map((char, idx) => {
+        const posFromRight = chars.length - 1 - idx;
+        if (/^[0-9]$/.test(char)) {
+          const digit = Number(char);
+          const staggerDelay = shouldReduceMotion ? 0 : Math.min(0.28, digitOrdinal * delayStep);
+          digitOrdinal += 1;
 
-    animationFrameId = requestAnimationFrame(animate);
+          return (
+            <span
+              key={`digit-pos-${posFromRight}`}
+              aria-hidden="true"
+              className="relative inline-block overflow-hidden align-bottom h-[1.15em] leading-[1.15em] tabular-nums"
+            >
+              <span className="invisible select-none">{char}</span>
+              <motion.span
+                initial={shouldReduceMotion ? false : { y: '0%' }}
+                animate={{ y: `-${digit * 10}%` }}
+                transition={
+                  shouldReduceMotion
+                    ? { duration: 0 }
+                    : {
+                        type: 'spring',
+                        stiffness: 92,
+                        damping: 16,
+                        mass: 0.85,
+                        delay: staggerDelay
+                      }
+                }
+                className="absolute left-0 top-0 flex flex-col w-full text-center will-change-transform"
+              >
+                {ODOMETER_DIGITS.map((d) => (
+                  <span key={d} className="h-[1.15em] leading-[1.15em] block">
+                    {d}
+                  </span>
+                ))}
+              </motion.span>
+            </span>
+          );
+        }
 
-    return () => cancelAnimationFrame(animationFrameId);
-  }, [target, duration]);
+        return (
+          <span key={`sep-pos-${posFromRight}-${char}`} aria-hidden="true" className="inline-block whitespace-pre">
+            {char}
+          </span>
+        );
+      })}
 
-  return count;
+      {suffix && (
+        <span aria-hidden="true" className="whitespace-pre">
+          {suffix}
+        </span>
+      )}
+    </motion.span>
+  );
 };
-
-const luxuryEase: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
 // Orchestrated luxury entrance variants with progressive staggered reveal
 const dashboardContainerVariants: Variants = {
@@ -340,16 +430,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     setShowAdjustModal(false);
   };
 
-  // Circular gauge calculations for 78% mastery
+  // Circular gauge calculations for mastery
   const circumference = 251.2; // 2 * PI * 40
   const progressRatio = user.stats.masteryPercentage / 100;
   const strokeDashoffset = circumference - progressRatio * circumference;
-
-  // Animated counters for smooth numerical presentation
-  const animatedStreak = useAnimatedCounter(user.stats.streakDays, 700);
-  const animatedWeeklyXp = useAnimatedCounter(user.stats.weeklyXp, 900);
-  const animatedMastery = useAnimatedCounter(user.stats.masteryPercentage, 1050);
-  const animatedTodayMinutes = useAnimatedCounter(user.stats.studyMinutesToday, 800);
 
   return (
     <motion.div
@@ -393,30 +477,42 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           {/* Notice Guide + Quick PDF Report Export + Streak Counter */}
           <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => setIsNoticeOpen(true)}
-              className="min-h-[40px] px-3.5 py-2 rounded-xl bg-[#070e1d]/90 border border-[#f2ca50]/50 hover:border-[#f2ca50] hover:bg-[#f2ca50]/15 text-[#f2ca50] text-xs font-mono font-bold transition-all flex items-center gap-1.5 shadow-inner whitespace-nowrap shrink-0 cursor-pointer"
-              title="Ouvrir la notice visuelle complète de l'application"
+            <MotionTooltip
+              title="Notice Visuelle"
+              content="Ouvre le guide interactif complet des modules et raccourcis."
+              placement="bottom"
             >
-              <span className="material-symbols-outlined text-base">menu_book</span>
-              <span>Notice</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => setIsNoticeOpen(true)}
+                aria-label="Ouvrir la notice visuelle complète de l'application"
+                className="min-h-[40px] px-3.5 py-2 rounded-xl bg-[#070e1d]/90 border border-[#f2ca50]/50 hover:border-[#f2ca50] hover:bg-[#f2ca50]/15 text-[#f2ca50] text-xs font-mono font-bold transition-all flex items-center gap-1.5 shadow-inner whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-base">menu_book</span>
+                <span>Notice</span>
+              </button>
+            </MotionTooltip>
 
-            <button
-              type="button"
-              onClick={handleExportProgressPdf}
-              disabled={isExportingPdf}
-              className="min-h-[40px] px-3 py-2 rounded-xl bg-[#070e1d]/90 border border-[#f2ca50]/35 hover:border-[#f2ca50] hover:bg-[#f2ca50]/15 text-[#f2ca50] text-xs font-mono font-bold transition-all flex items-center gap-1.5 shadow-inner disabled:opacity-50 whitespace-nowrap shrink-0 cursor-pointer"
-              title="Exporter vos statistiques et progrès en rapport PDF"
+            <MotionTooltip
+              title="Export PDF"
+              content="Génère un relevé PDF de vos statistiques, séries et progrès."
+              placement="bottom"
             >
-              <span className={`material-symbols-outlined text-base ${isExportingPdf ? 'animate-spin' : ''}`}>
-                {isExportingPdf ? 'sync' : 'picture_as_pdf'}
-              </span>
-              <span className="hidden sm:inline">
-                {isExportingPdf ? 'Export...' : pdfExportedLabel || 'Rapport PDF'}
-              </span>
-            </button>
+              <button
+                type="button"
+                onClick={handleExportProgressPdf}
+                disabled={isExportingPdf}
+                aria-label="Exporter vos statistiques et progrès en rapport PDF"
+                className="min-h-[40px] px-3 py-2 rounded-xl bg-[#070e1d]/90 border border-[#f2ca50]/35 hover:border-[#f2ca50] hover:bg-[#f2ca50]/15 text-[#f2ca50] text-xs font-mono font-bold transition-all flex items-center gap-1.5 shadow-inner disabled:opacity-50 whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                <span className={`material-symbols-outlined text-base ${isExportingPdf ? 'animate-spin' : ''}`}>
+                  {isExportingPdf ? 'sync' : 'picture_as_pdf'}
+                </span>
+                <span className="hidden sm:inline">
+                  {isExportingPdf ? 'Export...' : pdfExportedLabel || 'Rapport PDF'}
+                </span>
+              </button>
+            </MotionTooltip>
 
             <motion.div
               initial={shouldReduceMotion ? { opacity: 1 } : { scale: 0.85, opacity: 0 }}
@@ -432,7 +528,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   local_fire_department
                 </span>
                 <span className="text-lg font-bold font-mono tabular-nums tracking-tight">
-                  {animatedStreak}
+                  <FramerRollingCounter value={user.stats.streakDays ?? 0} />
                 </span>
               </div>
               <span className="text-[9px] text-[#d0c5af] uppercase tracking-wider font-semibold">
@@ -447,83 +543,115 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           variants={staggeredListContainerVariants}
           className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-4 pt-3 border-t border-[#232a3a]"
         >
-          <motion.div
-            variants={subItemVariants}
-            whileHover={{ y: -2, transition: { duration: 0.15 } }}
-            onClick={onNavigateLeaderboard}
-            className={`flex items-center gap-2.5 p-2.5 rounded-xl bg-[#151b2b]/70 border border-[#4d4635]/20 hover:border-[#f2ca50]/50 transition-all shadow-sm ${
-              onNavigateLeaderboard ? 'cursor-pointer hover:bg-[#1a233a]' : ''
-            }`}
-            title="Voir le classement hebdomadaire complet"
+          <MotionTooltip
+            title="XP Hebdomadaire"
+            content="Points gagnés cette semaine et cumul total • Cliquez pour ouvrir le classement."
+            placement="top"
+            wrapperClassName="flex w-full"
           >
-            <div className="w-8 h-8 rounded-full bg-[#f2ca50]/10 flex items-center justify-center shrink-0">
-              <span className="material-symbols-outlined text-[#f2ca50] text-lg">bolt</span>
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span className="text-[10px] text-[#d0c5af] uppercase tracking-wider flex items-center gap-1">
-                XP Hebdo
-                <span className="material-symbols-outlined text-[11px] text-[#f2ca50]">open_in_new</span>
-              </span>
-              <span className="text-sm font-bold text-[#f2ca50] font-mono truncate">
-                {animatedWeeklyXp.toLocaleString()} XP
-              </span>
-            </div>
-          </motion.div>
+            <motion.div
+              variants={subItemVariants}
+              whileHover={{ y: -2, transition: { duration: 0.15 } }}
+              onClick={onNavigateLeaderboard}
+              className={`w-full flex items-center gap-2.5 p-2.5 rounded-xl bg-[#151b2b]/70 border border-[#4d4635]/20 hover:border-[#f2ca50]/50 transition-all shadow-sm ${
+                onNavigateLeaderboard ? 'cursor-pointer hover:bg-[#1a233a]' : ''
+              }`}
+            >
+              <div className="w-8 h-8 rounded-full bg-[#f2ca50]/10 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-[#f2ca50] text-lg">bolt</span>
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[10px] text-[#d0c5af] uppercase tracking-wider flex items-center gap-1">
+                  XP Hebdo
+                  <span className="material-symbols-outlined text-[11px] text-[#f2ca50]">open_in_new</span>
+                </span>
+                <span className="text-sm font-bold text-[#f2ca50] font-mono truncate">
+                  <FramerRollingCounter value={user.stats.weeklyXp ?? 0} formatLocale suffix=" XP" />
+                </span>
+                <span className="text-[10px] text-[#d0c5af]/85 font-mono truncate">
+                  Cumul : <FramerRollingCounter value={user.stats.totalXp ?? 0} formatLocale suffix=" XP" />
+                </span>
+              </div>
+            </motion.div>
+          </MotionTooltip>
 
-          <motion.div
-            variants={subItemVariants}
-            whileHover={{ y: -2, transition: { duration: 0.15 } }}
-            onClick={onNavigateLeaderboard}
-            className={`flex items-center gap-2.5 p-2.5 rounded-xl bg-[#151b2b]/70 border border-[#4d4635]/20 hover:border-[#d4c78f]/50 transition-all shadow-sm ${
-              onNavigateLeaderboard ? 'cursor-pointer hover:bg-[#1a233a]' : ''
-            }`}
-            title="Voir le classement hebdomadaire complet"
+          <MotionTooltip
+            title="Ligue d'Oxford"
+            content="Votre division académique active • Cliquez pour consulter le podium."
+            placement="top"
+            wrapperClassName="flex w-full"
           >
-            <div className="w-8 h-8 rounded-full bg-[#d4c78f]/10 flex items-center justify-center shrink-0">
-              <span className="material-symbols-outlined text-[#d4c78f] text-lg">hotel_class</span>
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span className="text-[10px] text-[#d0c5af] uppercase tracking-wider flex items-center gap-1">
-                Ligue Hebdo
-                <span className="material-symbols-outlined text-[11px] text-[#d4c78f]">leaderboard</span>
-              </span>
-              <span className="text-sm font-bold text-[#d4c78f] font-mono truncate">
-                Ligue Oxford
-              </span>
-            </div>
-          </motion.div>
+            <motion.div
+              variants={subItemVariants}
+              whileHover={{ y: -2, transition: { duration: 0.15 } }}
+              onClick={onNavigateLeaderboard}
+              className={`w-full flex items-center gap-2.5 p-2.5 rounded-xl bg-[#151b2b]/70 border border-[#4d4635]/20 hover:border-[#d4c78f]/50 transition-all shadow-sm ${
+                onNavigateLeaderboard ? 'cursor-pointer hover:bg-[#1a233a]' : ''
+              }`}
+            >
+              <div className="w-8 h-8 rounded-full bg-[#d4c78f]/10 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-[#d4c78f] text-lg">hotel_class</span>
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[10px] text-[#d0c5af] uppercase tracking-wider flex items-center gap-1">
+                  Ligue Hebdo
+                  <span className="material-symbols-outlined text-[11px] text-[#d4c78f]">leaderboard</span>
+                </span>
+                <span className="text-sm font-bold text-[#d4c78f] font-mono truncate">
+                  Ligue Oxford
+                </span>
+              </div>
+            </motion.div>
+          </MotionTooltip>
 
-          <motion.div
-            variants={subItemVariants}
-            whileHover={{ y: -2, transition: { duration: 0.15 } }}
-            className="flex items-center gap-2.5 p-2.5 rounded-xl bg-[#151b2b]/70 border border-[#4d4635]/20 hover:border-[#f2ca50]/35 transition-all shadow-sm"
+          <MotionTooltip
+            title="Temps d'Immersion"
+            content="Minutes d'étude active enregistrées aujourd'hui et depuis vos débuts."
+            placement="top"
+            wrapperClassName="flex w-full"
           >
-            <div className="w-8 h-8 rounded-full bg-[#f2ca50]/10 flex items-center justify-center shrink-0">
-              <span className="material-symbols-outlined text-[#f2ca50] text-lg">hourglass_top</span>
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span className="text-[10px] text-[#d0c5af] uppercase tracking-wider">Temps / Jour</span>
-              <span className="text-sm font-bold text-[#f2ca50] font-mono truncate">
-                {animatedTodayMinutes} min
-              </span>
-            </div>
-          </motion.div>
+            <motion.div
+              variants={subItemVariants}
+              whileHover={{ y: -2, transition: { duration: 0.15 } }}
+              className="w-full flex items-center gap-2.5 p-2.5 rounded-xl bg-[#151b2b]/70 border border-[#4d4635]/20 hover:border-[#f2ca50]/35 transition-all shadow-sm"
+            >
+              <div className="w-8 h-8 rounded-full bg-[#f2ca50]/10 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-[#f2ca50] text-lg">hourglass_top</span>
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[10px] text-[#d0c5af] uppercase tracking-wider">Temps / Jour</span>
+                <span className="text-sm font-bold text-[#f2ca50] font-mono truncate">
+                  <FramerRollingCounter value={user.stats.studyMinutesToday ?? 0} suffix=" min" />
+                </span>
+                <span className="text-[10px] text-[#d0c5af]/85 font-mono truncate">
+                  Cumul : <FramerRollingCounter value={user.stats.totalImmersionMinutes ?? 0} formatLocale suffix=" min" />
+                </span>
+              </div>
+            </motion.div>
+          </MotionTooltip>
 
-          <motion.div
-            variants={subItemVariants}
-            whileHover={{ y: -2, transition: { duration: 0.15 } }}
-            className="flex items-center gap-2.5 p-2.5 rounded-xl bg-[#151b2b]/70 border border-[#4d4635]/20 hover:border-[#d4c78f]/35 transition-all shadow-sm"
+          <MotionTooltip
+            title="Précision Moyenne"
+            content="Score moyen obtenu sur vos quiz, dictées et exercices des 7 derniers jours."
+            placement="top"
+            wrapperClassName="flex w-full"
           >
-            <div className="w-8 h-8 rounded-full bg-[#d4c78f]/10 flex items-center justify-center shrink-0">
-              <span className="material-symbols-outlined text-[#d4c78f] text-lg">verified</span>
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span className="text-[10px] text-[#d0c5af] uppercase tracking-wider">Précision Moy.</span>
-              <span className="text-sm font-bold text-[#d4c78f] font-mono tabular-nums truncate">
-                {avgScore.toFixed(0)}%
-              </span>
-            </div>
-          </motion.div>
+            <motion.div
+              variants={subItemVariants}
+              whileHover={{ y: -2, transition: { duration: 0.15 } }}
+              className="w-full flex items-center gap-2.5 p-2.5 rounded-xl bg-[#151b2b]/70 border border-[#4d4635]/20 hover:border-[#d4c78f]/35 transition-all shadow-sm"
+            >
+              <div className="w-8 h-8 rounded-full bg-[#d4c78f]/10 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-[#d4c78f] text-lg">verified</span>
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[10px] text-[#d0c5af] uppercase tracking-wider">Précision Moy.</span>
+                <span className="text-sm font-bold text-[#d4c78f] font-mono tabular-nums truncate">
+                  <FramerRollingCounter value={Math.round(avgScore)} suffix="%" />
+                </span>
+              </div>
+            </motion.div>
+          </MotionTooltip>
         </motion.div>
       </motion.section>
 
@@ -535,25 +663,53 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       >
         <GlassSlidingCapsule containerRef={dashboardNavRef} activeKey={dashboardTab} />
         {[
-          { id: 'all' as const, label: 'Vue Complète', icon: 'dashboard' },
-          { id: 'mastery' as const, label: 'Objectifs & Maîtrise', icon: 'verified' },
-          { id: 'analytics' as const, label: 'Courbes 7 Jours', icon: 'show_chart' },
-          { id: 'curriculum' as const, label: 'Cursus & Boutique', icon: 'auto_stories' }
+          {
+            id: 'all' as const,
+            label: 'Vue Complète',
+            icon: 'dashboard',
+            tooltip: "Affiche tous vos indicateurs, graphiques D3, objectifs et folios."
+          },
+          {
+            id: 'mastery' as const,
+            label: 'Objectifs & Maîtrise',
+            icon: 'verified',
+            tooltip: "Jauge annuelle, objectifs hebdomadaires et radar linguistique."
+          },
+          {
+            id: 'analytics' as const,
+            label: 'Courbes 7J / 30J',
+            icon: 'show_chart',
+            tooltip: "Tendances XP/Score sur 7 jours, maîtrise lexicale D3 et épreuves."
+          },
+          {
+            id: 'curriculum' as const,
+            label: 'Cursus & Boutique',
+            icon: 'auto_stories',
+            tooltip: "Folios du cursus, calendrier d'étude, boutique 3D et synchro locale."
+          }
         ].map((tab) => {
           const isActive = dashboardTab === tab.id;
           return (
-            <button
+            <MotionTooltip
               key={tab.id}
-              type="button"
-              data-capsule-key={tab.id}
-              onClick={() => setDashboardTab(tab.id)}
-              className={`relative z-10 flex-1 min-w-fit px-3.5 py-2 rounded-full text-xs font-semibold whitespace-nowrap flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
-                isActive ? 'glass-capsule-active-text font-bold' : 'text-[#d0c5af] hover:text-[#dce2f8]'
-              }`}
+              title={tab.label}
+              content={tab.tooltip}
+              placement="top"
+              delayMs={240}
+              wrapperClassName="relative z-10 flex-1 min-w-fit flex"
             >
-              <span className="relative z-10 material-symbols-outlined text-[16px]">{tab.icon}</span>
-              <span className="relative z-10">{tab.label}</span>
-            </button>
+              <button
+                type="button"
+                data-capsule-key={tab.id}
+                onClick={() => setDashboardTab(tab.id)}
+                className={`relative z-10 w-full px-3.5 py-2 rounded-full text-xs font-semibold whitespace-nowrap flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                  isActive ? 'glass-capsule-active-text font-bold' : 'text-[#d0c5af] hover:text-[#dce2f8]'
+                }`}
+              >
+                <span className="relative z-10 material-symbols-outlined text-[16px]">{tab.icon}</span>
+                <span className="relative z-10">{tab.label}</span>
+              </button>
+            </MotionTooltip>
           );
         })}
       </nav>
@@ -626,7 +782,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             className="absolute inset-0 flex flex-col items-center justify-center text-center"
           >
             <span className="font-serif text-lg font-bold text-[#f2ca50] leading-none">
-              {animatedMastery}%
+              <FramerRollingCounter value={user.stats.masteryPercentage ?? 0} suffix="%" />
             </span>
             <span className="text-[9px] text-[#d0c5af] uppercase tracking-tighter mt-0.5 font-sans">
               Validé
@@ -646,14 +802,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <h3 className="font-serif text-base sm:text-lg text-[#dce2f8] font-semibold">
             Objectifs Hebdomadaires
           </h3>
-          <button
-            type="button"
-            onClick={() => setShowAdjustModal(true)}
-            className="text-xs text-[#f2ca50] hover:text-[#ffe088] flex items-center gap-1 font-semibold transition-colors cursor-pointer"
+          <MotionTooltip
+            title="Objectif Quotidien"
+            content="Ajuster votre rythme cible entre 20, 30 ou 45 minutes par jour."
+            placement="top"
           >
-            <span className="material-symbols-outlined text-sm">tune</span>
-            <span>Ajuster</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => setShowAdjustModal(true)}
+              className="text-xs text-[#f2ca50] hover:text-[#ffe088] flex items-center gap-1 font-semibold transition-colors cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-sm">tune</span>
+              <span>Ajuster</span>
+            </button>
+          </MotionTooltip>
         </div>
 
         <motion.div
@@ -746,7 +908,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <span className="text-[#dce2f8] font-medium">Cadence Quotidienne</span>
               </div>
               <span className="text-[#f2ca50] font-bold font-mono tabular-nums">
-                {animatedTodayMinutes} / {user.stats.studyMinutesTarget || 30} min
+                <FramerRollingCounter value={user.stats.studyMinutesToday ?? 0} /> /{' '}
+                <FramerRollingCounter value={user.stats.studyMinutesTarget || 30} suffix=" min" />
               </span>
             </div>
             <div className="w-full h-1.5 rounded-full bg-[#070e1d] overflow-hidden">
@@ -814,44 +977,62 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           <div className="flex items-center gap-2 self-start sm:self-auto">
             {/* Refresh button */}
-            <button
-              type="button"
-              onClick={() => loadHistory()}
-              disabled={isRefreshing}
-              className="p-1.5 rounded-xl bg-[#070e1d] border border-[#4d4635]/40 text-[#f2ca50] hover:text-[#ffe088] transition-all active:scale-95 disabled:opacity-50"
-              title="Synchroniser avec Cloud Firestore"
+            <MotionTooltip
+              title="Actualiser"
+              content="Recharger vos courbes de progression depuis Cloud Firestore."
+              placement="top"
             >
-              <span className={`material-symbols-outlined text-base ${isRefreshing ? 'animate-spin' : ''}`}>
-                sync
-              </span>
-            </button>
+              <button
+                type="button"
+                onClick={() => loadHistory()}
+                disabled={isRefreshing}
+                aria-label="Synchroniser avec Cloud Firestore"
+                className="p-1.5 rounded-xl bg-[#070e1d] border border-[#4d4635]/40 text-[#f2ca50] hover:text-[#ffe088] transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+              >
+                <span className={`material-symbols-outlined text-base ${isRefreshing ? 'animate-spin' : ''}`}>
+                  sync
+                </span>
+              </button>
+            </MotionTooltip>
 
             {/* Toggle between Recharts Line Charts (XP Regularity vs Accuracy Score) */}
             <div className="flex items-center p-0.5 rounded-xl bg-[#070e1d] border border-[#4d4635]/40">
-              <button
-                type="button"
-                onClick={() => setChartMetric('xp')}
-                className={`px-3 py-1 rounded-lg text-xs font-semibold font-mono transition-all flex items-center gap-1 ${
-                  chartMetric === 'xp'
-                    ? 'bg-[#f2ca50] text-[#3c2f00] shadow-sm font-bold'
-                    : 'text-[#d0c5af] hover:text-[#dce2f8]'
-                }`}
+              <MotionTooltip
+                title="Courbe XP"
+                content="Visualiser les XP gagnés quotidiennement sur les 7 derniers jours."
+                placement="top"
               >
-                <span className="material-symbols-outlined text-[14px]">bolt</span>
-                <span>XP Hebdo</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setChartMetric('score')}
-                className={`px-3 py-1 rounded-lg text-xs font-semibold font-mono transition-all flex items-center gap-1 ${
-                  chartMetric === 'score'
-                    ? 'bg-[#f2ca50] text-[#3c2f00] shadow-sm font-bold'
-                    : 'text-[#d0c5af] hover:text-[#dce2f8]'
-                }`}
+                <button
+                  type="button"
+                  onClick={() => setChartMetric('xp')}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold font-mono transition-all flex items-center gap-1 cursor-pointer ${
+                    chartMetric === 'xp'
+                      ? 'bg-[#f2ca50] text-[#3c2f00] shadow-sm font-bold'
+                      : 'text-[#d0c5af] hover:text-[#dce2f8]'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[14px]">bolt</span>
+                  <span>XP Hebdo</span>
+                </button>
+              </MotionTooltip>
+              <MotionTooltip
+                title="Courbe Score"
+                content="Visualiser votre précision moyenne (%) aux exercices et dictées."
+                placement="top"
               >
-                <span className="material-symbols-outlined text-[14px]">percent</span>
-                <span>Score (%)</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setChartMetric('score')}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold font-mono transition-all flex items-center gap-1 cursor-pointer ${
+                    chartMetric === 'score'
+                      ? 'bg-[#f2ca50] text-[#3c2f00] shadow-sm font-bold'
+                      : 'text-[#d0c5af] hover:text-[#dce2f8]'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[14px]">percent</span>
+                  <span>Score (%)</span>
+                </button>
+              </MotionTooltip>
             </div>
           </div>
         </div>
@@ -875,7 +1056,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <div>
                     <span className="text-[10px] text-[#99907c] block">Total Semaine</span>
                     <strong className="text-[#f2ca50]">
-                      {scoreData.reduce((acc, curr) => acc + curr.xp, 0).toLocaleString()} XP
+                      <FramerRollingCounter
+                        value={scoreData.reduce((acc, curr) => acc + curr.xp, 0)}
+                        formatLocale
+                        suffix=" XP"
+                      />
                     </strong>
                   </div>
                 </div>
@@ -885,8 +1070,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <div>
                     <span className="text-[10px] text-[#99907c] block">Régularité</span>
                     <strong className="text-[#38bdf8]">
-                      {scoreData.filter((d) => d.xp > 0).length}/7 jours (
-                      {Math.round((scoreData.filter((d) => d.xp > 0).length / (scoreData.length || 7)) * 100)}%)
+                      <FramerRollingCounter value={scoreData.filter((d) => d.xp > 0).length} />/7 jours (
+                      <FramerRollingCounter
+                        value={Math.round((scoreData.filter((d) => d.xp > 0).length / (scoreData.length || 7)) * 100)}
+                        suffix="%"
+                      />
+                      )
                     </strong>
                   </div>
                 </div>
@@ -896,7 +1085,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <div>
                     <span className="text-[10px] text-[#99907c] block">Moyenne / Jour</span>
                     <strong className="text-amber-300">
-                      ~{Math.round(scoreData.reduce((acc, curr) => acc + curr.xp, 0) / (scoreData.length || 7))} XP/j
+                      <FramerRollingCounter
+                        prefix="~"
+                        value={Math.round(scoreData.reduce((acc, curr) => acc + curr.xp, 0) / (scoreData.length || 7))}
+                        suffix=" XP/j"
+                      />
                     </strong>
                   </div>
                 </div>
@@ -906,7 +1099,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <div>
                     <span className="text-[10px] text-[#99907c] block">Pic Hebdo</span>
                     <strong className="text-emerald-300">
-                      +{Math.max(0, ...scoreData.map((d) => d.xp))} XP ({scoreData.find((d) => d.xp === Math.max(0, ...scoreData.map((x) => x.xp)))?.day || 'Dim'})
+                      <FramerRollingCounter
+                        prefix="+"
+                        value={Math.max(0, ...scoreData.map((d) => d.xp))}
+                        formatLocale
+                        suffix=" XP"
+                      />{' '}
+                      ({scoreData.find((d) => d.xp === Math.max(0, ...scoreData.map((x) => x.xp)))?.day || 'Dim'})
                     </strong>
                   </div>
                 </div>
@@ -1102,6 +1301,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </>
           )}
 
+      {(dashboardTab === 'all' || dashboardTab === 'analytics' || dashboardTab === 'mastery') && (
+        <motion.div variants={dashboardCardVariants} initial="hidden" animate="show">
+          <LexicalMasteryD3Chart
+            user={user}
+            onOpenFlashcards={onOpenFlashcards}
+          />
+        </motion.div>
+      )}
+
       {(dashboardTab === 'all' || dashboardTab === 'mastery') && (
         <motion.div variants={dashboardCardVariants} initial="hidden" animate="show">
           <VocabularyMasterySummary
@@ -1153,14 +1361,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </span>
           </div>
 
-          <button
-            type="button"
-            onClick={onResumePractice}
-            className="hidden sm:inline-flex items-center gap-1.5 text-xs text-[#f2ca50] hover:text-[#ffe088] font-semibold transition-colors cursor-pointer"
+          <MotionTooltip
+            title="Modules d'Entraînement"
+            content="Ouvrir l'atelier complet (dictées, flashcards, dialogues et oral)."
+            placement="top"
+            wrapperClassName="hidden sm:inline-flex"
           >
-            <span>Ouvrir les modules</span>
-            <span className="material-symbols-outlined text-sm">arrow_forward</span>
-          </button>
+            <button
+              type="button"
+              onClick={onResumePractice}
+              className="inline-flex items-center gap-1.5 text-xs text-[#f2ca50] hover:text-[#ffe088] font-semibold transition-colors cursor-pointer"
+            >
+              <span>Ouvrir les modules</span>
+              <span className="material-symbols-outlined text-sm">arrow_forward</span>
+            </button>
+          </MotionTooltip>
         </div>
 
         {/* Staggered Lessons Grid */}
@@ -1278,36 +1493,48 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     </div>
 
                     {/* Bouton 'Lecture Audio' */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handlePlayFolioAudio(folio);
-                      }}
-                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold font-mono transition-all active:scale-95 cursor-pointer shadow-sm ${
-                        playingFolioId === folio.id
-                          ? 'bg-[#f2ca50] text-[#3c2f00] ring-1 ring-[#f2ca50] animate-pulse font-extrabold'
-                          : 'bg-[#151b2b] hover:bg-[#f2ca50]/20 text-[#f2ca50] border border-[#f2ca50]/40'
-                      }`}
-                      title="Lancer la lecture audio de cette leçon du cursus (Web Speech API)"
+                    <MotionTooltip
+                      title="Synthèse Vocale"
+                      content="Écouter une présentation orale de ce folio selon l'accent choisi."
+                      placement="top"
                     >
-                      <span className="material-symbols-outlined text-xs">
-                        {playingFolioId === folio.id ? 'graphic_eq' : 'volume_up'}
-                      </span>
-                      <span>
-                        {playingFolioId === folio.id ? 'En cours...' : 'Lecture Audio'}
-                      </span>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePlayFolioAudio(folio);
+                        }}
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold font-mono transition-all active:scale-95 cursor-pointer shadow-sm ${
+                          playingFolioId === folio.id
+                            ? 'bg-[#f2ca50] text-[#3c2f00] ring-1 ring-[#f2ca50] animate-pulse font-extrabold'
+                            : 'bg-[#151b2b] hover:bg-[#f2ca50]/20 text-[#f2ca50] border border-[#f2ca50]/40'
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-xs">
+                          {playingFolioId === folio.id ? 'graphic_eq' : 'volume_up'}
+                        </span>
+                        <span>
+                          {playingFolioId === folio.id ? 'En cours...' : 'Lecture Audio'}
+                        </span>
+                      </button>
+                    </MotionTooltip>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={onResumePractice}
-                    className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-[#232a3a] hover:bg-[#f2ca50] text-[#d4c78f] hover:text-[#3c2f00] text-xs font-bold font-mono transition-all active:scale-95 cursor-pointer shadow-sm ml-auto"
+                  <MotionTooltip
+                    title={folio.folioNumber}
+                    content="Lancer les exercices et modules associés à ce folio du cursus."
+                    placement="top"
+                    wrapperClassName="inline-flex ml-auto"
                   >
-                    <span>{folio.progressPercent > 0 ? 'Continuer' : 'Débuter'}</span>
-                    <span className="material-symbols-outlined text-xs">arrow_forward</span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={onResumePractice}
+                      className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-[#232a3a] hover:bg-[#f2ca50] text-[#d4c78f] hover:text-[#3c2f00] text-xs font-bold font-mono transition-all active:scale-95 cursor-pointer shadow-sm"
+                    >
+                      <span>{folio.progressPercent > 0 ? 'Continuer' : 'Débuter'}</span>
+                      <span className="material-symbols-outlined text-xs">arrow_forward</span>
+                    </button>
+                  </MotionTooltip>
                 </div>
               </div>
             </motion.div>
@@ -1590,17 +1817,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             Même sans réseau, vos dictées, quiz, cartes SM-2 et points XP sont conservés de façon persistante dans le navigateur.
           </p>
 
-          <button
-            type="button"
-            onClick={handleManualSync}
-            disabled={isSyncing}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-[#232a3a] hover:bg-[#2e3545] border border-[#f2ca50]/30 text-xs font-bold text-[#f2ca50] hover:text-[#ffe088] transition-all active:scale-95 shrink-0 disabled:opacity-50"
+          <MotionTooltip
+            title="Synchronisation Cloud"
+            content="Transférer immédiatement vos épreuves locales IndexedDB vers Firebase."
+            placement="top"
+            wrapperClassName="inline-flex shrink-0"
           >
-            <span className={`material-symbols-outlined text-base ${isSyncing ? 'animate-spin' : ''}`}>
-              sync
-            </span>
-            <span>{isSyncing ? 'Synchronisation...' : 'Synchroniser Maintenant'}</span>
-          </button>
+            <button
+              type="button"
+              onClick={handleManualSync}
+              disabled={isSyncing}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-[#232a3a] hover:bg-[#2e3545] border border-[#f2ca50]/30 text-xs font-bold text-[#f2ca50] hover:text-[#ffe088] transition-all active:scale-95 shrink-0 disabled:opacity-50 cursor-pointer"
+            >
+              <span className={`material-symbols-outlined text-base ${isSyncing ? 'animate-spin' : ''}`}>
+                sync
+              </span>
+              <span>{isSyncing ? 'Synchronisation...' : 'Synchroniser Maintenant'}</span>
+            </button>
+          </MotionTooltip>
         </div>
       </motion.section>
       )}
@@ -1608,19 +1842,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </AnimatePresence>
 
       {/* Primary Action Button */}
-      <motion.button
-        variants={dashboardCardVariants}
-        whileHover={{ scale: 1.01 }}
-        whileTap={{ scale: 0.98 }}
-        type="button"
-        onClick={onResumePractice}
-        className="w-full py-3.5 px-6 rounded-xl bg-[#f2ca50] text-[#3c2f00] font-bold text-base shadow-xl shadow-[#f2ca50]/20 hover:bg-[#ffe088] transition-all flex items-center justify-center gap-2 cursor-pointer"
+      <MotionTooltip
+        title="Atelier Quotidien"
+        content="Reprendre directement votre entraînement adapté (vocabulaire, dictée et oral)."
+        placement="top"
+        wrapperClassName="flex w-full"
       >
-        <span className="material-symbols-outlined text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>
-          play_circle
-        </span>
-        <span>Reprendre la Session Quotidienne</span>
-      </motion.button>
+        <motion.button
+          variants={dashboardCardVariants}
+          whileHover={{ scale: 1.01 }}
+          whileTap={{ scale: 0.98 }}
+          type="button"
+          onClick={onResumePractice}
+          className="w-full py-3.5 px-6 rounded-xl bg-[#f2ca50] text-[#3c2f00] font-bold text-base shadow-xl shadow-[#f2ca50]/20 hover:bg-[#ffe088] transition-all flex items-center justify-center gap-2 cursor-pointer"
+        >
+          <span className="material-symbols-outlined text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>
+            play_circle
+          </span>
+          <span>Reprendre la Session Quotidienne</span>
+        </motion.button>
+      </MotionTooltip>
 
       {/* Modal d'ajustement du rythme */}
       {showAdjustModal && (

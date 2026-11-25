@@ -307,6 +307,29 @@ export function awardMszCoins(
 }
 
 /**
+ * Credit MSZ Coins from verified, non-duplicate English Adventure milestones/bosses.
+ * Callers must already verify idempotency via claimedRewardIds & immutable Firestore claim ledger.
+ */
+export function creditAdventureCoins(amount: number, description: string): number {
+  const safeAmount = Math.max(0, Math.min(100, Math.round(amount || 0)));
+  if (safeAmount <= 0) return getMszCoinsBalance();
+
+  const currentBalance = getMszCoinsBalance();
+  const newBalance = currentBalance + safeAmount;
+  saveMszCoinsBalance(newBalance);
+  syncMszStateToCloud(newBalance);
+
+  addTransaction({
+    type: 'reward_game',
+    amount: safeAmount,
+    date: new Date().toISOString(),
+    description: description.slice(0, 140)
+  });
+
+  return newBalance;
+}
+
+/**
  * Retrieve list of owned card instances with their unique serial identity codes
  */
 export function getOwnedCardInstances(): OwnedCardInstance[] {

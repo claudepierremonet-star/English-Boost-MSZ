@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'framer-motion';
 import { Header } from './components/Header';
 import { BottomNav, type TabKey } from './components/BottomNav';
 import { HeroSection } from './components/HeroSection';
@@ -48,6 +48,8 @@ import { FloatingSpeakingStudioShortcut } from './components/FloatingSpeakingStu
 import { LessonDetailModal } from './components/LessonDetailModal';
 import { FavoriteLessonsQuickAccess } from './components/FavoriteLessonsQuickAccess';
 import { CityQuizMapView } from './components/CityQuizMapView';
+import { EnglishAdventureView } from './components/EnglishAdventureView';
+import { GlassSlidingCapsule } from './components/GlassSlidingCapsule';
 import { getCityMapProgression } from './utils/cityMapManager';
 import { SmartEcosystemHub, type EcosystemLaunchTarget } from './components/SmartEcosystemHub';
 import { AITutorModal } from './components/AITutorModal';
@@ -56,9 +58,67 @@ import { ListeningCinemaModal } from './components/ListeningCinemaModal';
 import { GrammarBattleModal } from './components/GrammarBattleModal';
 import { AdaptivePlacementModal } from './components/AdaptivePlacementModal';
 import { inferGradeFromCefr, markLessonCompletedLocally } from './services/adaptiveEngine';
+import { useAppTheme } from './theme/ThemeContext';
+import { useReadingMode } from './context/ReadingModeContext';
+import { ReadingModeToggleButton } from './components/ReadingModeToggleButton';
+
+const TAB_ORDER: Record<TabKey, number> = {
+  accueil: 0,
+  carte: 1,
+  cursus: 2,
+  jeux: 3,
+  classement: 4,
+  pratique: 5,
+  dashboard: 6,
+  profil: 7
+};
+
+const TAB_EASE_OUT: [number, number, number, number] = [0.16, 1, 0.3, 1];
+
+const TAB_VIEW_VARIANTS = {
+  initial: (direction: number) => ({
+    opacity: 0,
+    x: direction * 18,
+    y: 8,
+    scale: 0.992
+  }),
+  animate: {
+    opacity: 1,
+    x: 0,
+    y: 0,
+    scale: 1
+  },
+  exit: (direction: number) => ({
+    opacity: 0,
+    x: direction * -14,
+    y: -6,
+    scale: 0.994
+  })
+};
+
+const TAB_REDUCED_VARIANTS = {
+  initial: { opacity: 0 },
+  animate: { opacity: 1 },
+  exit: { opacity: 0 }
+};
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<TabKey>('accueil');
+  const { isDark } = useAppTheme();
+  const { isReadingMode } = useReadingMode();
+  const shouldReduceMotion = useReducedMotion();
+  const [activeTab, setActiveTabState] = useState<TabKey>('accueil');
+  const [tabDirection, setTabDirection] = useState<1 | -1>(1);
+  const activeTabRef = useRef<TabKey>('accueil');
+
+  const setActiveTab = useCallback((nextTab: TabKey) => {
+    const prevTab = activeTabRef.current;
+    if (prevTab !== nextTab) {
+      setTabDirection(TAB_ORDER[nextTab] >= TAB_ORDER[prevTab] ? 1 : -1);
+      activeTabRef.current = nextTab;
+      setActiveTabState(nextTab);
+    }
+  }, []);
+
   const [user, setUser] = useState<UserProfile>(getLocalUserProfile());
   const { isOnline, pendingCount, triggerSync } = useSyncStatus();
   const [currentLevel, setCurrentLevel] = useState<CEFRLevel>(user.level || 'C1');
@@ -102,6 +162,8 @@ export default function App() {
   const [searchLessonForDetail, setSearchLessonForDetail] = useState<SchoolLesson | null>(null);
   const [favoriteLessonIds, setFavoriteLessonIds] = useState<string[]>(() => getFavoriteLessonIds());
   const [cityMapProgression, setCityMapProgression] = useState(() => getCityMapProgression());
+  const [carteViewMode, setCarteViewMode] = useState<'adventure' | 'city_map'>('adventure');
+  const carteSwitchTrackRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const handleCityEvt = () => {
@@ -221,6 +283,7 @@ export default function App() {
         setIsTutorOpen(true);
         break;
       case 'adventure_world':
+        setCarteViewMode('adventure');
         setActiveTab('carte');
         break;
       case 'flashcards':
@@ -431,7 +494,10 @@ export default function App() {
         onOpenAccentStudio={() => setIsAccentStudioOpen(true)}
         onOpenShop={() => setIsShopModalOpen(true)}
         cityMapProgression={cityMapProgression}
-        onNavigateCityMap={() => setActiveTab('carte')}
+        onNavigateCityMap={() => {
+          setCarteViewMode('city_map');
+          setActiveTab('carte');
+        }}
         onOpenLevelCelebration={() => {
           const currentLvl = calculateLevel(user.stats?.totalXp || 0);
           setLevelUpData({
@@ -479,7 +545,9 @@ export default function App() {
 
       {/* Discreet 1 cm Real-Time Weather Bar (Discreet hairline bar, reveals on click, auto-dismisses in 5s) */}
       <div
-        className="w-full z-30 transition-all"
+        className={`w-full z-30 transition-all duration-300 ${
+          isReadingMode ? 'opacity-15 hover:opacity-95' : 'opacity-100'
+        }`}
         style={{
           paddingTop: `calc(max(env(safe-area-inset-top, 0px), 10px) + ${!isOnline || (isOnline && pendingCount > 0) ? '130px' : '92px'})`
         }}
@@ -488,60 +556,198 @@ export default function App() {
       </div>
 
       {/* Main Routed Content */}
-      <main className="flex-1 w-full pb-20">
-        {activeTab === 'accueil' && (
-          <div className="flex flex-col w-full max-w-4xl mx-auto animate-fadeIn">
+      <LayoutGroup id="main-tab-views">
+        <motion.main
+          layout={!shouldReduceMotion}
+          transition={{ layout: { duration: 0.28, ease: TAB_EASE_OUT } }}
+          className="flex-1 w-full pb-20"
+        >
+          <AnimatePresence mode="wait" custom={tabDirection} initial={false}>
+            {activeTab === 'accueil' && (
+              <motion.div
+                key="tab-accueil"
+                layout={!shouldReduceMotion ? 'position' : false}
+                custom={tabDirection}
+                variants={shouldReduceMotion ? TAB_REDUCED_VARIANTS : TAB_VIEW_VARIANTS}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={{
+                  opacity: { duration: 0.22, ease: TAB_EASE_OUT },
+                  x: { duration: 0.28, ease: TAB_EASE_OUT },
+                  y: { duration: 0.28, ease: TAB_EASE_OUT },
+                  scale: { duration: 0.26, ease: TAB_EASE_OUT },
+                  layout: { duration: 0.28, ease: TAB_EASE_OUT }
+                }}
+                className="flex flex-col w-full max-w-4xl mx-auto will-change-transform"
+              >
+            {/* Active Lesson Spotlight Card (Always focused at 100% visibility when Reading Mode is enabled) */}
+            {isReadingMode && (() => {
+              const focusLesson = activeSelectedLesson || ALL_200_LESSONS[0];
+              if (!focusLesson) return null;
+              return (
+                <section
+                  aria-label="Concentration sur la leçon active en Mode Lecture"
+                  className="mx-4 sm:mx-6 mt-3 mb-4 p-5 sm:p-7 rounded-2xl bg-[#151b2b] border border-[#f2ca50]/55 shadow-2xl space-y-4"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#232a3a]/60 pb-4">
+                    <div className="space-y-1.5 min-w-0 flex-1">
+                      <div className={`flex items-center gap-2 text-xs font-mono font-semibold ${isDark ? 'text-[#f2ca50]' : 'text-[#785b24]'}`}>
+                        <span>Mode Lecture Actif</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{focusLesson.class_label || focusLesson.class_level}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>CECRL {focusLesson.cefr_level}</span>
+                        <span aria-hidden="true">·</span>
+                        <span className="text-[#d4c78f]">{focusLesson.theme_label}</span>
+                      </div>
+                      <h2 className="font-serif text-xl sm:text-2xl font-bold text-[#dce2f8] leading-snug">
+                        {focusLesson.title}
+                      </h2>
+                      <p className="text-sm text-[#d0c5af] leading-relaxed">
+                        {focusLesson.learning_objective}
+                      </p>
+                    </div>
+                    <ReadingModeToggleButton variant="toolbar" />
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="p-4 rounded-xl bg-[#0c1322] border border-[#232a3a]/60 space-y-1.5">
+                      <p className={`text-xs font-mono font-bold uppercase tracking-wider ${isDark ? 'text-[#f2ca50]' : 'text-[#785b24]'}`}>
+                        Grammaire · {focusLesson.grammar.title}
+                      </p>
+                      <p className="text-sm text-[#dce2f8] leading-relaxed">
+                        {focusLesson.grammar.rule}
+                      </p>
+                      <p className={`text-sm font-serif font-semibold pt-1 ${isDark ? 'text-[#ffe088]' : 'text-[#785b24]'}`}>
+                        « {focusLesson.grammar.example_en} »
+                      </p>
+                      <p className="text-xs text-[#d0c5af]/85 italic">
+                        {focusLesson.grammar.example_fr}
+                      </p>
+                    </div>
+
+                    {focusLesson.model_phrases?.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-mono font-bold text-[#d4c78f] uppercase tracking-wider">
+                          Phrases clés à retenir
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          {focusLesson.model_phrases.slice(0, 2).map((phrase, idx) => (
+                            <div
+                              key={idx}
+                              className="p-3.5 rounded-xl bg-[#0c1322] border border-[#232a3a] space-y-1"
+                            >
+                              <p className="text-sm font-serif font-semibold text-[#dce2f8]">
+                                {phrase.en}
+                              </p>
+                              <p className="text-xs text-[#d0c5af]/85 italic">
+                                {phrase.fr}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-[#232a3a]">
+                    <span className="text-xs text-[#d0c5af]">
+                      Les cartes secondaires et la barre de navigation sont atténuées pour préserver votre attention.
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('cursus')}
+                        className="px-3.5 py-2 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] border border-[#232a3a] text-xs font-semibold text-[#dce2f8] transition-colors cursor-pointer"
+                      >
+                        Changer de leçon
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveSelectedLesson(focusLesson);
+                          setSearchLessonForDetail(focusLesson);
+                        }}
+                        className="px-4 py-2 rounded-xl bg-[#f2ca50] hover:bg-[#ffe088] text-[#3c2f00] text-xs font-bold uppercase tracking-wider shadow-md transition-colors cursor-pointer flex items-center gap-1.5"
+                      >
+                        <span className="material-symbols-outlined text-sm">auto_stories</span>
+                        <span>Ouvrir la leçon complète</span>
+                      </button>
+                    </div>
+                  </div>
+                </section>
+              );
+            })()}
+
             {/* Barre de Recherche Globale (200 Leçons & Cartes Mémoire) */}
-            <GlobalSearchBar
-              onSelectLesson={(lesson) => {
-                setActiveSelectedLesson(lesson);
-                setSearchLessonForDetail(lesson);
-              }}
-              onSelectFlashcard={(_card) => {
-                setIsFlashcardsOpen(true);
-              }}
-              onOpenFlashcardsModal={() => setIsFlashcardsOpen(true)}
-              activeLessonId={activeSelectedLesson?.id}
-              favoriteLessonIds={favoriteLessonIds}
-              onToggleFavorite={handleToggleFavoriteLesson}
-            />
+            <div
+              className={`transition-opacity duration-300 ${
+                isReadingMode ? 'opacity-25 hover:opacity-100 focus-within:opacity-100' : 'opacity-100'
+              }`}
+            >
+              <GlobalSearchBar
+                onSelectLesson={(lesson) => {
+                  setActiveSelectedLesson(lesson);
+                  setSearchLessonForDetail(lesson);
+                }}
+                onSelectFlashcard={(_card) => {
+                  setIsFlashcardsOpen(true);
+                }}
+                onOpenFlashcardsModal={() => setIsFlashcardsOpen(true)}
+                activeLessonId={activeSelectedLesson?.id}
+                favoriteLessonIds={favoriteLessonIds}
+                onToggleFavorite={handleToggleFavoriteLesson}
+              />
+            </div>
 
-            {/* Global Rank Card sous le Header */}
-            <GlobalRankCard
-              totalXp={user.stats?.totalXp ?? 0}
-              weeklyXp={user.stats?.weeklyXp ?? 0}
-              onNavigateLeaderboard={() => setActiveTab('classement')}
-            />
+            {/* Secondary cards & peripheral widgets (smoothly dimmed when Reading Mode is active) */}
+            <div
+              className={`transition-opacity duration-300 ${
+                isReadingMode ? 'opacity-15 hover:opacity-85' : 'opacity-100'
+              }`}
+            >
+              {/* Global Rank Card sous le Header */}
+              <GlobalRankCard
+                totalXp={user.stats?.totalXp ?? 0}
+                weeklyXp={user.stats?.weeklyXp ?? 0}
+                onNavigateLeaderboard={() => setActiveTab('classement')}
+              />
 
-            {/* Smart Adaptive Ecosystem Hub (6e-Terminale, Daily Missions, Adaptive Recommendations, SM-2 Queue, 12 Pillars) */}
-            <SmartEcosystemHub
-              user={user}
-              currentLevel={currentLevel}
-              onSelectSchoolGrade={handleSelectSchoolGrade}
-              onLaunchModule={handleLaunchEcosystemModule}
-              onOpenLesson={(lesson) => {
-                setActiveSelectedLesson(lesson);
-                setSearchLessonForDetail(lesson);
-              }}
-              onClaimMissionXp={(xp) => {
-                handleChallengeComplete(xp);
-                setUser(getLocalUserProfile());
-              }}
-            />
+              {/* Smart Adaptive Ecosystem Hub (6e-Terminale, Daily Missions, Adaptive Recommendations, SM-2 Queue, 12 Pillars) */}
+              <SmartEcosystemHub
+                user={user}
+                currentLevel={currentLevel}
+                onSelectSchoolGrade={handleSelectSchoolGrade}
+                onLaunchModule={handleLaunchEcosystemModule}
+                onOpenLesson={(lesson) => {
+                  setActiveSelectedLesson(lesson);
+                  setSearchLessonForDetail(lesson);
+                }}
+                onClaimMissionXp={(xp) => {
+                  handleChallengeComplete(xp);
+                  setUser(getLocalUserProfile());
+                }}
+              />
 
-            {/* Monumental Hero Section with background-clip text & scroll zoom */}
-            <HeroSection
-              currentPhotoUrl={heroPhotoUrl}
-              onPhotoChange={handlePhotoChange}
-              onCustomUpload={handleCustomUpload}
-            />
+              {/* Monumental Hero Section with background-clip text & scroll zoom */}
+              <HeroSection
+                currentPhotoUrl={heroPhotoUrl}
+                onPhotoChange={handlePhotoChange}
+                onCustomUpload={handleCustomUpload}
+              />
 
-            {/* Bilingual Quote of Distinction (Lord Chesterfield) */}
-            <QuoteSection />
+              {/* Bilingual Quote of Distinction (Lord Chesterfield) */}
+              <QuoteSection />
+            </div>
 
             {/* Google Authentication & Firebase Cloud Sync Banner */}
             {!isAuthenticated && (
-              <div className="mx-4 sm:mx-6 my-2 p-4 rounded-2xl bg-gradient-to-r from-[#172133] via-[#121927] to-[#1c273c] border border-[#f2ca50]/40 shadow-xl flex items-center justify-between gap-4">
+              <div
+                className={`mx-4 sm:mx-6 my-2 p-4 rounded-2xl bg-gradient-to-r from-[#172133] via-[#121927] to-[#1c273c] border border-[#f2ca50]/40 shadow-xl flex items-center justify-between gap-4 transition-opacity duration-300 ${
+                  isReadingMode ? 'opacity-15 hover:opacity-85' : 'opacity-100'
+                }`}
+              >
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-[#0c1322] border border-[#f2ca50]/40 flex items-center justify-center shadow-md shrink-0">
                     <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -577,7 +783,7 @@ export default function App() {
               </div>
             )}
 
-            {/* Editorial Banner for 6e-Terminale School Curriculum */}
+            {/* Editorial Banner for 6e-Terminale School Curriculum (kept clear in Reading Mode) */}
             <div
               className="mx-4 sm:mx-6 my-4 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#191f2f] via-[#151b2b] to-[#232a3a] border border-[#f2ca50]/40 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all group"
             >
@@ -667,6 +873,12 @@ export default function App() {
               onNavigateToCursus={() => setActiveTab('cursus')}
             />
 
+            {/* Secondary Promotional & Gamification Cards (dimmed during Reading Mode) */}
+            <div
+              className={`transition-opacity duration-300 ${
+                isReadingMode ? 'opacity-15 hover:opacity-85' : 'opacity-100'
+              }`}
+            >
             {/* Editorial Banner for 20 Mini-Games Arcade */}
             <div
               onClick={() => setActiveTab('jeux')}
@@ -702,9 +914,49 @@ export default function App() {
               </button>
             </div>
 
+            {/* Editorial Banner for English Adventure 7-Island 3D World */}
+            <div
+              onClick={() => {
+                setCarteViewMode('adventure');
+                setActiveTab('carte');
+              }}
+              className="mx-4 sm:mx-6 my-2 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#17263f] via-[#131d33] to-[#0c1322] border border-[#f2ca50]/55 shadow-xl flex items-center justify-between gap-4 cursor-pointer hover:border-[#f2ca50] transition-all group"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-xl bg-[#0c1322] border border-[#f2ca50]/55 flex items-center justify-center text-[#f2ca50] shadow-md group-hover:scale-105 transition-transform shrink-0">
+                  <span className="material-symbols-outlined text-2xl font-bold">public</span>
+                </div>
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-2 flex-wrap text-[10px] font-mono font-bold uppercase tracking-widest">
+                    <span className="text-[#f2ca50]">ENGLISH ADVENTURE · ARCHIPEL 3D</span>
+                    <span className="text-[#99907c]">·</span>
+                    <span className="text-emerald-400">
+                      {user.englishAdventure?.bossDefeatedIslandIds?.length || 0}/7 ÎLES CONQUISES
+                    </span>
+                  </div>
+                  <h3 className="font-serif font-bold text-base sm:text-lg text-[#dce2f8] group-hover:text-[#f2ca50] transition-colors mt-0.5">
+                    7 Territoires Gamifiés : Missions, Mini-Jeux, Boss &amp; Trophées
+                  </h3>
+                  <p className="text-xs text-[#d0c5af]/85">
+                    {user.englishAdventure?.totalStars || 0} ★ · Progression adaptative sans chrono pour débloquer cartes, avatars et thèmes.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="px-4 py-2.5 rounded-xl bg-[#f2ca50] text-[#3c2f00] font-bold text-xs uppercase tracking-wider hidden sm:flex items-center gap-1 shrink-0 group-hover:bg-[#ffe088] shadow-md cursor-pointer"
+              >
+                <span>Explorer</span>
+                <span className="material-symbols-outlined text-sm">explore</span>
+              </button>
+            </div>
+
             {/* Editorial City Design Banner for 100-Level Urban Quiz Map */}
             <div
-              onClick={() => setActiveTab('carte')}
+              onClick={() => {
+                setCarteViewMode('city_map');
+                setActiveTab('carte');
+              }}
               className="mx-4 sm:mx-6 my-2 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#191f2f] via-[#151b2b] to-[#0c1322] border border-[#f2ca50]/50 shadow-xl flex items-center justify-between gap-4 cursor-pointer hover:border-[#f2ca50] transition-all group"
             >
               <div className="flex items-center gap-3.5">
@@ -809,147 +1061,326 @@ export default function App() {
               </div>
               <span className="font-mono text-[#d4c78f]">MSZ SECURE</span>
             </footer>
-          </div>
-        )}
+            </div>
+              </motion.div>
+            )}
 
-        {activeTab === 'carte' && (
-          <div className="w-full animate-fadeIn pt-2">
-            <CityQuizMapView
-              progression={cityMapProgression}
-              playerLevel={calculateLevel(user.stats?.totalXp ?? 0)}
-              onXpEarned={(xp) => {
-                handleChallengeComplete(xp);
-                setUser(getLocalUserProfile());
-              }}
-              onProgressionUpdated={(nextState) => {
-                setCityMapProgression(nextState);
-                setUser(getLocalUserProfile());
-              }}
-            />
-          </div>
-        )}
-
-        {activeTab === 'cursus' && (
-          <div className="max-w-4xl mx-auto animate-fadeIn pt-2">
-            <SchoolCurriculumView
-              onLessonCompleted={(lessonId, xp) => {
-                markLessonCompletedLocally(lessonId);
-                handleChallengeComplete(xp);
-              }}
-              activeSelectedLessonId={activeSelectedLesson?.id}
-              onSelectLesson={(lesson) => setActiveSelectedLesson(lesson)}
-              favoriteLessonIds={favoriteLessonIds}
-              onToggleFavorite={handleToggleFavoriteLesson}
-              cityProgression={cityMapProgression}
-              playerLevel={calculateLevel(user.stats?.totalXp ?? 0)}
-              onCityXpEarned={(xp) => {
-                handleChallengeComplete(xp);
-                setUser(getLocalUserProfile());
-              }}
-              onCityProgressionUpdated={(nextState) => {
-                setCityMapProgression(nextState);
-                setUser(getLocalUserProfile());
-              }}
-            />
-          </div>
-        )}
-
-        {activeTab === 'jeux' && (
-          <div className="max-w-5xl mx-auto animate-fadeIn pt-2">
-            <TwentyGamesHub
-              onXpEarned={(xp) => handleChallengeComplete(xp)}
-              onPointsDeducted={(pts) => handleChallengeComplete(pts)}
-              onClose={() => setActiveTab('accueil')}
-            />
-          </div>
-        )}
-
-        {activeTab === 'classement' && (
-          <div className="max-w-4xl mx-auto animate-fadeIn pt-2 px-4 sm:px-6">
-            <LeaderboardView
-              user={user}
-              onNavigateToGames={() => setActiveTab('jeux')}
-              onNavigateToPractice={() => setActiveTab('pratique')}
-            />
-          </div>
-        )}
-
-        <AnimatePresence mode="wait">
-          {activeTab === 'dashboard' && (
-            <motion.div
-              key="tab-dashboard"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-              className="max-w-4xl mx-auto pt-2 space-y-6"
+            {activeTab === 'carte' && (
+              <motion.div
+                key="tab-carte"
+                layout={!shouldReduceMotion ? 'position' : false}
+                custom={tabDirection}
+                variants={shouldReduceMotion ? TAB_REDUCED_VARIANTS : TAB_VIEW_VARIANTS}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={{
+                  opacity: { duration: 0.22, ease: TAB_EASE_OUT },
+                  x: { duration: 0.28, ease: TAB_EASE_OUT },
+                  y: { duration: 0.28, ease: TAB_EASE_OUT },
+                  scale: { duration: 0.26, ease: TAB_EASE_OUT },
+                  layout: { duration: 0.28, ease: TAB_EASE_OUT }
+                }}
+                className="w-full pt-2 space-y-3 will-change-transform"
+              >
+            {/* Carte World Mode Switcher (English Adventure 7 Islands <-> Plan 600 Niveaux) */}
+            <div
+              className={`max-w-6xl mx-auto px-3 sm:px-6 flex justify-center sm:justify-start transition-opacity duration-300 ${
+                isReadingMode ? 'opacity-25 hover:opacity-100 focus-within:opacity-100' : 'opacity-100'
+              }`}
             >
-              <DashboardView
+              <div
+                ref={carteSwitchTrackRef}
+                className={`relative inline-flex items-center p-1 rounded-full border shadow-md ${
+                  isDark
+                    ? 'bg-[#12192c] border-[#e8c55b]/35'
+                    : 'bg-white border-[#cbbd9f]'
+                }`}
+              >
+                <GlassSlidingCapsule
+                  containerRef={carteSwitchTrackRef}
+                  activeKey={carteViewMode}
+                  tone={isDark ? 'dark' : 'adaptive'}
+                />
+                <button
+                  type="button"
+                  data-capsule-key="adventure"
+                  onClick={() => setCarteViewMode('adventure')}
+                  className={`relative z-10 px-4 py-1.5 rounded-full text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap shrink-0 ${
+                    carteViewMode === 'adventure'
+                      ? 'glass-capsule-active-text'
+                      : isDark
+                      ? 'text-[#cbd5e1] hover:text-[#f5cf5e]'
+                      : 'text-[#475569] hover:text-[#8c5e08]'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-sm">public</span>
+                  <span>English Adventure (7 Îles)</span>
+                </button>
+                <button
+                  type="button"
+                  data-capsule-key="city_map"
+                  onClick={() => setCarteViewMode('city_map')}
+                  className={`relative z-10 px-4 py-1.5 rounded-full text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap shrink-0 ${
+                    carteViewMode === 'city_map'
+                      ? 'glass-capsule-active-text'
+                      : isDark
+                      ? 'text-[#cbd5e1] hover:text-[#f5cf5e]'
+                      : 'text-[#475569] hover:text-[#8c5e08]'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-sm">map</span>
+                  <span>Plan Cité (600 Niveaux)</span>
+                </button>
+              </div>
+            </div>
+
+            {carteViewMode === 'adventure' ? (
+              <EnglishAdventureView
                 user={user}
-                onResumePractice={() => setActiveTab('pratique')}
-                onUpdateStudyTarget={handleUpdateStudyTarget}
-                onOpenFlashcards={() => setIsFlashcardsOpen(true)}
-                onNavigateLeaderboard={() => setActiveTab('classement')}
-                onLaunchEcosystemModule={handleLaunchEcosystemModule}
+                currentLevel={currentLevel}
+                onXpEarned={(xp) => {
+                  if (xp > 0) {
+                    handleChallengeComplete(true, xp);
+                  }
+                  setUser(getLocalUserProfile());
+                }}
+                onProfileRefresh={() => setUser(getLocalUserProfile())}
               />
-              {/* Section 'Mon historique de progression' sous le composant DashboardView */}
-              <ProgressHistorySection user={user} />
-            </motion.div>
-          )}
-        </AnimatePresence>
+            ) : (
+              <CityQuizMapView
+                progression={cityMapProgression}
+                playerLevel={calculateLevel(user.stats?.totalXp ?? 0)}
+                onXpEarned={(xp) => {
+                  handleChallengeComplete(xp);
+                  setUser(getLocalUserProfile());
+                }}
+                onProgressionUpdated={(nextState) => {
+                  setCityMapProgression(nextState);
+                  setUser(getLocalUserProfile());
+                }}
+              />
+            )}
+              </motion.div>
+            )}
 
-        {activeTab === 'pratique' && (
-          <div className="max-w-4xl mx-auto animate-fadeIn pt-2">
-            <PracticeView
-              currentLevel={currentLevel}
-              onSelectLevel={handleLevelChange}
-              onOpenDictation={() => setIsDictationOpen(true)}
-              onOpenFlashcards={() => {
-                setFlashcardsDeckMode('vocab');
-                setIsFlashcardsOpen(true);
-              }}
-              onOpenFlashcardsFocus={() => {
-                setFlashcardsDeckMode('vocab');
-                setFlashcardsFocusMode(true);
-                setIsFlashcardsOpen(true);
-              }}
-              onOpenDialogueFlashcards={() => {
-                setFlashcardsDeckMode('dialogues');
-                setFlashcardsFocusMode(false);
-                setIsFlashcardsOpen(true);
-              }}
-              onOpenDialogues={(themeId = 'all') => {
-                setDialoguesInitialTheme(themeId);
-                setIsDialoguesOpen(true);
-              }}
-              onOpenQuiz={() => setIsQuizOpen(true)}
-              onOpenSpeaking={() => setIsSpeakingOpen(true)}
-              onOpenGames={() => setActiveTab('jeux')}
-              onOpenCityMap={() => setActiveTab('carte')}
-              onOpenAiTutor={() => setIsTutorOpen(true)}
-              onOpenEscapeRoom={() => setIsEscapeRoomOpen(true)}
-              onOpenListeningCinema={() => setIsCinemaOpen(true)}
-              onOpenGrammarBattle={() => setIsGrammarBattleOpen(true)}
-            />
-          </div>
-        )}
+            {activeTab === 'cursus' && (
+              <motion.div
+                key="tab-cursus"
+                layout={!shouldReduceMotion ? 'position' : false}
+                custom={tabDirection}
+                variants={shouldReduceMotion ? TAB_REDUCED_VARIANTS : TAB_VIEW_VARIANTS}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={{
+                  opacity: { duration: 0.22, ease: TAB_EASE_OUT },
+                  x: { duration: 0.28, ease: TAB_EASE_OUT },
+                  y: { duration: 0.28, ease: TAB_EASE_OUT },
+                  scale: { duration: 0.26, ease: TAB_EASE_OUT },
+                  layout: { duration: 0.28, ease: TAB_EASE_OUT }
+                }}
+                className="max-w-4xl mx-auto pt-2 will-change-transform"
+              >
+                <SchoolCurriculumView
+                  onLessonCompleted={(lessonId, xp) => {
+                    markLessonCompletedLocally(lessonId);
+                    handleChallengeComplete(xp);
+                  }}
+                  activeSelectedLessonId={activeSelectedLesson?.id}
+                  onSelectLesson={(lesson) => setActiveSelectedLesson(lesson)}
+                  favoriteLessonIds={favoriteLessonIds}
+                  onToggleFavorite={handleToggleFavoriteLesson}
+                  cityProgression={cityMapProgression}
+                  playerLevel={calculateLevel(user.stats?.totalXp ?? 0)}
+                  onCityXpEarned={(xp) => {
+                    handleChallengeComplete(xp);
+                    setUser(getLocalUserProfile());
+                  }}
+                  onCityProgressionUpdated={(nextState) => {
+                    setCityMapProgression(nextState);
+                    setUser(getLocalUserProfile());
+                  }}
+                />
+              </motion.div>
+            )}
 
-        {activeTab === 'profil' && (
-          <div className="max-w-xl mx-auto animate-fadeIn pt-2">
-            <ProfileModal
-              user={user}
-              onClose={() => setActiveTab('accueil')}
-              onUpdateUser={async (partial) => {
-                const updated = await updateUserProfile(partial);
-                setUser(updated);
-              }}
-              onCustomPhotoUpload={handleCustomUpload}
-              onOpenInstallModal={() => setIsInstallModalOpen(true)}
-              onOpenPlacement={() => setIsPlacementModalOpen(true)}
-            />
-          </div>
-        )}
-      </main>
+            {activeTab === 'jeux' && (
+              <motion.div
+                key="tab-jeux"
+                layout={!shouldReduceMotion ? 'position' : false}
+                custom={tabDirection}
+                variants={shouldReduceMotion ? TAB_REDUCED_VARIANTS : TAB_VIEW_VARIANTS}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={{
+                  opacity: { duration: 0.22, ease: TAB_EASE_OUT },
+                  x: { duration: 0.28, ease: TAB_EASE_OUT },
+                  y: { duration: 0.28, ease: TAB_EASE_OUT },
+                  scale: { duration: 0.26, ease: TAB_EASE_OUT },
+                  layout: { duration: 0.28, ease: TAB_EASE_OUT }
+                }}
+                className="max-w-5xl mx-auto pt-2 will-change-transform"
+              >
+                <TwentyGamesHub
+                  onXpEarned={(xp) => handleChallengeComplete(xp)}
+                  onPointsDeducted={(pts) => handleChallengeComplete(pts)}
+                  onClose={() => setActiveTab('accueil')}
+                />
+              </motion.div>
+            )}
+
+            {activeTab === 'classement' && (
+              <motion.div
+                key="tab-classement"
+                layout={!shouldReduceMotion ? 'position' : false}
+                custom={tabDirection}
+                variants={shouldReduceMotion ? TAB_REDUCED_VARIANTS : TAB_VIEW_VARIANTS}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={{
+                  opacity: { duration: 0.22, ease: TAB_EASE_OUT },
+                  x: { duration: 0.28, ease: TAB_EASE_OUT },
+                  y: { duration: 0.28, ease: TAB_EASE_OUT },
+                  scale: { duration: 0.26, ease: TAB_EASE_OUT },
+                  layout: { duration: 0.28, ease: TAB_EASE_OUT }
+                }}
+                className="max-w-4xl mx-auto pt-2 px-4 sm:px-6 will-change-transform"
+              >
+                <LeaderboardView
+                  user={user}
+                  onNavigateToGames={() => setActiveTab('jeux')}
+                  onNavigateToPractice={() => setActiveTab('pratique')}
+                />
+              </motion.div>
+            )}
+
+            {activeTab === 'dashboard' && (
+              <motion.div
+                key="tab-dashboard"
+                layout={!shouldReduceMotion ? 'position' : false}
+                custom={tabDirection}
+                variants={shouldReduceMotion ? TAB_REDUCED_VARIANTS : TAB_VIEW_VARIANTS}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={{
+                  opacity: { duration: 0.22, ease: TAB_EASE_OUT },
+                  x: { duration: 0.28, ease: TAB_EASE_OUT },
+                  y: { duration: 0.28, ease: TAB_EASE_OUT },
+                  scale: { duration: 0.26, ease: TAB_EASE_OUT },
+                  layout: { duration: 0.28, ease: TAB_EASE_OUT }
+                }}
+                className="max-w-4xl mx-auto pt-2 space-y-6 will-change-transform"
+              >
+                <DashboardView
+                  user={user}
+                  onResumePractice={() => setActiveTab('pratique')}
+                  onUpdateStudyTarget={handleUpdateStudyTarget}
+                  onOpenFlashcards={() => setIsFlashcardsOpen(true)}
+                  onNavigateLeaderboard={() => setActiveTab('classement')}
+                  onLaunchEcosystemModule={handleLaunchEcosystemModule}
+                />
+                {/* Section 'Mon historique de progression' sous le composant DashboardView */}
+                <ProgressHistorySection user={user} />
+              </motion.div>
+            )}
+
+            {activeTab === 'pratique' && (
+              <motion.div
+                key="tab-pratique"
+                layout={!shouldReduceMotion ? 'position' : false}
+                custom={tabDirection}
+                variants={shouldReduceMotion ? TAB_REDUCED_VARIANTS : TAB_VIEW_VARIANTS}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={{
+                  opacity: { duration: 0.22, ease: TAB_EASE_OUT },
+                  x: { duration: 0.28, ease: TAB_EASE_OUT },
+                  y: { duration: 0.28, ease: TAB_EASE_OUT },
+                  scale: { duration: 0.26, ease: TAB_EASE_OUT },
+                  layout: { duration: 0.28, ease: TAB_EASE_OUT }
+                }}
+                className="max-w-4xl mx-auto pt-2 will-change-transform"
+              >
+                <PracticeView
+                  currentLevel={currentLevel}
+                  onSelectLevel={handleLevelChange}
+                  onOpenDictation={() => setIsDictationOpen(true)}
+                  onOpenFlashcards={() => {
+                    setFlashcardsDeckMode('vocab');
+                    setIsFlashcardsOpen(true);
+                  }}
+                  onOpenFlashcardsFocus={() => {
+                    setFlashcardsDeckMode('vocab');
+                    setFlashcardsFocusMode(true);
+                    setIsFlashcardsOpen(true);
+                  }}
+                  onOpenDialogueFlashcards={() => {
+                    setFlashcardsDeckMode('dialogues');
+                    setFlashcardsFocusMode(false);
+                    setIsFlashcardsOpen(true);
+                  }}
+                  onOpenDialogues={(themeId = 'all') => {
+                    setDialoguesInitialTheme(themeId);
+                    setIsDialoguesOpen(true);
+                  }}
+                  onOpenQuiz={() => setIsQuizOpen(true)}
+                  onOpenSpeaking={() => setIsSpeakingOpen(true)}
+                  onOpenGames={() => setActiveTab('jeux')}
+                  onOpenCityMap={() => {
+                    setCarteViewMode('city_map');
+                    setActiveTab('carte');
+                  }}
+                  onOpenAdventure={() => {
+                    setCarteViewMode('adventure');
+                    setActiveTab('carte');
+                  }}
+                  onOpenAiTutor={() => setIsTutorOpen(true)}
+                  onOpenEscapeRoom={() => setIsEscapeRoomOpen(true)}
+                  onOpenListeningCinema={() => setIsCinemaOpen(true)}
+                  onOpenGrammarBattle={() => setIsGrammarBattleOpen(true)}
+                />
+              </motion.div>
+            )}
+
+            {activeTab === 'profil' && (
+              <motion.div
+                key="tab-profil"
+                layout={!shouldReduceMotion ? 'position' : false}
+                custom={tabDirection}
+                variants={shouldReduceMotion ? TAB_REDUCED_VARIANTS : TAB_VIEW_VARIANTS}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={{
+                  opacity: { duration: 0.22, ease: TAB_EASE_OUT },
+                  x: { duration: 0.28, ease: TAB_EASE_OUT },
+                  y: { duration: 0.28, ease: TAB_EASE_OUT },
+                  scale: { duration: 0.26, ease: TAB_EASE_OUT },
+                  layout: { duration: 0.28, ease: TAB_EASE_OUT }
+                }}
+                className="max-w-xl mx-auto pt-2 will-change-transform"
+              >
+                <ProfileModal
+                  user={user}
+                  onClose={() => setActiveTab('accueil')}
+                  onUpdateUser={async (partial) => {
+                    const updated = await updateUserProfile(partial);
+                    setUser(updated);
+                  }}
+                  onCustomPhotoUpload={handleCustomUpload}
+                  onOpenInstallModal={() => setIsInstallModalOpen(true)}
+                  onOpenPlacement={() => setIsPlacementModalOpen(true)}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.main>
+      </LayoutGroup>
 
       {/* Bottom Luxury Navigation */}
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />

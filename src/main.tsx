@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import { ThemeProvider } from './theme/ThemeContext';
+import { ReadingModeProvider } from './context/ReadingModeContext';
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -48,7 +49,9 @@ class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, Er
 createRoot(document.getElementById('root')!).render(
   <AppErrorBoundary>
     <ThemeProvider>
-      <App />
+      <ReadingModeProvider>
+        <App />
+      </ReadingModeProvider>
     </ThemeProvider>
   </AppErrorBoundary>
 );

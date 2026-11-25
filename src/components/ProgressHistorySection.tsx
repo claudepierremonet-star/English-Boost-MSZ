@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import type {
   UserProfile,
   ProgressChartAnnotation,
@@ -28,6 +29,7 @@ import {
   ReferenceLine,
   ReferenceDot
 } from 'recharts';
+import { ChartSectionSkeleton } from './SkeletonLoaders';
 
 interface ProgressHistorySectionProps {
   user: UserProfile;
@@ -713,12 +715,24 @@ export const ProgressHistorySection: React.FC<ProgressHistorySectionProps> = ({
 
       {/* Graphique Recharts sur 30 jours */}
       <div className="w-full h-64 sm:h-72 select-none pt-2">
-        {loading ? (
-          <div className="w-full h-full flex items-center justify-center text-xs text-zinc-400 font-mono">
-            <span className="material-symbols-outlined animate-spin mr-2 text-sm">sync</span>
-            Chargement de l'évolution XP sur 30 jours...
-          </div>
-        ) : granularity === 'weekly' ? (
+        <AnimatePresence mode="wait">
+          {loading ? (
+            <ChartSectionSkeleton
+              key="progress-history-skeleton"
+              heightClass="h-64 sm:h-72"
+              variant={granularity === 'daily' ? 'bars' : 'curve'}
+              label="Chargement de l'évolution XP sur 30 jours"
+            />
+          ) : (
+            <motion.div
+              key={`progress-history-chart-${granularity}`}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+              className="w-full h-full"
+            >
+              {granularity === 'weekly' ? (
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
               data={weeklyPoints}
@@ -940,7 +954,10 @@ export const ProgressHistorySection: React.FC<ProgressHistorySectionProps> = ({
               ))}
             </BarChart>
           </ResponsiveContainer>
-        )}
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Liste des événements annotés pour l'affichage actif */}

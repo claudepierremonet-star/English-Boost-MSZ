@@ -280,6 +280,42 @@ export const BADGES_CATALOG: Omit<AcademicBadge, 'currentProgress' | 'isUnlocked
     requirementLabel: 'Participation active à un défi de groupe',
     requiredTarget: 1,
     xpReward: 200
+  },
+  {
+    id: 'adventure_voyager',
+    title: 'Navigateur des Îles',
+    latinTitle: 'Navarchus Linguae',
+    tier: 'silver',
+    category: 'mastery',
+    description: 'Vaincre les premiers Gardiens d’English Adventure et conquérir au moins 2 territoires.',
+    icon: 'sailing',
+    requirementLabel: '2 Boss vaincus dans English Adventure',
+    requiredTarget: 2,
+    xpReward: 150
+  },
+  {
+    id: 'adventure_scholar',
+    title: 'Stratège de l’Archipel',
+    latinTitle: 'Imperator Polyglottus',
+    tier: 'platinum',
+    category: 'mastery',
+    description: 'Accumuler au moins 24 étoiles de précision à travers les îles d’English Adventure.',
+    icon: 'auto_awesome',
+    requirementLabel: '24 étoiles de précision en Aventure',
+    requiredTarget: 24,
+    xpReward: 250
+  },
+  {
+    id: 'adventure_sovereign',
+    title: 'Souverain de l’Univers Anglais',
+    latinTitle: 'Rex Universi Anglici',
+    tier: 'oxford',
+    category: 'mastery',
+    description: 'Triompher des 7 territoires et vaincre le Boss de l’Advanced English Universe.',
+    icon: 'crown',
+    requirementLabel: '7 Boss vaincus (Archipel complet)',
+    requiredTarget: 7,
+    xpReward: 500
   }
 ];
 
@@ -290,6 +326,8 @@ export function computeUserBadges(user: UserProfile, attempts: LearningAttempt[]
   const totalXp = user.stats.totalXp || 0;
   const streak = user.stats.streakDays || 0;
   const completedLessons = user.stats.completedModules || 0;
+  const advBossCount = user.englishAdventure?.bossDefeatedIslandIds?.length || 0;
+  const advTotalStars = user.englishAdventure?.totalStars || 0;
 
   // Max dictation score recorded
   const dictationAttempts = attempts.filter((a) => a.moduleType === 'dictation');
@@ -330,6 +368,17 @@ export function computeUserBadges(user: UserProfile, attempts: LearningAttempt[]
     } else if (def.category === 'quiz') {
       currentProgress = Math.min(def.requiredTarget, bestQuizScore);
       isUnlocked = bestQuizScore >= def.requiredTarget;
+    } else if (def.category === 'mastery') {
+      if (def.id === 'adventure_voyager') {
+        currentProgress = Math.min(def.requiredTarget, advBossCount);
+        isUnlocked = advBossCount >= def.requiredTarget;
+      } else if (def.id === 'adventure_scholar') {
+        currentProgress = Math.min(def.requiredTarget, advTotalStars);
+        isUnlocked = advTotalStars >= def.requiredTarget;
+      } else if (def.id === 'adventure_sovereign') {
+        currentProgress = Math.min(def.requiredTarget, advBossCount);
+        isUnlocked = advBossCount >= def.requiredTarget;
+      }
     } else if (def.category === 'distinction') {
       if (def.id === 'polyglotte_matin') {
         currentProgress = hasMorningSession ? 1 : 0;

@@ -8,6 +8,9 @@ import { HeaderSessionTimer } from './HeaderSessionTimer';
 import { HeaderLevelProgressBar } from './HeaderLevelProgressBar';
 import { isSoundEffectsEnabled, toggleSoundEffects, SOUND_EFFECTS_EVENT } from '../utils/soundEffects';
 import { inferGradeFromCefr } from '../services/adaptiveEngine';
+import { useReadingMode } from '../context/ReadingModeContext';
+import { ReadingModeToggleButton } from './ReadingModeToggleButton';
+import { MotionTooltip } from './MotionTooltip';
 import appIconImg from '../assets/images/app_icon_msz_1792789129742.jpg';
 
 interface HeaderProps {
@@ -52,6 +55,7 @@ export const Header: React.FC<HeaderProps> = ({
   onNavigateCityMap
 }) => {
   const { isOnline, isSyncing, pendingCount, triggerSync } = useSyncStatus();
+  const { isReadingMode } = useReadingMode();
   const [imageError, setImageError] = useState(false);
   const [mszCoins, setMszCoins] = useState<number>(() => getMszCoinsBalance());
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => isSoundEffectsEnabled());
@@ -75,14 +79,20 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header
-      className="fixed top-0 w-full z-40 bg-[#0c1322]/90 backdrop-blur-xl border-b border-[#232a3a]/80 shadow-[0_4px_20px_rgba(0,0,0,0.5)]"
+      className={`fixed top-0 w-full z-40 transition-all duration-300 ${
+        isReadingMode
+          ? 'bg-[#0c1322]/65 backdrop-blur-md border-b border-[#232a3a]/35 shadow-none'
+          : 'bg-[#0c1322]/90 backdrop-blur-xl border-b border-[#232a3a]/80 shadow-[0_4px_20px_rgba(0,0,0,0.5)]'
+      }`}
       style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 10px)' }}
     >
       <div className="max-w-6xl mx-auto h-14 sm:h-16 px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4">
         {/* Brand Lockup with Luxury App Icon */}
         <div
           onClick={onOpenInstallModal}
-          className="flex items-center gap-2.5 cursor-pointer group shrink-0"
+          className={`flex items-center gap-2.5 cursor-pointer group shrink-0 transition-opacity duration-300 ${
+            isReadingMode ? 'opacity-25 hover:opacity-100' : 'opacity-100'
+          }`}
           title="Voir l'icône de l'application et l'ajouter sur votre écran d'accueil iOS/Android"
         >
           <div className="relative w-9 h-9 rounded-xl overflow-hidden p-0.5 bg-gradient-to-br from-[#d4af37] via-[#f2ca50] to-[#ccb14f] shadow-md shadow-[#f2ca50]/20 group-hover:scale-105 transition-transform shrink-0 flex items-center justify-center">
@@ -113,9 +123,18 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Level, Session Timer, Theme Palette, Network State & Profile Zone */}
+        {/* Mode Lecture + Utility Controls */}
         <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* Visual Session Timer & Daily Target Configurator */}
+          {/* Always crisp Mode Lecture toggle */}
+          <ReadingModeToggleButton variant="header" />
+
+          {/* Secondary Header Elements (dimmed during Reading Mode) */}
+          <div
+            className={`flex items-center gap-1.5 sm:gap-2 transition-opacity duration-300 ${
+              isReadingMode ? 'opacity-15 hover:opacity-95 focus-within:opacity-100' : 'opacity-100'
+            }`}
+          >
+            {/* Visual Session Timer & Daily Target Configurator */}
           <HeaderSessionTimer
             activeLesson={activeLesson}
             studyMinutesToday={user.stats?.studyMinutesToday ?? 0}
@@ -155,116 +174,164 @@ export const Header: React.FC<HeaderProps> = ({
           ) : null}
           {/* Cursus 6e-Tle quick badge */}
           {onNavigateCursus && (
-            <button
-              type="button"
-              onClick={onNavigateCursus}
-              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#232a3a]/80 hover:bg-[#2e3545] border border-[#f2ca50]/30 text-xs font-bold text-[#f2ca50] hover:text-[#ffe088] transition-all active:scale-95"
-              title="Accéder au cursus 6e à Terminale (200 leçons)"
+            <MotionTooltip
+              title="Cursus Scolaire"
+              content="Accéder directement aux 200 leçons de la 6e à la Terminale."
+              placement="bottom"
+              wrapperClassName="hidden sm:inline-flex"
             >
-              <span className="material-symbols-outlined text-[15px]">school</span>
-              <span className="font-mono text-[11px] uppercase tracking-wider">Cursus 6e-Tle</span>
-            </button>
+              <button
+                type="button"
+                onClick={onNavigateCursus}
+                aria-label="Accéder au cursus 6e à Terminale"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#232a3a]/80 hover:bg-[#2e3545] border border-[#f2ca50]/30 text-xs font-bold text-[#f2ca50] hover:text-[#ffe088] transition-all active:scale-95 cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[15px]">school</span>
+                <span className="font-mono text-[11px] uppercase tracking-wider">Cursus 6e-Tle</span>
+              </button>
+            </MotionTooltip>
           )}
 
           {/* Oxford Academic Level & Prestige Badge with Level-up celebration preview */}
           {onOpenLevelCelebration && (
-            <button
-              type="button"
-              onClick={onOpenLevelCelebration}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-500/20 via-[#f2ca50]/20 to-amber-600/20 hover:from-amber-500/35 hover:to-[#f2ca50]/40 border border-[#f2ca50]/60 text-xs font-bold text-[#f2ca50] hover:text-[#ffe088] transition-all active:scale-95 shadow-sm cursor-pointer"
-              title={`Niveau Académique ${academicLevel} (${xpInLevel}/100 XP vers le Niveau ${academicLevel + 1}). Cliquez pour contempler vos distinctions et l'ascension.`}
+            <MotionTooltip
+              title={`Niveau ${academicLevel} (${xpInLevel}/100 XP)`}
+              content={`Progression vers le Niveau ${academicLevel + 1}. Cliquez pour voir vos distinctions.`}
+              placement="bottom"
             >
-              <span className="material-symbols-outlined text-[15px] text-[#f2ca50]">military_tech</span>
-              <span className="font-mono text-[11px] font-extrabold tracking-wide">Niv. {academicLevel}</span>
-              <span className="hidden lg:inline text-[9px] font-mono text-[#d0c5af]/80">({xpInLevel}%)</span>
-            </button>
+              <button
+                type="button"
+                onClick={onOpenLevelCelebration}
+                aria-label={`Niveau Académique ${academicLevel}`}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-500/20 via-[#f2ca50]/20 to-amber-600/20 hover:from-amber-500/35 hover:to-[#f2ca50]/40 border border-[#f2ca50]/60 text-xs font-bold text-[#f2ca50] hover:text-[#ffe088] transition-all active:scale-95 shadow-sm cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[15px] text-[#f2ca50]">military_tech</span>
+                <span className="font-mono text-[11px] font-extrabold tracking-wide">Niv. {academicLevel}</span>
+                <span className="hidden lg:inline text-[9px] font-mono text-[#d0c5af]/80">({xpInLevel}%)</span>
+              </button>
+            </MotionTooltip>
           )}
 
           {/* Weekly Leaderboard quick badge */}
           {onNavigateLeaderboard && (
-            <button
-              type="button"
-              onClick={onNavigateLeaderboard}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-[#b45309]/30 to-[#f59e0b]/20 hover:from-[#b45309]/50 hover:to-[#f59e0b]/30 border border-[#f2ca50]/50 text-xs font-bold text-[#f2ca50] hover:text-[#ffe088] transition-all active:scale-95 shadow-sm"
-              title="Consulter le classement hebdomadaire des apprenants"
+            <MotionTooltip
+              title="Ligue d'Oxford"
+              content="Consulter le classement hebdomadaire et les défis de groupe."
+              placement="bottom"
             >
-              <span className="material-symbols-outlined text-[15px] text-[#f2ca50]">emoji_events</span>
-              <span className="hidden sm:inline font-mono text-[11px]">Top Hebdo</span>
-            </button>
+              <button
+                type="button"
+                onClick={onNavigateLeaderboard}
+                aria-label="Consulter le classement hebdomadaire"
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-[#b45309]/30 to-[#f59e0b]/20 hover:from-[#b45309]/50 hover:to-[#f59e0b]/30 border border-[#f2ca50]/50 text-xs font-bold text-[#f2ca50] hover:text-[#ffe088] transition-all active:scale-95 shadow-sm cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[15px] text-[#f2ca50]">emoji_events</span>
+                <span className="hidden sm:inline font-mono text-[11px]">Top Hebdo</span>
+              </button>
+            </MotionTooltip>
           )}
 
           {/* MSZ Coins Balance & Shop Quick Button */}
           {onOpenShop && (
-            <button
-              type="button"
-              onClick={onOpenShop}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#182338] hover:bg-[#202f4a] border border-[#f2ca50]/50 text-xs font-bold text-[#ffd700] hover:text-white transition-all active:scale-95 shadow-sm cursor-pointer"
-              title="Portefeuille MSZ Coins & Boutique des Personnages"
+            <MotionTooltip
+              title="Boutique MSZ"
+              content="Gérer vos MSZ Coins et débloquer avatars ou cartes 3D."
+              placement="bottom"
             >
-              <span
-                className="material-symbols-outlined text-[15px] text-[#f2ca50]"
-                style={{ fontVariationSettings: "'FILL' 1" }}
+              <button
+                type="button"
+                onClick={onOpenShop}
+                aria-label="Ouvrir la boutique MSZ Coins"
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#182338] hover:bg-[#202f4a] border border-[#f2ca50]/50 text-xs font-bold text-[#ffd700] hover:text-white transition-all active:scale-95 shadow-sm cursor-pointer"
               >
-                monetization_on
-              </span>
-              <span className="font-mono text-[11px] font-black">{mszCoins.toLocaleString()}</span>
-              <span className="hidden xl:inline text-[9px] text-[#f2ca50] font-mono">MSZ</span>
-            </button>
+                <span
+                  className="material-symbols-outlined text-[15px] text-[#f2ca50]"
+                  style={{ fontVariationSettings: "'FILL' 1" }}
+                >
+                  monetization_on
+                </span>
+                <span className="font-mono text-[11px] font-black">{mszCoins.toLocaleString()}</span>
+                <span className="hidden xl:inline text-[9px] text-[#f2ca50] font-mono">MSZ</span>
+              </button>
+            </MotionTooltip>
           )}
 
           {/* Subtle Sound Effects Toggle Button */}
-          <button
-            type="button"
-            onClick={() => setSoundEnabled(toggleSoundEffects())}
-            className={`p-1.5 rounded-full border transition-all active:scale-95 flex items-center justify-center cursor-pointer ${
-              soundEnabled
-                ? 'bg-[#232a3a]/80 hover:bg-[#2e3545] border-[#f2ca50]/30 text-[#f2ca50] hover:text-[#ffe088]'
-                : 'bg-[#151b2b]/80 hover:bg-[#232a3a] border-[#232a3a] text-[#99907c] hover:text-[#dce2f8]'
-            }`}
-            title={soundEnabled ? 'Indices sonores activés (cliquer pour couper)' : 'Indices sonores coupés (cliquer pour activer)'}
-            aria-label={soundEnabled ? 'Couper les indices sonores' : 'Activer les indices sonores'}
+          <MotionTooltip
+            title="Effets Sonores"
+            content={soundEnabled ? 'Couper les retours sonores interactifs.' : 'Activer les retours sonores interactifs.'}
+            placement="bottom"
           >
-            <span className="material-symbols-outlined text-[19px]">
-              {soundEnabled ? 'volume_up' : 'volume_off'}
-            </span>
-          </button>
+            <button
+              type="button"
+              onClick={() => setSoundEnabled(toggleSoundEffects())}
+              className={`p-1.5 rounded-full border transition-all active:scale-95 flex items-center justify-center cursor-pointer ${
+                soundEnabled
+                  ? 'bg-[#232a3a]/80 hover:bg-[#2e3545] border-[#f2ca50]/30 text-[#f2ca50] hover:text-[#ffe088]'
+                  : 'bg-[#151b2b]/80 hover:bg-[#232a3a] border-[#232a3a] text-[#99907c] hover:text-[#dce2f8]'
+              }`}
+              aria-label={soundEnabled ? 'Couper les indices sonores' : 'Activer les indices sonores'}
+            >
+              <span className="material-symbols-outlined text-[19px]">
+                {soundEnabled ? 'volume_up' : 'volume_off'}
+              </span>
+            </button>
+          </MotionTooltip>
 
           {/* Quick Skin / Theme Switcher Button */}
           {onOpenThemeSelector && (
-            <button
-              type="button"
-              onClick={onOpenThemeSelector}
-              className="p-1.5 rounded-full bg-[#232a3a]/80 hover:bg-[#2e3545] border border-[#f2ca50]/30 text-[#f2ca50] hover:text-[#ffe088] transition-all active:scale-95 flex items-center justify-center cursor-pointer"
-              title="Changer la peau de l'application (Sombre, Claire, Florale)"
+            <MotionTooltip
+              title="Apparence"
+              content="Personnaliser le thème visuel (Sombre, Clair ou Floral)."
+              placement="bottom"
             >
-              <span className="material-symbols-outlined text-[19px]">palette</span>
-            </button>
+              <button
+                type="button"
+                onClick={onOpenThemeSelector}
+                aria-label="Changer le thème de l'application"
+                className="p-1.5 rounded-full bg-[#232a3a]/80 hover:bg-[#2e3545] border border-[#f2ca50]/30 text-[#f2ca50] hover:text-[#ffe088] transition-all active:scale-95 flex items-center justify-center cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[19px]">palette</span>
+              </button>
+            </MotionTooltip>
           )}
 
           {/* Authentic American Accent Studio Button */}
           {onOpenAccentStudio && (
-            <button
-              type="button"
-              onClick={onOpenAccentStudio}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#101e33] hover:bg-[#192b47] border border-[#38bdf8]/40 hover:border-[#38bdf8] text-xs font-semibold text-[#7dd3fc] transition-all active:scale-95 shadow-sm cursor-pointer"
-              title="Studio d'Authenticité Vocale Américaine (General American)"
+            <MotionTooltip
+              title="Accent Américain"
+              content="Studio d'entraînement à la prononciation General American."
+              placement="bottom"
             >
-              <span className="text-[13px]">🇺🇸</span>
-              <span className="hidden sm:inline font-mono text-[11px] font-bold text-[#38bdf8]">Accent US</span>
-            </button>
+              <button
+                type="button"
+                onClick={onOpenAccentStudio}
+                aria-label="Ouvrir le studio d'accent américain"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#101e33] hover:bg-[#192b47] border border-[#38bdf8]/40 hover:border-[#38bdf8] text-xs font-semibold text-[#7dd3fc] transition-all active:scale-95 shadow-sm cursor-pointer"
+              >
+                <span className="text-[13px]">🇺🇸</span>
+                <span className="hidden sm:inline font-mono text-[11px] font-bold text-[#38bdf8]">Accent US</span>
+              </button>
+            </MotionTooltip>
           )}
 
           {/* Mobile Icon & PWA Installation Modal Button */}
           {onOpenInstallModal && (
-            <button
-              type="button"
-              onClick={onOpenInstallModal}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#1b263e] hover:bg-[#243354] border border-[#f2ca50]/40 text-xs font-semibold text-[#ffe082] transition-all active:scale-95 shadow-sm"
-              title="Installer l'icône sur iPhone / iPad ou Android"
+            <MotionTooltip
+              title="Application Mobile"
+              content="Installer le raccourci MSZ sur iPhone, iPad ou Android."
+              placement="bottom"
             >
-              <span className="material-symbols-outlined text-[15px] text-[#f2ca50]">install_mobile</span>
-              <span className="hidden md:inline font-mono text-[11px]">Icône Mobile</span>
-            </button>
+              <button
+                type="button"
+                onClick={onOpenInstallModal}
+                aria-label="Installer l'application sur mobile"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#1b263e] hover:bg-[#243354] border border-[#f2ca50]/40 text-xs font-semibold text-[#ffe082] transition-all active:scale-95 shadow-sm cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[15px] text-[#f2ca50]">install_mobile</span>
+                <span className="hidden md:inline font-mono text-[11px]">Icône Mobile</span>
+              </button>
+            </MotionTooltip>
           )}
 
           {/* School Grade Indicator + CEFR Level Quick Selector */}
@@ -328,17 +395,33 @@ export const Header: React.FC<HeaderProps> = ({
               alt={user.displayName}
               className="w-8 h-8 rounded-full object-cover"
             />
+            {user.englishAdventure?.equippedAvatarId &&
+              user.englishAdventure.equippedAvatarId !== 'avatar_scholar_initiate' && (
+                <span
+                  className="absolute -top-1 -left-1 w-4 h-4 rounded-full bg-[#0c1322] border border-[#f2ca50] text-[#f2ca50] flex items-center justify-center shadow"
+                  title="Avatar English Adventure équipé"
+                >
+                  <span className="material-symbols-outlined text-[10px]">crown</span>
+                </span>
+              )}
             <span
               className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ${isAuthenticated ? 'bg-emerald-400' : 'bg-amber-400'} ring-2 ring-[#0c1322]`}
               title={isAuthenticated ? 'Compte Google synchronisé sur Firebase' : 'Mode invité local'}
             />
           </button>
+          </div>
         </div>
       </div>
-      <HeaderLevelProgressBar
-        progression={cityMapProgression}
-        onNavigateCityMap={onNavigateCityMap}
-      />
+      <div
+        className={`transition-opacity duration-300 ${
+          isReadingMode ? 'opacity-15 hover:opacity-95' : 'opacity-100'
+        }`}
+      >
+        <HeaderLevelProgressBar
+          progression={cityMapProgression}
+          onNavigateCityMap={onNavigateCityMap}
+        />
+      </div>
     </header>
   );
 };

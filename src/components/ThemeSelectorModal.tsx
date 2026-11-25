@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useAppTheme, type AppTheme, type FloralBorderWidth } from '../theme/ThemeContext';
+import { ADVENTURE_THEMES } from '../data/englishAdventureData';
+import { getEnglishAdventureState } from '../utils/englishAdventureManager';
 
 interface ThemeSelectorModalProps {
   isOpen: boolean;
@@ -8,6 +10,8 @@ interface ThemeSelectorModalProps {
 
 export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({ isOpen, onClose }) => {
   const { theme, floralWidth, setTheme, setFloralWidth, isDark } = useAppTheme();
+  const advState = useMemo(() => (isOpen ? getEnglishAdventureState() : null), [isOpen]);
+  const unlockedThemeIds = advState?.unlockedThemeIds || [];
 
   if (!isOpen) return null;
 
@@ -20,6 +24,7 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({ isOpen, 
     previewBorder: string;
     previewAccent: string;
     isFloral: boolean;
+    locked?: boolean;
   }> = [
     {
       id: 'dark',
@@ -60,16 +65,27 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({ isOpen, 
       previewBorder: '#785b24',
       previewAccent: '#785b24',
       isFloral: true
-    }
+    },
+    ...ADVENTURE_THEMES.map((th) => ({
+      id: th.id,
+      name: th.name,
+      category: 'English Adventure',
+      description: unlockedThemeIds.includes(th.id) ? th.subtitleFr : th.unlockRequirementFr,
+      previewBg: th.previewBg,
+      previewBorder: th.previewAccent,
+      previewAccent: th.previewAccent,
+      isFloral: false,
+      locked: !unlockedThemeIds.includes(th.id)
+    }))
   ];
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn select-none"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn select-none overflow-y-auto"
       onClick={onClose}
     >
       <div
-        className={`w-full max-w-lg rounded-2xl p-6 shadow-2xl border flex flex-col gap-5 ${
+        className={`w-full max-w-xl rounded-2xl p-6 shadow-2xl border flex flex-col gap-5 max-h-[90vh] overflow-y-auto ${
           isDark
             ? 'bg-[#191f2f] border-[#f2ca50]/40 text-[#dce2f8]'
             : 'bg-[#ffffff] border-[#d6cebe] text-[#1c1917]'
@@ -87,7 +103,7 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({ isOpen, 
                 Choix de la Peau & Thème
               </h2>
               <p className="text-xs opacity-75">
-                Personnalisez l’ambiance chromatique et les bordures florales
+                Personnalisez l’ambiance chromatique, bordures florales & thèmes English Adventure
               </p>
             </div>
           </div>
@@ -103,23 +119,29 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({ isOpen, 
           </button>
         </div>
 
-        {/* 4 Theme Cards */}
+        {/* Theme Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {skins.map((skin) => {
             const isSelected = theme === skin.id;
+            const isLocked = Boolean(skin.locked);
             return (
               <button
                 key={skin.id}
                 type="button"
-                onClick={() => setTheme(skin.id)}
-                className={`p-4 rounded-xl border text-left transition-all relative overflow-hidden flex flex-col justify-between gap-3 active:scale-[0.98] ${
-                  isSelected
+                disabled={isLocked}
+                onClick={() => !isLocked && setTheme(skin.id)}
+                className={`p-4 rounded-xl border text-left transition-all relative overflow-hidden flex flex-col justify-between gap-3 ${
+                  isLocked
                     ? isDark
-                      ? 'border-[#f2ca50] bg-[#232a3a] shadow-lg shadow-[#f2ca50]/15 ring-1 ring-[#f2ca50]'
-                      : 'border-[#9a6700] bg-[#fbf9f5] shadow-lg shadow-[#9a6700]/15 ring-1 ring-[#9a6700]'
+                      ? 'border-[#232a3a] bg-[#0c1322]/70 opacity-60 cursor-not-allowed'
+                      : 'border-[#e7dfd3] bg-[#f7f4ee]/60 opacity-60 cursor-not-allowed'
+                    : isSelected
+                    ? isDark
+                      ? 'border-[#f2ca50] bg-[#232a3a] shadow-lg shadow-[#f2ca50]/15 ring-1 ring-[#f2ca50] active:scale-[0.98] cursor-pointer'
+                      : 'border-[#9a6700] bg-[#fbf9f5] shadow-lg shadow-[#9a6700]/15 ring-1 ring-[#9a6700] active:scale-[0.98] cursor-pointer'
                     : isDark
-                    ? 'border-[#4d4635]/40 bg-[#151b2b] hover:bg-[#232a3a]'
-                    : 'border-[#e7dfd3] bg-[#f7f4ee] hover:bg-[#f2eee5]'
+                    ? 'border-[#4d4635]/40 bg-[#151b2b] hover:bg-[#232a3a] active:scale-[0.98] cursor-pointer'
+                    : 'border-[#e7dfd3] bg-[#f7f4ee] hover:bg-[#f2eee5] active:scale-[0.98] cursor-pointer'
                 }`}
               >
                 {/* Visual Swatch Strip */}
@@ -131,7 +153,9 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({ isOpen, 
                       borderColor: skin.previewBorder
                     }}
                   >
-                    {skin.isFloral ? (
+                    {isLocked ? (
+                      <span className="material-symbols-outlined text-sm text-slate-400">lock</span>
+                    ) : skin.isFloral ? (
                       <span
                         className="material-symbols-outlined text-sm"
                         style={{ color: skin.previewAccent }}
@@ -143,7 +167,7 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({ isOpen, 
                         className="material-symbols-outlined text-sm"
                         style={{ color: skin.previewAccent }}
                       >
-                        {skin.id === 'dark' ? 'dark_mode' : 'light_mode'}
+                        {skin.id === 'light' || skin.id === 'parchment-royal' ? 'light_mode' : 'dark_mode'}
                       </span>
                     )}
 
@@ -158,14 +182,16 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({ isOpen, 
 
                   <span
                     className={`material-symbols-outlined text-lg ${
-                      isSelected
+                      isLocked
+                        ? 'opacity-40'
+                        : isSelected
                         ? isDark
                           ? 'text-[#f2ca50]'
                           : 'text-[#9a6700]'
                         : 'opacity-30'
                     }`}
                   >
-                    {isSelected ? 'check_circle' : 'radio_button_unchecked'}
+                    {isLocked ? 'lock' : isSelected ? 'check_circle' : 'radio_button_unchecked'}
                   </span>
                 </div>
 
