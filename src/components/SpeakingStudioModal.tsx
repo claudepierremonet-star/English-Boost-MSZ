@@ -22,6 +22,18 @@ import {
 import type { SchoolLesson } from '../data/schoolCurriculum';
 import { stopSpeech } from '../services/speechService';
 import {
+  selectSkillsForTask,
+  type LoadedContextSkillEntry
+} from '../services/skillsService';
+import {
+  analyzeReferencePhonemes,
+  playAutomatedVocalFeedback,
+  type PhonemeEvaluationResult,
+  type VocalFeedbackPhase,
+  type VocalFeedbackPlaybackMode
+} from '../utils/phonemeFeedbackEngine';
+import { PhonemeVocalFeedbackPanel } from './PhonemeVocalFeedbackPanel';
+import {
   STUDIO_ACOUSTIC_PRESETS,
   getStudioAcousticPreset,
   setStudioAcousticPreset,
@@ -99,6 +111,21 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
   const [finalTranscript, setFinalTranscript] = useState<string>('');
   const [phoneticReport, setPhoneticReport] = useState<PhoneticCorrectionReport | null>(null);
 
+  // Studio d'Élocution Skill & Automated Reference-Phoneme Vocal Feedback states
+  const [skillLoadState, setSkillLoadState] = useState<'loading' | 'loaded' | 'disabled' | 'unavailable'>('loading');
+  const [skillLoadedEntry, setSkillLoadedEntry] = useState<LoadedContextSkillEntry | null>(null);
+  const [skillLoadReason, setSkillLoadReason] = useState<string>('');
+  const [autoVocalFeedbackEnabled, setAutoVocalFeedbackEnabled] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('eb_msz_auto_vocal_feedback');
+      return saved === null ? true : saved === 'true';
+    } catch {
+      return true;
+    }
+  });
+  const [vocalPlaybackMode, setVocalPlaybackMode] = useState<VocalFeedbackPlaybackMode>('full');
+  const [vocalFeedbackPhase, setVocalFeedbackPhase] = useState<VocalFeedbackPhase>('idle');
+
   // Refs for audio hardware and speech recognizer
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -109,6 +136,8 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
   const liveAnimFrameRef = useRef<number | null>(null);
   const speechRecognizerRef = useRef<SpeechRecognitionController | null>(null);
   const blobUrlRef = useRef<string | null>(null);
+  const vocalFeedbackCancelRef = useRef<(() => void) | null>(null);
+  const pendingAutoFeedbackRef = useRef<boolean>(false);
 
   // Effective practice target text based on mode
   const effectiveTargetText = useMemo(() => {
@@ -123,14 +152,129 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
     return generateNativeProsodyModel(effectiveTargetText, selectedAccent, 100);
   }, [effectiveTargetText, selectedAccent]);
 
-  // Check speech recognition capability on mount
+  // Reference-phoneme evaluation derived from real recognition & acoustic telemetry
+  const phonemeEvaluation: PhonemeEvaluationResult | null = useMemo(() => {
+    if (!phoneticReport) return null;
+    return analyzeReferencePhonemes({
+      expectedText: effectiveTargetText,
+      phoneticHints: isFreeDictationMode ? '' : item.phoneticHints,
+      report: phoneticReport,
+      targetAccent: selectedAccent,
+      acousticResult: analysisResult,
+      audioFormat: audioBlob?.type || 'audio/webm'
+    });
+  }, [
+    phoneticReport,
+    effectiveTargetText,
+    isFreeDictationMode,
+    item.phoneticHints,
+    selectedAccent,
+    analysisResult,
+    audioBlob
+  ]);
+
+  const stopAutomatedVocalFeedback = () => {
+    pendingAutoFeedbackRef.current = false;
+    if (vocalFeedbackCancelRef.current) {
+      vocalFeedbackCancelRef.current();
+      vocalFeedbackCancelRef.current = null;
+    }
+    setVocalFeedbackPhase('idle');
+  };
+
+  const triggerAutomatedVocalFeedback = (
+    evalData: PhonemeEvaluationResult | null = phonemeEvaluation,
+    modeOverride?: VocalFeedbackPlaybackMode
+  ) => {
+    if (!evalData) return;
+    stopAutomatedVocalFeedback();
+    const cancel = playAutomatedVocalFeedback(evalData.vocalFeedbackPlan, {
+      mode: modeOverride ?? vocalPlaybackMode,
+      onPhaseChange: setVocalFeedbackPhase,
+      onComplete: () => {
+        vocalFeedbackCancelRef.current = null;
+        setVocalFeedbackPhase('idle');
+      },
+      onError: () => {
+        vocalFeedbackCancelRef.current = null;
+        setVocalFeedbackPhase('idle');
+      }
+    });
+    vocalFeedbackCancelRef.current = cancel;
+  };
+
+  const handleToggleAutoVocalFeedback = (enabled: boolean) => {
+    setAutoVocalFeedbackEnabled(enabled);
+    try {
+      localStorage.setItem('eb_msz_auto_vocal_feedback', String(enabled));
+    } catch {
+      // ignore storage failure
+    }
+  };
+
+  // Check speech recognition capability & load real Studio d'Élocution Skill context on mount
   useEffect(() => {
     setSpeechSupported(isSpeechRecognitionAvailable());
+
+    let cancelled = false;
+    selectSkillsForTask(
+      "Studio d'Élocution : analyse audio, transcription mot-à-mot, phonèmes de référence, rétroaction vocale automatisée TTS et synchronisation prosodique",
+      4
+    )
+      .then((res) => {
+        if (cancelled) return;
+        const loadedAudioSkill = res.context.loadedSkills.find(
+          (s) => s.skillId === 'audio-music-intelligence' && s.loadStatus === 'loaded'
+        );
+        if (loadedAudioSkill) {
+          setSkillLoadedEntry(loadedAudioSkill);
+          setSkillLoadState('loaded');
+          setSkillLoadReason(loadedAudioSkill.reason);
+          return;
+        }
+        const disabledMatch = res.selection.excluded.find(
+          (e) => e.id === 'audio-music-intelligence' && e.reason === 'disabled'
+        );
+        if (disabledMatch) {
+          setSkillLoadedEntry(null);
+          setSkillLoadState('disabled');
+          setSkillLoadReason('La compétence audio-music-intelligence est actuellement désactivée dans skills/index.json.');
+          return;
+        }
+        setSkillLoadedEntry(null);
+        setSkillLoadState('unavailable');
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSkillLoadedEntry(null);
+          setSkillLoadState('unavailable');
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  // Automatically play automated vocal feedback once recording + acoustic analysis settle
+  useEffect(() => {
+    if (!pendingAutoFeedbackRef.current || isRecording || isAnalyzing || !phonemeEvaluation) {
+      return;
+    }
+    pendingAutoFeedbackRef.current = false;
+    if (!autoVocalFeedbackEnabled || skillLoadState === 'disabled') {
+      return;
+    }
+    const timer = setTimeout(() => {
+      triggerAutomatedVocalFeedback(phonemeEvaluation);
+    }, 280);
+    return () => clearTimeout(timer);
+  }, [isRecording, isAnalyzing, phonemeEvaluation, autoVocalFeedbackEnabled, skillLoadState]);
 
   // Clean up on unmount
   useEffect(() => {
     return () => {
+      stopAutomatedVocalFeedback();
       stopSpeech();
       stopStudioAcousticAmbiance(true);
       if (timerRef.current) clearInterval(timerRef.current);
@@ -178,6 +322,7 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
   };
 
   const resetRecordingState = () => {
+    stopAutomatedVocalFeedback();
     stopSpeech();
     stopStudioAcousticAmbiance();
     setIsRecording(false);
@@ -361,6 +506,9 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
     // 3. Run Immediate Orthographic & Phonetic Correction without faking 100% on silence
     const targetText = effectiveTargetText;
     const report = compareOrthographyAndPhonetics(targetText, fullSpoken, selectedAccent);
+    if (autoVocalFeedbackEnabled && skillLoadState !== 'disabled') {
+      pendingAutoFeedbackRef.current = true;
+    }
     setPhoneticReport(report);
   };
 
@@ -624,49 +772,86 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
           </div>
         </div>
 
-        {/* 3D Spatial Acoustic Environment Selector */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 px-3 py-2.5 rounded-2xl bg-[#111829] border border-[#232a3a]">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="w-7 h-7 rounded-lg bg-[#0a101f] border border-[#f2ca50]/30 flex items-center justify-center text-[#f2ca50] shrink-0">
-              <span className="material-symbols-outlined text-base">spatial_audio_off</span>
-            </span>
-            <div className="flex flex-col min-w-0">
-              <span className="text-[11px] font-mono font-bold text-[#dce2f8] flex items-center gap-1.5">
-                Acoustique Spatiale 3D
-                {isRecording && acousticRoom !== 'off' && (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-emerald-500/15 border border-emerald-400/30 text-[9px] text-emerald-300 font-bold">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    Actif
-                  </span>
-                )}
+        {/* 3D Spatial Acoustic Environment + Skill Vocal Feedback Toggle */}
+        <div className="flex flex-col gap-2.5 px-3 py-2.5 rounded-2xl bg-[#111829] border border-[#232a3a]">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="w-7 h-7 rounded-lg bg-[#0a101f] border border-[#f2ca50]/30 flex items-center justify-center text-[#f2ca50] shrink-0">
+                <span className="material-symbols-outlined text-base">spatial_audio_off</span>
               </span>
-              <span className="text-[10px] text-[#94a3b8] truncate">
-                {STUDIO_ACOUSTIC_PRESETS[acousticRoom].description}
-              </span>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[11px] font-mono font-bold text-[#dce2f8] flex items-center gap-1.5">
+                  Acoustique Spatiale 3D
+                  {isRecording && acousticRoom !== 'off' && (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-emerald-500/15 border border-emerald-400/30 text-[9px] text-emerald-300 font-bold">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      Actif
+                    </span>
+                  )}
+                </span>
+                <span className="text-[10px] text-[#94a3b8] truncate">
+                  {STUDIO_ACOUSTIC_PRESETS[acousticRoom].description}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1 bg-[#0a101f] p-1 rounded-xl border border-white/5 w-full sm:w-auto justify-between sm:justify-end flex-wrap">
+              {(['library', 'booth', 'auditorium', 'off'] as StudioAcousticPreset[]).map((presetKey) => {
+                const info = STUDIO_ACOUSTIC_PRESETS[presetKey];
+                const isSelected = acousticRoom === presetKey;
+                return (
+                  <button
+                    key={presetKey}
+                    type="button"
+                    onClick={() => handleSelectAcousticRoom(presetKey)}
+                    title={info.description}
+                    className={`px-2 py-1 rounded-lg text-[10px] font-mono font-semibold flex items-center gap-1 transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-[#f2ca50]/20 text-[#f2ca50] border border-[#f2ca50]/40 shadow-sm'
+                        : 'text-[#8391ac] hover:text-[#dce2f8]'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-xs">{info.icon}</span>
+                    <span>{info.shortLabel}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          <div className="flex items-center gap-1 bg-[#0a101f] p-1 rounded-xl border border-white/5 w-full sm:w-auto justify-between sm:justify-end flex-wrap">
-            {(['library', 'booth', 'auditorium', 'off'] as StudioAcousticPreset[]).map((presetKey) => {
-              const info = STUDIO_ACOUSTIC_PRESETS[presetKey];
-              const isSelected = acousticRoom === presetKey;
-              return (
-                <button
-                  key={presetKey}
-                  type="button"
-                  onClick={() => handleSelectAcousticRoom(presetKey)}
-                  title={info.description}
-                  className={`px-2 py-1 rounded-lg text-[10px] font-mono font-semibold flex items-center gap-1 transition-all cursor-pointer ${
-                    isSelected
-                      ? 'bg-[#f2ca50]/20 text-[#f2ca50] border border-[#f2ca50]/40 shadow-sm'
-                      : 'text-[#8391ac] hover:text-[#dce2f8]'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-xs">{info.icon}</span>
-                  <span>{info.shortLabel}</span>
-                </button>
-              );
-            })}
+          <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/5 flex-wrap">
+            <div className="flex items-center gap-2 text-[10px] font-mono">
+              <span
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${
+                  skillLoadState === 'loaded'
+                    ? 'bg-emerald-500/10 border-emerald-400/30 text-emerald-300'
+                    : skillLoadState === 'disabled'
+                    ? 'bg-amber-500/10 border-amber-400/30 text-amber-300'
+                    : 'bg-slate-500/10 border-slate-400/25 text-slate-300'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[12px]">
+                  {skillLoadState === 'loaded' ? 'verified' : skillLoadState === 'disabled' ? 'pause_circle' : 'graphic_eq'}
+                </span>
+                <span>
+                  {skillLoadState === 'loaded' && skillLoadedEntry
+                    ? `Skill « ${skillLoadedEntry.title} » active`
+                    : skillLoadState === 'disabled'
+                    ? 'Skill Audio désactivée (mode manuel)'
+                    : 'Analyse Phonémique de Référence'}
+                </span>
+              </span>
+            </div>
+
+            <label className="inline-flex items-center gap-1.5 text-[10px] font-mono text-[#d4c78f] cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={autoVocalFeedbackEnabled}
+                onChange={(e) => handleToggleAutoVocalFeedback(e.target.checked)}
+                className="accent-[#f2ca50] w-3.5 h-3.5 cursor-pointer"
+              />
+              <span>Rétroaction vocale automatisée (phonèmes de référence)</span>
+            </label>
           </div>
         </div>
 
@@ -974,17 +1159,38 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
               </button>
             </div>
 
-            {/* TAB 1: IMMEDIATE ORTHOGRAPHIC & PHONETIC DIAGNOSTIC CARD */}
+            {/* TAB 1: IMMEDIATE ORTHOGRAPHIC & PHONETIC DIAGNOSTIC + AUTOMATED VOCAL PHONEME FEEDBACK */}
             {activeTab === 'diagnostic' && phoneticReport && (
-              <SpeechRecognitionDiagnosticCard
-                report={phoneticReport}
-                targetText={effectiveTargetText}
-                spokenTranscript={`${finalTranscript} ${liveTranscript}`.trim()}
-                targetAccent={selectedAccent}
-                onReRecord={handleStartRecording}
-                onValidate={handleValidateSession}
-                onSwitchToWaveform={() => setActiveTab('waveform')}
-              />
+              <div className="flex flex-col gap-5">
+                {phonemeEvaluation && (
+                  <PhonemeVocalFeedbackPanel
+                    evaluation={phonemeEvaluation}
+                    targetAccent={selectedAccent}
+                    skillLoadedEntry={skillLoadedEntry}
+                    skillLoadState={skillLoadState}
+                    skillLoadReason={skillLoadReason}
+                    autoFeedbackEnabled={autoVocalFeedbackEnabled}
+                    onToggleAutoFeedback={handleToggleAutoVocalFeedback}
+                    playbackMode={vocalPlaybackMode}
+                    onChangePlaybackMode={setVocalPlaybackMode}
+                    activePhase={vocalFeedbackPhase}
+                    onPlayFeedback={(modeOverride) =>
+                      triggerAutomatedVocalFeedback(phonemeEvaluation, modeOverride)
+                    }
+                    onStopFeedback={stopAutomatedVocalFeedback}
+                  />
+                )}
+
+                <SpeechRecognitionDiagnosticCard
+                  report={phoneticReport}
+                  targetText={effectiveTargetText}
+                  spokenTranscript={`${finalTranscript} ${liveTranscript}`.trim()}
+                  targetAccent={selectedAccent}
+                  onReRecord={handleStartRecording}
+                  onValidate={handleValidateSession}
+                  onSwitchToWaveform={() => setActiveTab('waveform')}
+                />
+              </div>
             )}
 
             {/* TAB 2: ACOUSTIC WAVEFORM COMPARISON TOOL COMPONENT */}

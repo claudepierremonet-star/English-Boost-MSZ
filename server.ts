@@ -7,6 +7,8 @@ import { GoogleGenAI, Type, ThinkingLevel } from '@google/genai';
 import {
   getRegistrySnapshot,
   toggleSkillEnabled,
+  bulkToggleSkillsEnabled,
+  buildGlobalAgentContext,
   selectAndLoadSkillsForTask,
   getSkillInstructionsDetails
 } from './skills/skillsStore.ts';
@@ -1127,6 +1129,35 @@ Return valid JSON strictly matching the schema.`;
     }
   });
 
+  app.get('/api/skills/global-context', (_req: Request, res: Response) => {
+    try {
+      const globalContext = buildGlobalAgentContext(__dirname);
+      res.json(globalContext);
+    } catch (err) {
+      console.error('Failed to build global agent context:', err instanceof Error ? err.message : err);
+      res.status(500).json({ error: 'Impossible de charger le contexte global des compétences.' });
+    }
+  });
+
+  app.patch('/api/skills/bulk', async (req: Request, res: Response) => {
+    const body = (req.body || {}) as { enabled?: unknown; skillIds?: unknown };
+    if (typeof body.enabled !== 'boolean') {
+      res.status(400).json({ error: 'Le champ booléen "enabled" est requis.' });
+      return;
+    }
+    const skillIds = Array.isArray(body.skillIds)
+      ? body.skillIds.filter((id): id is string => typeof id === 'string' && /^[a-z0-9-]+$/.test(id))
+      : undefined;
+
+    try {
+      const updated = await bulkToggleSkillsEnabled(__dirname, body.enabled, skillIds);
+      res.json(updated);
+    } catch (err) {
+      console.error('Failed bulk skill toggle:', err instanceof Error ? err.message : err);
+      res.status(500).json({ error: 'Impossible de mettre à jour les compétences.' });
+    }
+  });
+
   app.patch('/api/skills/:id', async (req: Request, res: Response) => {
     const rawId = typeof req.params.id === 'string' ? req.params.id.trim() : '';
     if (!/^[a-z0-9-]+$/.test(rawId) || rawId.length > 80) {
@@ -1142,7 +1173,8 @@ Return valid JSON strictly matching the schema.`;
 
     try {
       const updated = await toggleSkillEnabled(__dirname, rawId, body.enabled);
-      res.json(updated);
+      const globalContext = buildGlobalAgentContext(__dirname);
+      res.json({ ...updated, globalContext });
     } catch (err) {
       const statusCode =
         typeof (err as { statusCode?: unknown })?.statusCode === 'number'

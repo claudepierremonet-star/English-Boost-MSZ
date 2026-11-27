@@ -591,4 +591,314 @@ html[data-theme="parchment-royal"] .text-\[\#d4c78f\] {
   animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+/* ============================================================================
+   UI-UX-PREMIUM DESIGN SYSTEM TOKENS & LUXURY COLOR NUANCES
+   Curated obsidian-navy surfaces, satin champagne-gold highlights,
+   jewel-tone semantic accents & multi-theme adaptive contrast.
+   ============================================================================ */
+:root {
+  --lux-canvas: #090f1d;
+  --lux-surface-card: linear-gradient(180deg, rgba(27, 36, 56, 0.96) 0%, rgba(19, 25, 42, 0.98) 100%);
+  --lux-surface-panel: linear-gradient(180deg, rgba(18, 25, 42, 0.94) 0%, rgba(13, 19, 34, 0.96) 100%);
+  --lux-border-subtle: rgba(212, 175, 55, 0.22);
+  --lux-border-hover: rgba(242, 202, 80, 0.48);
+  --lux-specular-top: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --lux-gold-gradient: linear-gradient(135deg, #fce599 0%, #f1c852 52%, #cfa234 100%);
+  --lux-gold-gradient-hover: linear-gradient(135deg, #fff0b8 0%, #f8d468 52%, #dcb040 100%);
+  --lux-btn-surface-bg: linear-gradient(180deg, rgba(34, 43, 66, 0.92) 0%, rgba(21, 28, 46, 0.96) 100%);
+  --lux-btn-surface-hover: linear-gradient(180deg, rgba(44, 55, 84, 0.96) 0%, rgba(29, 38, 61, 0.98) 100%);
+  --lux-btn-sapphire-bg: linear-gradient(180deg, rgba(20, 42, 77, 0.94) 0%, rgba(13, 27, 52, 0.98) 100%);
+  --lux-btn-emerald-bg: linear-gradient(180deg, rgba(16, 54, 43, 0.92) 0%, rgba(10, 35, 28, 0.97) 100%);
+  --lux-btn-ruby-bg: linear-gradient(180deg, rgba(64, 22, 34, 0.9) 0%, rgba(42, 14, 23, 0.96) 100%);
+}
+
+.luxury-card-surface {
+  background: var(--lux-surface-card);
+  border: 1px solid var(--lux-border-subtle);
+  box-shadow:
+    var(--lux-specular-top),
+    0 10px 28px -12px rgba(2, 6, 18, 0.65);
+  transition: border-color 180ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.luxury-card-interactive:hover {
+  border-color: var(--lux-border-hover);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 190, 0.14),
+    0 14px 32px -12px rgba(2, 6, 18, 0.78);
+}
+
+.luxury-hairline-panel {
+  background: var(--lux-surface-panel);
+  border: 1px solid rgba(56, 70, 102, 0.55);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.luxury-btn-gold {
+  background: var(--lux-gold-gradient);
+  color: #291e00;
+  border: 1px solid rgba(255, 234, 162, 0.65);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    0 6px 18px -6px rgba(242, 202, 80, 0.42);
+  transition:
+    background 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 120ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.luxury-btn-gold:hover:not(:disabled) {
+  background: var(--lux-gold-gradient-hover);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    0 8px 22px -6px rgba(242, 202, 80, 0.56);
+}
+
+.luxury-btn-gold:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.luxury-btn-surface {
+  background: var(--lux-btn-surface-bg);
+  color: #e6ebf8;
+  border: 1px solid rgba(212, 175, 55, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 2px 8px -2px rgba(3, 7, 18, 0.45);
+  transition:
+    background 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    color 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 120ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.luxury-btn-surface:hover:not(:disabled) {
+  background: var(--lux-btn-surface-hover);
+  border-color: rgba(242, 202, 80, 0.54);
+  color: #ffe8a3;
+}
+
+.luxury-btn-surface:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.luxury-btn-sapphire {
+  background: var(--lux-btn-sapphire-bg);
+  color: #bae6fd;
+  border: 1px solid rgba(56, 189, 248, 0.36);
+  box-shadow:
+    inset 0 1px 0 rgba(186, 230, 253, 0.14),
+    0 2px 8px -2px rgba(3, 12, 32, 0.5);
+  transition:
+    border-color 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    color 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    filter 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 120ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.luxury-btn-sapphire:hover:not(:disabled) {
+  border-color: rgba(125, 211, 252, 0.7);
+  color: #f0f9ff;
+  filter: brightness(1.12);
+}
+
+.luxury-btn-emerald {
+  background: var(--lux-btn-emerald-bg);
+  color: #a7f3d0;
+  border: 1px solid rgba(52, 211, 153, 0.36);
+  box-shadow:
+    inset 0 1px 0 rgba(167, 243, 208, 0.14),
+    0 2px 8px -2px rgba(2, 20, 14, 0.5);
+  transition:
+    border-color 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    color 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    filter 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 120ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.luxury-btn-emerald:hover:not(:disabled) {
+  border-color: rgba(110, 231, 183, 0.68);
+  color: #ecfdf5;
+  filter: brightness(1.1);
+}
+
+.luxury-btn-ruby {
+  background: var(--lux-btn-ruby-bg);
+  color: #fecdd3;
+  border: 1px solid rgba(251, 113, 133, 0.34);
+  box-shadow: inset 0 1px 0 rgba(254, 205, 211, 0.1);
+  transition:
+    border-color 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    filter 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 120ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.luxury-btn-ruby:hover:not(:disabled) {
+  border-color: rgba(253, 164, 175, 0.65);
+  filter: brightness(1.12);
+}
+
+.luxury-btn-amber-soft {
+  background: linear-gradient(135deg, rgba(66, 48, 12, 0.86) 0%, rgba(36, 28, 13, 0.92) 100%);
+  color: #fce28b;
+  border: 1px solid rgba(242, 202, 80, 0.45);
+  box-shadow: inset 0 1px 0 rgba(255, 236, 170, 0.14);
+  transition:
+    border-color 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    color 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    filter 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 120ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.luxury-btn-amber-soft:hover:not(:disabled) {
+  border-color: rgba(255, 224, 136, 0.78);
+  color: #fff3c4;
+  filter: brightness(1.12);
+}
+
+/* Light & Parchment Royal Theme Contrast Calibration for Luxury Classes */
+html.light .luxury-card-surface,
+html[data-theme="light"] .luxury-card-surface,
+html[data-theme="light-floral"] .luxury-card-surface,
+html[data-theme="parchment-royal"] .luxury-card-surface {
+  background: linear-gradient(180deg, #ffffff 0%, #fcfaf5 100%) !important;
+  border-color: rgba(180, 146, 74, 0.32) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 8px 24px -10px rgba(45, 36, 18, 0.12) !important;
+}
+
+html.light .luxury-hairline-panel,
+html[data-theme="light"] .luxury-hairline-panel,
+html[data-theme="light-floral"] .luxury-hairline-panel,
+html[data-theme="parchment-royal"] .luxury-hairline-panel {
+  background: #f8f4eb !important;
+  border-color: rgba(180, 146, 74, 0.28) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85) !important;
+}
+
+html.light .luxury-btn-surface,
+html[data-theme="light"] .luxury-btn-surface,
+html[data-theme="light-floral"] .luxury-btn-surface,
+html[data-theme="parchment-royal"] .luxury-btn-surface {
+  background: linear-gradient(180deg, #ffffff 0%, #f3ece0 100%) !important;
+  color: #292218 !important;
+  border-color: rgba(168, 133, 62, 0.38) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 2px 6px rgba(45, 36, 18, 0.08) !important;
+}
+
+html.light .luxury-btn-surface:hover:not(:disabled),
+html[data-theme="light"] .luxury-btn-surface:hover:not(:disabled),
+html[data-theme="light-floral"] .luxury-btn-surface:hover:not(:disabled),
+html[data-theme="parchment-royal"] .luxury-btn-surface:hover:not(:disabled) {
+  background: linear-gradient(180deg, #fffdf8 0%, #ebe1ce 100%) !important;
+  border-color: rgba(154, 112, 26, 0.65) !important;
+  color: #6b4b06 !important;
+}
+
+html.light .luxury-btn-sapphire,
+html[data-theme="light"] .luxury-btn-sapphire,
+html[data-theme="light-floral"] .luxury-btn-sapphire,
+html[data-theme="parchment-royal"] .luxury-btn-sapphire {
+  background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%) !important;
+  color: #1e40af !important;
+  border-color: rgba(59, 130, 246, 0.38) !important;
+}
+
+html.light .luxury-btn-emerald,
+html[data-theme="light"] .luxury-btn-emerald,
+html[data-theme="light-floral"] .luxury-btn-emerald,
+html[data-theme="parchment-royal"] .luxury-btn-emerald {
+  background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%) !important;
+  color: #065f46 !important;
+  border-color: rgba(16, 185, 129, 0.38) !important;
+}
+
+html.light .luxury-btn-ruby,
+html[data-theme="light"] .luxury-btn-ruby,
+html[data-theme="light-floral"] .luxury-btn-ruby,
+html[data-theme="parchment-royal"] .luxury-btn-ruby {
+  background: linear-gradient(180deg, #fff1f2 0%, #ffe4e6 100%) !important;
+  color: #9f1239 !important;
+  border-color: rgba(244, 63, 94, 0.35) !important;
+}
+
+html.light .luxury-btn-amber-soft,
+html[data-theme="light"] .luxury-btn-amber-soft,
+html[data-theme="light-floral"] .luxury-btn-amber-soft,
+html[data-theme="parchment-royal"] .luxury-btn-amber-soft {
+  background: linear-gradient(180deg, #fef9e7 0%, #faecc0 100%) !important;
+  color: #6b4b06 !important;
+  border-color: rgba(180, 130, 30, 0.45) !important;
+}
+
+html[data-theme="emerald-grove"] .luxury-card-surface {
+  background: linear-gradient(180deg, rgba(16, 44, 37, 0.96) 0%, rgba(10, 30, 25, 0.98) 100%) !important;
+  border-color: rgba(52, 211, 153, 0.26) !important;
+}
+
+html[data-theme="sapphire-ocean"] .luxury-card-surface {
+  background: linear-gradient(180deg, rgba(16, 39, 75, 0.96) 0%, rgba(10, 26, 54, 0.98) 100%) !important;
+  border-color: rgba(56, 189, 248, 0.26) !important;
+}
+
+html[data-theme="obsidian-imperial"] .luxury-card-surface {
+  background: linear-gradient(180deg, rgba(31, 22, 56, 0.96) 0%, rgba(20, 14, 38, 0.98) 100%) !important;
+  border-color: rgba(167, 139, 250, 0.28) !important;
+}
+
+/* Ensure crisp light-theme contrast inside luxury cards & hairline panels (non-CTA text) */
+html.light .luxury-card-surface:not(.preserve-dark-surface) .text-\[\#f3f4f6\],
+html[data-theme="light"] .luxury-card-surface:not(.preserve-dark-surface) .text-\[\#f3f4f6\],
+html[data-theme="light-floral"] .luxury-card-surface:not(.preserve-dark-surface) .text-\[\#f3f4f6\],
+html[data-theme="parchment-royal"] .luxury-card-surface:not(.preserve-dark-surface) .text-\[\#f3f4f6\],
+html.light .luxury-card-surface:not(.preserve-dark-surface) .text-\[\#e2e8f0\],
+html[data-theme="light"] .luxury-card-surface:not(.preserve-dark-surface) .text-\[\#e2e8f0\],
+html[data-theme="light-floral"] .luxury-card-surface:not(.preserve-dark-surface) .text-\[\#e2e8f0\],
+html[data-theme="parchment-royal"] .luxury-card-surface:not(.preserve-dark-surface) .text-\[\#e2e8f0\],
+html.light .luxury-card-surface:not(.preserve-dark-surface) .text-white:not([class*="bg-"]),
+html[data-theme="light"] .luxury-card-surface:not(.preserve-dark-surface) .text-white:not([class*="bg-"]),
+html[data-theme="light-floral"] .luxury-card-surface:not(.preserve-dark-surface) .text-white:not([class*="bg-"]),
+html[data-theme="parchment-royal"] .luxury-card-surface:not(.preserve-dark-surface) .text-white:not([class*="bg-"]) {
+  color: #1c1917 !important;
+}
+
+html.light .luxury-card-surface:not(.preserve-dark-surface) .text-\[\#cbd5e1\],
+html[data-theme="light"] .luxury-card-surface:not(.preserve-dark-surface) .text-\[\#cbd5e1\],
+html[data-theme="light-floral"] .luxury-card-surface:not(.preserve-dark-surface) .text-\[\#cbd5e1\],
+html[data-theme="parchment-royal"] .luxury-card-surface:not(.preserve-dark-surface) .text-\[\#cbd5e1\] {
+  color: #44403c !important;
+}
+
+html.light .luxury-card-surface:not(.preserve-dark-surface) .text-\[\#f2ca50\],
+html[data-theme="light"] .luxury-card-surface:not(.preserve-dark-surface) .text-\[\#f2ca50\],
+html[data-theme="light-floral"] .luxury-card-surface:not(.preserve-dark-surface) .text-\[\#f2ca50\],
+html[data-theme="parchment-royal"] .luxury-card-surface:not(.preserve-dark-surface) .text-\[\#f2ca50\] {
+  color: #8a640b !important;
+}
+
+html.light .luxury-card-surface:not(.preserve-dark-surface) .text-\[\#ffe082\],
+html[data-theme="light"] .luxury-card-surface:not(.preserve-dark-surface) .text-\[\#ffe082\],
+html[data-theme="light-floral"] .luxury-card-surface:not(.preserve-dark-surface) .text-\[\#ffe082\],
+html[data-theme="parchment-royal"] .luxury-card-surface:not(.preserve-dark-surface) .text-\[\#ffe082\] {
+  color: #7c5808 !important;
+}
+
+html.light .luxury-hairline-panel input,
+html[data-theme="light"] .luxury-hairline-panel input,
+html[data-theme="light-floral"] .luxury-hairline-panel input,
+html[data-theme="parchment-royal"] .luxury-hairline-panel input,
+html.light .luxury-hairline-panel select,
+html[data-theme="light"] .luxury-hairline-panel select,
+html[data-theme="light-floral"] .luxury-hairline-panel select,
+html[data-theme="parchment-royal"] .luxury-hairline-panel select {
+  background-color: #ffffff !important;
+  color: #1c1917 !important;
+  border-color: rgba(180, 146, 74, 0.45) !important;
+}
+
+
+
 

@@ -14,9 +14,13 @@ import {
 import {
   getRegistrySnapshot,
   toggleSkillEnabled,
+  bulkToggleSkillsEnabled,
+  buildGlobalAgentContext,
   selectAndLoadSkillsForTask,
   getSkillInstructionsDetails
 } from '../skills/skillsStore.ts';
+import { computeMasterSkillProgress } from '../src/utils/masterSkillProgress.ts';
+import type { UserProfile } from '../src/firebase/types.ts';
 
 const WORKSPACE_ROOT = process.cwd();
 
@@ -230,5 +234,118 @@ describe('Persistent Skill Toggle & Instructions Store', () => {
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
+  });
+
+  it('builds and updates the global agent context strictly from enabled skills in skills/index.json', async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'eb-global-ctx-test-'));
+    try {
+      fs.mkdirSync(path.join(tempDir, 'skills'), { recursive: true });
+      fs.mkdirSync(path.join(tempDir, 'public', 'assets', 'aistudio'), { recursive: true });
+
+      fs.copyFileSync(
+        path.join(WORKSPACE_ROOT, 'skills', 'index.json'),
+        path.join(tempDir, 'skills', 'index.json')
+      );
+      for (const file of fs.readdirSync(path.join(WORKSPACE_ROOT, 'public', 'assets', 'aistudio'))) {
+        if (file.startsWith('SKILL_') && file.endsWith('.md')) {
+          fs.copyFileSync(
+            path.join(WORKSPACE_ROOT, 'public', 'assets', 'aistudio', file),
+            path.join(tempDir, 'public', 'assets', 'aistudio', file)
+          );
+        }
+      }
+
+      const initialGlobal = buildGlobalAgentContext(tempDir);
+      assert.equal(initialGlobal.totalSkills, 20);
+      assert.equal(initialGlobal.enabledCount, 20);
+      assert.equal(initialGlobal.loadedCount, 20);
+      assert.equal(initialGlobal.hasSimulatedSkills, false);
+      assert.ok(initialGlobal.totalBytes > 0);
+      assert.ok(initialGlobal.context.assembledSystemContext.includes('### [SKILL: ui-ux-premium]'));
+
+      // Uncheck one skill -> must be excluded from global agent context
+      await toggleSkillEnabled(tempDir, 'ui-ux-premium', false);
+      const afterUncheck = buildGlobalAgentContext(tempDir);
+      assert.equal(afterUncheck.enabledCount, 19);
+      assert.equal(afterUncheck.loadedCount, 19);
+      assert.ok(afterUncheck.disabledSkillIds.includes('ui-ux-premium'));
+      assert.ok(!afterUncheck.activeSkillIds.includes('ui-ux-premium'));
+      assert.ok(!afterUncheck.context.assembledSystemContext.includes('### [SKILL: ui-ux-premium]'));
+
+      // Bulk disable 2 more skills, then bulk enable all
+      const bulkOff = await bulkToggleSkillsEnabled(tempDir, false, ['security-audit', 'data-analytics']);
+      assert.equal(bulkOff.globalContext.enabledCount, 17);
+      assert.equal(bulkOff.globalContext.loadedCount, 17);
+
+      const bulkOn = await bulkToggleSkillsEnabled(tempDir, true);
+      assert.equal(bulkOn.globalContext.enabledCount, 20);
+      assert.equal(bulkOn.globalContext.loadedCount, 20);
+      assert.ok(bulkOn.globalContext.context.assembledSystemContext.includes('### [SKILL: ui-ux-premium]'));
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('Master Skill Mastery & Activity Progress Calculation', () => {
+  it('computes bounded progress percentages for active skills based on user mastery/activity and returns inactive for disabled skills', () => {
+    const baseUser = {
+      uid: 'test-user',
+      displayName: 'Test',
+      email: 'test@example.com',
+      level: 'B2',
+      heroImageURL: '',
+      stats: {
+        streakDays: 5,
+        totalXp: 3200,
+        weeklyXp: 1200,
+        completedModules: 18,
+        totalModules: 24,
+        masteryPercentage: 84,
+        studyMinutesToday: 27,
+        studyMinutesTarget: 30,
+        totalImmersionMinutes: 640,
+        lastActiveDate: '2026-11-27'
+      }
+    } as UserProfile;
+
+    const lowUser = {
+      ...baseUser,
+      stats: {
+        ...baseUser.stats,
+        streakDays: 1,
+        weeklyXp: 150,
+        completedModules: 3,
+        totalModules: 24,
+        masteryPercentage: 28,
+        studyMinutesToday: 5,
+        studyMinutesTarget: 30
+      }
+    } as UserProfile;
+
+    const activeUi = computeMasterSkillProgress(
+      { id: 'ui-ux-premium', category: 'ui-ux-design', priority: 96, enabled: true },
+      baseUser,
+      88
+    );
+    assert.equal(activeUi.isActive, true);
+    assert.ok(activeUi.percentage >= 70 && activeUi.percentage <= 100);
+
+    const lowFrontend = computeMasterSkillProgress(
+      { id: 'frontend-development', category: 'frontend-mobile', priority: 97, enabled: true },
+      lowUser,
+      40
+    );
+    assert.equal(lowFrontend.isActive, true);
+    assert.ok(lowFrontend.percentage < activeUi.percentage);
+    assert.ok(lowFrontend.percentage >= 0 && lowFrontend.percentage <= 100);
+
+    const disabledSkill = computeMasterSkillProgress(
+      { id: 'ui-ux-premium', category: 'ui-ux-design', priority: 96, enabled: false },
+      baseUser,
+      88
+    );
+    assert.equal(disabledSkill.isActive, false);
+    assert.equal(disabledSkill.percentage, 0);
   });
 });

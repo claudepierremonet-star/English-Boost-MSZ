@@ -96,11 +96,11 @@ export const LinguisticRadarSection: React.FC<LinguisticRadarSectionProps> = ({
   const activeEval = assessment.profile.skills[activeKey];
 
   return (
-    <div className="p-5 rounded-2xl bg-gradient-to-br from-[#161d2d] via-[#111723] to-[#0a0f19] border border-[#f2ca50]/40 shadow-xl flex flex-col gap-4">
+    <div className="p-5 rounded-2xl luxury-card-surface flex flex-col gap-4">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-[#f2ca50]/20 border border-[#f2ca50]/50 flex items-center justify-center text-[#f2ca50] shadow-inner shrink-0">
+          <div className="w-9 h-9 rounded-xl luxury-btn-amber-soft flex items-center justify-center shrink-0">
             <span className="material-symbols-outlined text-xl">radar</span>
           </div>
           <div>
@@ -108,7 +108,8 @@ export const LinguisticRadarSection: React.FC<LinguisticRadarSectionProps> = ({
               <span className="text-[10px] text-[#f2ca50] font-bold uppercase tracking-wider font-mono">
                 MOTEUR ADAPTATIF • 7 COMPÉTENCES
               </span>
-              <span className="px-2 py-0.2 rounded bg-[#1f283d] text-[10px] font-mono text-[#d4c78f] font-bold">
+              <span aria-hidden="true" className="text-[#99907c]">·</span>
+              <span className="text-[10px] font-mono text-[#d4c78f] font-bold">
                 {assessment.gradeMeta.shortLabel}
               </span>
             </div>
@@ -118,12 +119,12 @@ export const LinguisticRadarSection: React.FC<LinguisticRadarSectionProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#1f283d] border border-[#f2ca50]/30 shadow-sm">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl luxury-hairline-panel">
           <span className="text-[10px] uppercase font-mono text-[#cbd5e1]">Préparation</span>
           <span className="text-xs font-mono font-bold text-[#f2ca50] tabular-nums">
             {assessment.profile.overallReadiness}%
           </span>
-          <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#f2ca50]/20 text-[#f2ca50] font-bold uppercase">
+          <span className="text-[9px] px-1.5 py-0.5 rounded luxury-btn-amber-soft font-bold uppercase">
             {assessment.profile.assessedCefrLevel}
           </span>
         </div>
@@ -221,7 +222,7 @@ export const LinguisticRadarSection: React.FC<LinguisticRadarSectionProps> = ({
       </div>
 
       {/* Personalized Path Prescription */}
-      <div className="p-3.5 rounded-xl bg-[#0f1728] border border-[#f2ca50]/35 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="p-3.5 rounded-xl luxury-hairline-panel flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-start gap-2.5 text-xs text-[#cbd5e1] leading-relaxed">
           <span className="material-symbols-outlined text-[#f2ca50] text-lg shrink-0 mt-0.5">
             auto_awesome
@@ -235,7 +236,7 @@ export const LinguisticRadarSection: React.FC<LinguisticRadarSectionProps> = ({
           <button
             type="button"
             onClick={() => onLaunchSkillModule(activeMeta.recommendedAction)}
-            className="px-3.5 py-2 rounded-xl bg-[#f2ca50] hover:bg-[#ffe088] text-[#3c2f00] font-bold text-xs uppercase tracking-wider shrink-0 cursor-pointer"
+            className="px-3.5 py-2 rounded-xl luxury-btn-gold font-bold text-xs uppercase tracking-wider shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffe088]"
           >
             Lancer {activeMeta.recommendedModuleLabel}
           </button>

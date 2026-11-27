@@ -39,6 +39,10 @@ import { GlassSlidingCapsule } from './GlassSlidingCapsule';
 import { LexicalMasteryD3Chart } from './LexicalMasteryD3Chart';
 import { MotionTooltip } from './MotionTooltip';
 import { SkillsAdminView } from './SkillsAdminView';
+import { MasterSkillsView } from './MasterSkillsView';
+import { SkillAnalyticsRadialD3 } from './SkillAnalyticsRadialD3';
+import { ActiveMemoryPanel } from './ActiveMemoryPanel';
+import { ChartSectionSkeleton } from './SkeletonLoaders';
 
 interface CustomTooltipProps {
   active?: boolean;
@@ -327,7 +331,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onLaunchEcosystemModule
 }) => {
   const shouldReduceMotion = useReducedMotion();
-  const [dashboardTab, setDashboardTab] = useState<'all' | 'mastery' | 'analytics' | 'curriculum' | 'skills'>('all');
+  const [dashboardTab, setDashboardTab] = useState<'all' | 'mastery' | 'analytics' | 'skill-analytics' | 'curriculum' | 'master-skills' | 'skills'>('all');
   const [showAdjustModal, setShowAdjustModal] = useState<boolean>(false);
   const [selectedTarget, setSelectedTarget] = useState<number>(user.stats.studyMinutesTarget || 30);
   const [chartMetric, setChartMetric] = useState<'xp' | 'score'>('xp');
@@ -399,6 +403,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     };
   }, []);
 
+  useEffect(() => {
+    if (!showAdjustModal) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowAdjustModal(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showAdjustModal]);
+
   const loadHistory = useCallback(async () => {
     setIsRefreshing(true);
     try {
@@ -441,43 +456,52 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       variants={dashboardContainerVariants}
       initial="hidden"
       animate="show"
-      className="flex flex-col w-full px-4 sm:px-6 pb-24 gap-4 select-none"
+      className="flex flex-col w-full px-4 sm:px-6 pb-24 gap-5 select-none"
     >
-      {/* Top Welcome / Prestige Status Banner & User Stats */}
+      {/* Executive Command Header — Clean single-elevation workspace banner */}
       <motion.section
         variants={dashboardCardVariants}
-        className="relative w-full rounded-2xl bg-[#191f2f] p-5 shadow-xl border border-[#4d4635]/40 overflow-hidden backdrop-blur-md"
+        className="w-full rounded-2xl luxury-card-surface p-5 sm:p-6"
       >
-        <div className="absolute -top-12 -right-12 w-40 h-40 rounded-full bg-[#f2ca50]/10 blur-2xl pointer-events-none" />
-
-        <div className="flex items-start justify-between gap-3 relative z-10">
-          <div className="flex flex-col gap-1 min-w-0">
-            <motion.div
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-              className="inline-flex items-center gap-1.5 w-fit px-2.5 py-0.5 rounded-full bg-[#232a3a] border border-[#f2ca50]/20"
-            >
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div className="flex flex-col gap-1.5 min-w-0">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-[#d4c78f] font-medium">
               <span
                 className="material-symbols-outlined text-[#f2ca50] text-sm"
                 style={{ fontVariationSettings: "'FILL' 1" }}
               >
                 military_tech
               </span>
-              <span className="text-[10px] text-[#d4c78f] uppercase tracking-widest font-bold">
-                Échelon Supérieur • {user.level}
-              </span>
-            </motion.div>
-            <h2 className="font-serif text-lg sm:text-2xl text-[#dce2f8] font-bold truncate">
-              Niveau {user.level} — Maîtrise Opérationnelle
+              <span>Échelon Supérieur</span>
+              <span aria-hidden="true">·</span>
+              <span>Niveau {user.level}</span>
+              <span aria-hidden="true">·</span>
+              <span className="text-[#d0c5af]">Rhétorique, Philologie & Style Diplomatique</span>
+            </div>
+            <h2 className="font-serif text-xl sm:text-2xl lg:text-[1.7rem] text-[#dce2f8] font-bold tracking-tight [text-wrap:balance]">
+              Tableau de Bord Exécutif — Maîtrise {user.level}
             </h2>
-            <p className="text-xs text-[#d0c5af]/80">
-              Cursus Rhétorique, Philologie & Style Diplomatique
-            </p>
           </div>
 
-          {/* Notice Guide + Quick PDF Report Export + Streak Counter */}
-          <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
+          {/* Primary Focal CTA + Secondary Utilities + Live Streak */}
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            <MotionTooltip
+              title="Atelier Quotidien"
+              content="Reprendre directement votre entraînement adapté (vocabulaire, dictée et oral)."
+              placement="bottom"
+            >
+              <button
+                type="button"
+                onClick={onResumePractice}
+                className="min-h-[40px] px-4 py-2 rounded-lg luxury-btn-gold text-xs font-bold whitespace-nowrap shrink-0 flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffe088] cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-base" style={{ fontVariationSettings: "'FILL' 1" }}>
+                  play_circle
+                </span>
+                <span>Reprendre la session</span>
+              </button>
+            </MotionTooltip>
+
             <MotionTooltip
               title="Notice Visuelle"
               content="Ouvre le guide interactif complet des modules et raccourcis."
@@ -487,9 +511,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 type="button"
                 onClick={() => setIsNoticeOpen(true)}
                 aria-label="Ouvrir la notice visuelle complète de l'application"
-                className="min-h-[40px] px-3.5 py-2 rounded-xl bg-[#070e1d]/90 border border-[#f2ca50]/50 hover:border-[#f2ca50] hover:bg-[#f2ca50]/15 text-[#f2ca50] text-xs font-mono font-bold transition-all flex items-center gap-1.5 shadow-inner whitespace-nowrap shrink-0 cursor-pointer"
+                className="min-h-[40px] px-3.5 py-2 rounded-lg luxury-btn-surface text-xs font-semibold whitespace-nowrap shrink-0 flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] cursor-pointer"
               >
-                <span className="material-symbols-outlined text-base">menu_book</span>
+                <span className="material-symbols-outlined text-base text-[#f2ca50]">menu_book</span>
                 <span>Notice</span>
               </button>
             </MotionTooltip>
@@ -504,163 +528,152 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 onClick={handleExportProgressPdf}
                 disabled={isExportingPdf}
                 aria-label="Exporter vos statistiques et progrès en rapport PDF"
-                className="min-h-[40px] px-3 py-2 rounded-xl bg-[#070e1d]/90 border border-[#f2ca50]/35 hover:border-[#f2ca50] hover:bg-[#f2ca50]/15 text-[#f2ca50] text-xs font-mono font-bold transition-all flex items-center gap-1.5 shadow-inner disabled:opacity-50 whitespace-nowrap shrink-0 cursor-pointer"
+                className="min-h-[40px] px-3.5 py-2 rounded-lg luxury-btn-sapphire text-xs font-semibold whitespace-nowrap shrink-0 flex items-center gap-1.5 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#38bdf8] cursor-pointer"
               >
                 <span className={`material-symbols-outlined text-base ${isExportingPdf ? 'animate-spin' : ''}`}>
                   {isExportingPdf ? 'sync' : 'picture_as_pdf'}
                 </span>
-                <span className="hidden sm:inline">
-                  {isExportingPdf ? 'Export...' : pdfExportedLabel || 'Rapport PDF'}
-                </span>
+                <span>{isExportingPdf ? 'Export...' : pdfExportedLabel || 'Rapport PDF'}</span>
               </button>
             </MotionTooltip>
 
-            <motion.div
-              initial={shouldReduceMotion ? { opacity: 1 } : { scale: 0.85, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.14, type: 'spring', stiffness: 220, damping: 18 }}
-              className="flex flex-col items-center justify-center px-3.5 py-2 rounded-xl bg-[#070e1d]/90 border border-[#4d4635]/40 shadow-inner shrink-0"
+            <div
+              className="min-h-[40px] px-3.5 py-1.5 rounded-lg luxury-hairline-panel flex items-center gap-2 shrink-0"
+              aria-label={`Série active : ${user.stats.streakDays ?? 0} jours consécutifs`}
             >
-              <div className="flex items-center gap-1 text-[#f2ca50]">
-                <span
-                  className="material-symbols-outlined text-xl"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
-                  local_fire_department
-                </span>
-                <span className="text-lg font-bold font-mono tabular-nums tracking-tight">
+              <span
+                className="material-symbols-outlined text-lg text-[#f2ca50]"
+                style={{ fontVariationSettings: "'FILL' 1" }}
+              >
+                local_fire_department
+              </span>
+              <div className="flex items-baseline gap-1 font-mono tabular-nums">
+                <span className="text-base font-bold text-[#f2ca50]">
                   <FramerRollingCounter value={user.stats.streakDays ?? 0} />
                 </span>
+                <span className="text-[11px] text-[#d0c5af]">jours</span>
               </div>
-              <span className="text-[9px] text-[#d0c5af] uppercase tracking-wider font-semibold">
-                Jours
-              </span>
-            </motion.div>
+            </div>
           </div>
         </div>
+      </motion.section>
 
-        {/* Quick Stats Metric Cards with Hover and Staggered Sub-entry */}
-        <motion.div
-          variants={staggeredListContainerVariants}
-          className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-4 pt-3 border-t border-[#232a3a]"
+      {/* Dedicated 4-Column Executive KPI Strip (Single-Elevation, Tabular Numerals) */}
+      <motion.section
+        aria-label="Indicateurs clés de progression"
+        variants={staggeredListContainerVariants}
+        className="grid grid-cols-2 lg:grid-cols-4 gap-3"
+      >
+        <MotionTooltip
+          title="XP Hebdomadaire"
+          content="Points gagnés cette semaine et cumul total • Cliquez pour ouvrir le classement."
+          placement="top"
+          wrapperClassName="flex w-full"
         >
-          <MotionTooltip
-            title="XP Hebdomadaire"
-            content="Points gagnés cette semaine et cumul total • Cliquez pour ouvrir le classement."
-            placement="top"
-            wrapperClassName="flex w-full"
+          <motion.button
+            type="button"
+            variants={subItemVariants}
+            whileHover={shouldReduceMotion ? undefined : { y: -2, transition: { duration: 0.15 } }}
+            onClick={onNavigateLeaderboard}
+            className="w-full text-left rounded-2xl luxury-card-surface luxury-card-interactive p-4 flex flex-col justify-between gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] cursor-pointer"
           >
-            <motion.div
-              variants={subItemVariants}
-              whileHover={{ y: -2, transition: { duration: 0.15 } }}
-              onClick={onNavigateLeaderboard}
-              className={`w-full flex items-center gap-2.5 p-2.5 rounded-xl bg-[#151b2b]/70 border border-[#4d4635]/20 hover:border-[#f2ca50]/50 transition-all shadow-sm ${
-                onNavigateLeaderboard ? 'cursor-pointer hover:bg-[#1a233a]' : ''
-              }`}
-            >
-              <div className="w-8 h-8 rounded-full bg-[#f2ca50]/10 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-[#f2ca50] text-lg">bolt</span>
-              </div>
-              <div className="flex flex-col min-w-0">
-                <span className="text-[10px] text-[#d0c5af] uppercase tracking-wider flex items-center gap-1">
-                  XP Hebdo
-                  <span className="material-symbols-outlined text-[11px] text-[#f2ca50]">open_in_new</span>
-                </span>
-                <span className="text-sm font-bold text-[#f2ca50] font-mono truncate">
-                  <FramerRollingCounter value={user.stats.weeklyXp ?? 0} formatLocale suffix=" XP" />
-                </span>
-                <span className="text-[10px] text-[#d0c5af]/85 font-mono truncate">
-                  Cumul : <FramerRollingCounter value={user.stats.totalXp ?? 0} formatLocale suffix=" XP" />
-                </span>
-              </div>
-            </motion.div>
-          </MotionTooltip>
+            <div className="flex items-center justify-between gap-2 w-full">
+              <span className="text-xs font-medium text-[#d0c5af]">XP Hebdomadaire</span>
+              <span className="material-symbols-outlined text-base text-[#f2ca50]">bolt</span>
+            </div>
+            <div className="text-xl sm:text-2xl font-bold font-mono tabular-nums text-[#f2ca50] leading-none">
+              <FramerRollingCounter value={user.stats.weeklyXp ?? 0} formatLocale suffix=" XP" />
+            </div>
+            <div className="text-[11px] font-mono tabular-nums text-[#99907c] flex items-center justify-between gap-2">
+              <span className="truncate">
+                Cumul : <FramerRollingCounter value={user.stats.totalXp ?? 0} formatLocale suffix=" XP" />
+              </span>
+              <span className="material-symbols-outlined text-xs text-[#d4c78f] shrink-0">open_in_new</span>
+            </div>
+          </motion.button>
+        </MotionTooltip>
 
-          <MotionTooltip
-            title="Ligue d'Oxford"
-            content="Votre division académique active • Cliquez pour consulter le podium."
-            placement="top"
-            wrapperClassName="flex w-full"
+        <MotionTooltip
+          title="Ligue d'Oxford"
+          content="Votre division académique active • Cliquez pour consulter le podium."
+          placement="top"
+          wrapperClassName="flex w-full"
+        >
+          <motion.button
+            type="button"
+            variants={subItemVariants}
+            whileHover={shouldReduceMotion ? undefined : { y: -2, transition: { duration: 0.15 } }}
+            onClick={onNavigateLeaderboard}
+            className="w-full text-left rounded-2xl luxury-card-surface luxury-card-interactive p-4 flex flex-col justify-between gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] cursor-pointer"
           >
-            <motion.div
-              variants={subItemVariants}
-              whileHover={{ y: -2, transition: { duration: 0.15 } }}
-              onClick={onNavigateLeaderboard}
-              className={`w-full flex items-center gap-2.5 p-2.5 rounded-xl bg-[#151b2b]/70 border border-[#4d4635]/20 hover:border-[#d4c78f]/50 transition-all shadow-sm ${
-                onNavigateLeaderboard ? 'cursor-pointer hover:bg-[#1a233a]' : ''
-              }`}
-            >
-              <div className="w-8 h-8 rounded-full bg-[#d4c78f]/10 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-[#d4c78f] text-lg">hotel_class</span>
-              </div>
-              <div className="flex flex-col min-w-0">
-                <span className="text-[10px] text-[#d0c5af] uppercase tracking-wider flex items-center gap-1">
-                  Ligue Hebdo
-                  <span className="material-symbols-outlined text-[11px] text-[#d4c78f]">leaderboard</span>
-                </span>
-                <span className="text-sm font-bold text-[#d4c78f] font-mono truncate">
-                  Ligue Oxford
-                </span>
-              </div>
-            </motion.div>
-          </MotionTooltip>
+            <div className="flex items-center justify-between gap-2 w-full">
+              <span className="text-xs font-medium text-[#d0c5af]">Division Académique</span>
+              <span className="material-symbols-outlined text-base text-[#d4c78f]">hotel_class</span>
+            </div>
+            <div className="text-xl sm:text-2xl font-serif font-bold text-[#dce2f8] leading-none truncate">
+              Ligue Oxford
+            </div>
+            <div className="text-[11px] font-mono text-[#d4c78f] flex items-center justify-between gap-2">
+              <span>Classement hebdomadaire</span>
+              <span className="material-symbols-outlined text-xs shrink-0">leaderboard</span>
+            </div>
+          </motion.button>
+        </MotionTooltip>
 
-          <MotionTooltip
-            title="Temps d'Immersion"
-            content="Minutes d'étude active enregistrées aujourd'hui et depuis vos débuts."
-            placement="top"
-            wrapperClassName="flex w-full"
+        <MotionTooltip
+          title="Temps d'Immersion"
+          content="Minutes d'étude active enregistrées aujourd'hui et depuis vos débuts."
+          placement="top"
+          wrapperClassName="flex w-full"
+        >
+          <motion.div
+            variants={subItemVariants}
+            whileHover={shouldReduceMotion ? undefined : { y: -2, transition: { duration: 0.15 } }}
+            className="w-full rounded-2xl luxury-card-surface p-4 flex flex-col justify-between gap-2"
           >
-            <motion.div
-              variants={subItemVariants}
-              whileHover={{ y: -2, transition: { duration: 0.15 } }}
-              className="w-full flex items-center gap-2.5 p-2.5 rounded-xl bg-[#151b2b]/70 border border-[#4d4635]/20 hover:border-[#f2ca50]/35 transition-all shadow-sm"
-            >
-              <div className="w-8 h-8 rounded-full bg-[#f2ca50]/10 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-[#f2ca50] text-lg">hourglass_top</span>
-              </div>
-              <div className="flex flex-col min-w-0">
-                <span className="text-[10px] text-[#d0c5af] uppercase tracking-wider">Temps / Jour</span>
-                <span className="text-sm font-bold text-[#f2ca50] font-mono truncate">
-                  <FramerRollingCounter value={user.stats.studyMinutesToday ?? 0} suffix=" min" />
-                </span>
-                <span className="text-[10px] text-[#d0c5af]/85 font-mono truncate">
-                  Cumul : <FramerRollingCounter value={user.stats.totalImmersionMinutes ?? 0} formatLocale suffix=" min" />
-                </span>
-              </div>
-            </motion.div>
-          </MotionTooltip>
+            <div className="flex items-center justify-between gap-2 w-full">
+              <span className="text-xs font-medium text-[#d0c5af]">Immersion du Jour</span>
+              <span className="material-symbols-outlined text-base text-[#38bdf8]">hourglass_top</span>
+            </div>
+            <div className="text-xl sm:text-2xl font-bold font-mono tabular-nums text-[#f2ca50] leading-none">
+              <FramerRollingCounter value={user.stats.studyMinutesToday ?? 0} suffix=" min" />
+            </div>
+            <div className="text-[11px] font-mono tabular-nums text-[#99907c] truncate">
+              Cumul total : <FramerRollingCounter value={user.stats.totalImmersionMinutes ?? 0} formatLocale suffix=" min" />
+            </div>
+          </motion.div>
+        </MotionTooltip>
 
-          <MotionTooltip
-            title="Précision Moyenne"
-            content="Score moyen obtenu sur vos quiz, dictées et exercices des 7 derniers jours."
-            placement="top"
-            wrapperClassName="flex w-full"
+        <MotionTooltip
+          title="Précision Moyenne"
+          content="Score moyen obtenu sur vos quiz, dictées et exercices des 7 derniers jours."
+          placement="top"
+          wrapperClassName="flex w-full"
+        >
+          <motion.div
+            variants={subItemVariants}
+            whileHover={shouldReduceMotion ? undefined : { y: -2, transition: { duration: 0.15 } }}
+            className="w-full rounded-2xl luxury-card-surface p-4 flex flex-col justify-between gap-2"
           >
-            <motion.div
-              variants={subItemVariants}
-              whileHover={{ y: -2, transition: { duration: 0.15 } }}
-              className="w-full flex items-center gap-2.5 p-2.5 rounded-xl bg-[#151b2b]/70 border border-[#4d4635]/20 hover:border-[#d4c78f]/35 transition-all shadow-sm"
-            >
-              <div className="w-8 h-8 rounded-full bg-[#d4c78f]/10 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-[#d4c78f] text-lg">verified</span>
-              </div>
-              <div className="flex flex-col min-w-0">
-                <span className="text-[10px] text-[#d0c5af] uppercase tracking-wider">Précision Moy.</span>
-                <span className="text-sm font-bold text-[#d4c78f] font-mono tabular-nums truncate">
-                  <FramerRollingCounter value={Math.round(avgScore)} suffix="%" />
-                </span>
-              </div>
-            </motion.div>
-          </MotionTooltip>
-        </motion.div>
+            <div className="flex items-center justify-between gap-2 w-full">
+              <span className="text-xs font-medium text-[#d0c5af]">Précision 7 Jours</span>
+              <span className="material-symbols-outlined text-base text-emerald-400">verified</span>
+            </div>
+            <div className="text-xl sm:text-2xl font-bold font-mono tabular-nums text-[#dce2f8] leading-none">
+              <FramerRollingCounter value={Math.round(avgScore)} suffix="%" />
+            </div>
+            <div className="text-[11px] font-mono tabular-nums text-emerald-400 truncate">
+              Pic {peakScore}% ({peakDay})
+            </div>
+          </motion.div>
+        </MotionTooltip>
       </motion.section>
 
       {/* FRAMER MOTION ANIMATED DASHBOARD SUB-TAB NAVIGATOR */}
       <nav
         ref={dashboardNavRef}
         aria-label="Onglets de progression du tableau de bord"
-        className="relative flex items-center gap-1 p-1.5 rounded-full bg-[#151b2b] border border-[#232a3a] overflow-x-auto no-scrollbar"
+        className="relative flex items-center gap-1 p-1.5 rounded-full luxury-hairline-panel overflow-x-auto no-scrollbar"
       >
         <GlassSlidingCapsule containerRef={dashboardNavRef} activeKey={dashboardTab} />
         {[
@@ -683,16 +696,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             tooltip: "Tendances XP/Score sur 7 jours, maîtrise lexicale D3 et épreuves."
           },
           {
+            id: 'skill-analytics' as const,
+            label: 'Skill Analytics',
+            icon: 'radar',
+            tooltip: "Graphique radial D3 de corrélation entre les 20 compétences actives et la maîtrise globale."
+          },
+          {
             id: 'curriculum' as const,
             label: 'Cursus & Boutique',
             icon: 'auto_stories',
             tooltip: "Folios du cursus, calendrier d'étude, boutique 3D et synchro locale."
           },
           {
+            id: 'master-skills' as const,
+            label: 'Master Skills',
+            icon: 'checklist',
+            tooltip: "Liste des 20 AI Studio Master Skills (skills/index.json) et activation par checkbox dans le contexte global."
+          },
+          {
             id: 'skills' as const,
             label: 'Skills IA',
             icon: 'tune',
-            tooltip: "Registre des Skills (skills/index.json), activation/désactivation et chargement contextuel."
+            tooltip: "Sélection contextuelle par tâche et test d'instructions (skills/index.json)."
           }
         ].map((tab) => {
           const isActive = dashboardTab === tab.id;
@@ -732,210 +757,184 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         >
           {(dashboardTab === 'all' || dashboardTab === 'mastery') && (
             <>
-      {/* Curriculum Mastery Card & Radial Gauge (La Carte de Progression) */}
-      <motion.section
-        variants={dashboardCardVariants}
-        initial="hidden"
-        animate="show"
-        whileHover={shouldReduceMotion ? undefined : { y: -2, transition: { duration: 0.18 } }}
-        className="relative w-full rounded-2xl bg-[#191f2f] p-5 shadow-xl border border-[#4d4635]/40 flex items-center justify-between gap-4 overflow-hidden"
-      >
-        <div className="flex flex-col gap-1 min-w-0">
-          <span className="text-[10px] text-[#f2ca50] uppercase tracking-widest font-bold">
-            Avancement Annuel
-          </span>
-          <h3 className="font-serif text-lg sm:text-xl text-[#dce2f8] font-bold">
-            Curriculum {user.level} Réussi
-          </h3>
-          <p className="text-xs text-[#d0c5af]/80">
-            {user.stats.completedModules} modules sur {user.stats.totalModules} complétés avec mention d’excellence.
-          </p>
-          <div className="mt-2 flex items-center gap-2 text-[11px] font-mono tabular-nums font-semibold text-[#f2ca50]">
-            <span className="material-symbols-outlined text-sm">trending_up</span>
-            <span>+4.2% cette semaine</span>
-          </div>
-        </div>
-
-        {/* Champagne Radial Gauge SVG with Animated Stroke Sweep and Central Pop-in */}
-        <div className="relative w-24 h-24 shrink-0 flex items-center justify-center">
-          <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-            <circle
-              cx="50"
-              cy="50"
-              r="40"
-              fill="transparent"
-              stroke="#232a3a"
-              strokeWidth="8"
-            />
-            <motion.circle
-              cx="50"
-              cy="50"
-              r="40"
-              fill="transparent"
-              stroke="#f2ca50"
-              strokeWidth="8"
-              strokeDasharray={circumference}
-              initial={{ strokeDashoffset: circumference }}
-              animate={{ strokeDashoffset: strokeDashoffset }}
-              transition={{ duration: 1.25, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
-              strokeLinecap="round"
-              className="drop-shadow-[0_0_8px_rgba(242,202,80,0.4)]"
-            />
-          </svg>
-          <motion.div
-            initial={{ scale: 0.75, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.35, ease: [0.16, 1, 0.3, 1] }}
-            className="absolute inset-0 flex flex-col items-center justify-center text-center"
-          >
-            <span className="font-serif text-lg font-bold text-[#f2ca50] leading-none">
-              <FramerRollingCounter value={user.stats.masteryPercentage ?? 0} suffix="%" />
-            </span>
-            <span className="text-[9px] text-[#d0c5af] uppercase tracking-tighter mt-0.5 font-sans">
-              Validé
-            </span>
-          </motion.div>
-        </div>
-      </motion.section>
-
-      {/* Weekly Objectives Breakdown with Smoothly Filling Progress Bars */}
-      <motion.section
-        variants={dashboardCardVariants}
-        initial="hidden"
-        animate="show"
-        className="flex flex-col gap-2.5"
-      >
-        <div className="flex items-center justify-between">
-          <h3 className="font-serif text-base sm:text-lg text-[#dce2f8] font-semibold">
-            Objectifs Hebdomadaires
-          </h3>
-          <MotionTooltip
-            title="Objectif Quotidien"
-            content="Ajuster votre rythme cible entre 20, 30 ou 45 minutes par jour."
-            placement="top"
-          >
-            <button
-              type="button"
-              onClick={() => setShowAdjustModal(true)}
-              className="text-xs text-[#f2ca50] hover:text-[#ffe088] flex items-center gap-1 font-semibold transition-colors cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-sm">tune</span>
-              <span>Ajuster</span>
-            </button>
-          </MotionTooltip>
-        </div>
-
-        <motion.div
-          variants={staggeredListContainerVariants}
+      {/* Balanced 12-Column Executive Row: Annual Mastery Gauge + Hairline-Divided Weekly Objectives */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
+        {/* Left: Curriculum Mastery Card & Radial Gauge */}
+        <motion.section
+          variants={dashboardCardVariants}
           initial="hidden"
           animate="show"
-          className="flex flex-col gap-2"
+          className="lg:col-span-5 rounded-2xl luxury-card-surface p-5 sm:p-6 flex flex-col justify-between gap-5"
         >
-          {/* Goal 1: Dictée */}
-          <motion.div
-            variants={subItemVariants}
-            whileHover={{ y: -1, transition: { duration: 0.15 } }}
-            className="w-full rounded-xl bg-[#191f2f] p-3.5 border border-[#4d4635]/30 hover:border-[#f2ca50]/30 transition-all flex flex-col gap-2"
-          >
-            <div className="flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[#f2ca50] text-base">edit_note</span>
-                <span className="text-[#dce2f8] font-medium">Dictées Lexicales Avancées</span>
-              </div>
-              <span className="text-[#f2ca50] font-bold font-mono tabular-nums">3 / 4</span>
-            </div>
-            <div className="w-full h-1.5 rounded-full bg-[#070e1d] overflow-hidden">
-              <motion.div
-                initial={{ scaleX: 0 }}
-                animate={{ scaleX: 0.75 }}
-                transition={{ duration: 0.75, delay: 0.15, ease: luxuryEase }}
-                style={{ transformOrigin: 'left center' }}
-                className="w-full h-full bg-[#f2ca50] rounded-full shadow-[0_0_8px_rgba(242,202,80,0.4)]"
-              />
-            </div>
-          </motion.div>
-
-          {/* Goal 2: Flashcards */}
-          <motion.div
-            variants={subItemVariants}
-            whileHover={{ y: -1, transition: { duration: 0.15 } }}
-            className="w-full rounded-xl bg-[#191f2f] p-3.5 border border-[#4d4635]/30 hover:border-[#d4c78f]/30 transition-all flex flex-col gap-2"
-          >
-            <div className="flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[#d4c78f] text-base">style</span>
-                <span className="text-[#dce2f8] font-medium">Vocabulaire Spécialisé SM-2</span>
-              </div>
-              <span className="text-[#d4c78f] font-bold font-mono tabular-nums">150 / 150</span>
-            </div>
-            <div className="w-full h-1.5 rounded-full bg-[#070e1d] overflow-hidden">
-              <motion.div
-                initial={{ scaleX: 0 }}
-                animate={{ scaleX: 1 }}
-                transition={{ duration: 0.75, delay: 0.22, ease: luxuryEase }}
-                style={{ transformOrigin: 'left center' }}
-                className="w-full h-full bg-[#d4c78f] rounded-full shadow-[0_0_8px_rgba(212,199,143,0.4)]"
-              />
-            </div>
-          </motion.div>
-
-          {/* Goal 3: Speaking */}
-          <motion.div
-            variants={subItemVariants}
-            whileHover={{ y: -1, transition: { duration: 0.15 } }}
-            className="w-full rounded-xl bg-[#191f2f] p-3.5 border border-[#4d4635]/30 hover:border-[#e9cd67]/30 transition-all flex flex-col gap-2"
-          >
-            <div className="flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[#e9cd67] text-base">mic</span>
-                <span className="text-[#dce2f8] font-medium">Enregistrements Rhétoriques</span>
-              </div>
-              <span className="text-[#e9cd67] font-bold font-mono tabular-nums">2 / 2</span>
-            </div>
-            <div className="w-full h-1.5 rounded-full bg-[#070e1d] overflow-hidden">
-              <motion.div
-                initial={{ scaleX: 0 }}
-                animate={{ scaleX: 1 }}
-                transition={{ duration: 0.75, delay: 0.29, ease: luxuryEase }}
-                style={{ transformOrigin: 'left center' }}
-                className="w-full h-full bg-[#e9cd67] rounded-full shadow-[0_0_8px_rgba(233,205,103,0.4)]"
-              />
-            </div>
-          </motion.div>
-
-          {/* Goal 4: Daily study pace */}
-          <motion.div
-            variants={subItemVariants}
-            whileHover={{ y: -1, transition: { duration: 0.15 } }}
-            className="w-full rounded-xl bg-[#191f2f] p-3.5 border border-[#4d4635]/30 hover:border-[#f2ca50]/30 transition-all flex flex-col gap-2"
-          >
-            <div className="flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[#f2ca50] text-base">hourglass_bottom</span>
-                <span className="text-[#dce2f8] font-medium">Cadence Quotidienne</span>
-              </div>
-              <span className="text-[#f2ca50] font-bold font-mono tabular-nums">
-                <FramerRollingCounter value={user.stats.studyMinutesToday ?? 0} /> /{' '}
-                <FramerRollingCounter value={user.stats.studyMinutesTarget || 30} suffix=" min" />
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-col gap-1.5 min-w-0">
+              <span className="text-xs text-[#f2ca50] font-semibold">
+                Avancement Annuel
               </span>
+              <h3 className="font-serif text-lg sm:text-xl text-[#dce2f8] font-bold">
+                Curriculum {user.level} Réussi
+              </h3>
+              <p className="text-xs text-[#d0c5af]/85 leading-relaxed">
+                {user.stats.completedModules} modules sur {user.stats.totalModules} complétés avec mention d’excellence.
+              </p>
             </div>
-            <div className="w-full h-1.5 rounded-full bg-[#070e1d] overflow-hidden">
-              <motion.div
-                initial={{ scaleX: 0 }}
-                animate={{
-                  scaleX: Math.min(
-                    1,
-                    (user.stats.studyMinutesToday ?? 0) / Math.max(1, user.stats.studyMinutesTarget || 30)
-                  )
-                }}
-                transition={{ duration: 0.75, delay: 0.36, ease: luxuryEase }}
-                style={{ transformOrigin: 'left center' }}
-                className="w-full h-full bg-[#f2ca50] rounded-full shadow-[0_0_8px_rgba(242,202,80,0.4)]"
-              />
+
+            {/* Champagne Radial Gauge SVG */}
+            <div className="relative w-24 h-24 shrink-0 flex items-center justify-center">
+              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100" aria-hidden="true">
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="40"
+                  fill="transparent"
+                  stroke="#232a3a"
+                  strokeWidth="8"
+                />
+                <motion.circle
+                  cx="50"
+                  cy="50"
+                  r="40"
+                  fill="transparent"
+                  stroke="#f2ca50"
+                  strokeWidth="8"
+                  strokeDasharray={circumference}
+                  initial={{ strokeDashoffset: circumference }}
+                  animate={{ strokeDashoffset: strokeDashoffset }}
+                  transition={{ duration: 1.15, delay: 0.2, ease: luxuryEase }}
+                  strokeLinecap="round"
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                <span className="font-serif text-lg font-bold text-[#f2ca50] leading-none">
+                  <FramerRollingCounter value={user.stats.masteryPercentage ?? 0} suffix="%" />
+                </span>
+                <span className="text-[10px] text-[#d0c5af] mt-0.5">
+                  Validé
+                </span>
+              </div>
             </div>
-          </motion.div>
-        </motion.div>
-      </motion.section>
+          </div>
+
+          <div className="pt-3 border-t border-[#232a3a] flex items-center justify-between gap-2 text-xs font-mono tabular-nums">
+            <span className="text-[#d0c5af]">Tendance hebdomadaire</span>
+            <span className="inline-flex items-center gap-1 font-semibold text-emerald-400">
+              <span className="material-symbols-outlined text-sm">trending_up</span>
+              <span>+4.2% cette semaine</span>
+            </span>
+          </div>
+        </motion.section>
+
+        {/* Right: Unified Single-Elevation Weekly Objectives Panel (No Nested Cards) */}
+        <motion.section
+          variants={dashboardCardVariants}
+          initial="hidden"
+          animate="show"
+          className="lg:col-span-7 rounded-2xl luxury-card-surface p-5 sm:p-6 flex flex-col justify-between gap-3"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="font-serif text-lg text-[#dce2f8] font-bold">
+                Objectifs Hebdomadaires
+              </h3>
+              <p className="text-xs text-[#d0c5af]/80">
+                Cibles de pratique active et cadence quotidienne
+              </p>
+            </div>
+            <MotionTooltip
+              title="Objectif Quotidien"
+              content="Ajuster votre rythme cible entre 20, 30 ou 45 minutes par jour."
+              placement="top"
+            >
+              <button
+                type="button"
+                onClick={() => setShowAdjustModal(true)}
+                className="min-h-[36px] px-3 py-1.5 rounded-lg luxury-btn-amber-soft text-xs flex items-center gap-1.5 font-semibold whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-sm">tune</span>
+                <span>Ajuster</span>
+              </button>
+            </MotionTooltip>
+          </div>
+
+          <div className="divide-y divide-[#232a3a] border-t border-[#232a3a]">
+            {/* Goal 1: Dictée */}
+            <div className="py-3 flex flex-col gap-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-[#dce2f8] font-medium">Dictées Lexicales Avancées</span>
+                <span className="text-[#f2ca50] font-bold font-mono tabular-nums">3 / 4</span>
+              </div>
+              <div className="w-full h-1.5 rounded-full bg-[#070e1d] overflow-hidden">
+                <motion.div
+                  initial={{ scaleX: 0 }}
+                  animate={{ scaleX: 0.75 }}
+                  transition={{ duration: 0.75, delay: 0.12, ease: luxuryEase }}
+                  style={{ transformOrigin: 'left center' }}
+                  className="w-full h-full bg-[#f2ca50] rounded-full"
+                />
+              </div>
+            </div>
+
+            {/* Goal 2: Flashcards */}
+            <div className="py-3 flex flex-col gap-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-[#dce2f8] font-medium">Vocabulaire Spécialisé SM-2</span>
+                <span className="text-emerald-400 font-bold font-mono tabular-nums">150 / 150</span>
+              </div>
+              <div className="w-full h-1.5 rounded-full bg-[#070e1d] overflow-hidden">
+                <motion.div
+                  initial={{ scaleX: 0 }}
+                  animate={{ scaleX: 1 }}
+                  transition={{ duration: 0.75, delay: 0.18, ease: luxuryEase }}
+                  style={{ transformOrigin: 'left center' }}
+                  className="w-full h-full bg-emerald-400 rounded-full"
+                />
+              </div>
+            </div>
+
+            {/* Goal 3: Speaking */}
+            <div className="py-3 flex flex-col gap-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-[#dce2f8] font-medium">Enregistrements Rhétoriques</span>
+                <span className="text-emerald-400 font-bold font-mono tabular-nums">2 / 2</span>
+              </div>
+              <div className="w-full h-1.5 rounded-full bg-[#070e1d] overflow-hidden">
+                <motion.div
+                  initial={{ scaleX: 0 }}
+                  animate={{ scaleX: 1 }}
+                  transition={{ duration: 0.75, delay: 0.24, ease: luxuryEase }}
+                  style={{ transformOrigin: 'left center' }}
+                  className="w-full h-full bg-emerald-400 rounded-full"
+                />
+              </div>
+            </div>
+
+            {/* Goal 4: Daily study pace */}
+            <div className="pt-3 flex flex-col gap-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-[#dce2f8] font-medium">Cadence Quotidienne</span>
+                <span className="text-[#f2ca50] font-bold font-mono tabular-nums">
+                  <FramerRollingCounter value={user.stats.studyMinutesToday ?? 0} /> /{' '}
+                  <FramerRollingCounter value={user.stats.studyMinutesTarget || 30} suffix=" min" />
+                </span>
+              </div>
+              <div className="w-full h-1.5 rounded-full bg-[#070e1d] overflow-hidden">
+                <motion.div
+                  initial={{ scaleX: 0 }}
+                  animate={{
+                    scaleX: Math.min(
+                      1,
+                      (user.stats.studyMinutesToday ?? 0) / Math.max(1, user.stats.studyMinutesTarget || 30)
+                    )
+                  }}
+                  transition={{ duration: 0.75, delay: 0.3, ease: luxuryEase }}
+                  style={{ transformOrigin: 'left center' }}
+                  className="w-full h-full bg-[#f2ca50] rounded-full"
+                />
+              </div>
+            </div>
+          </div>
+        </motion.section>
+      </div>
             </>
           )}
 
@@ -946,25 +945,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         variants={dashboardCardVariants}
         initial="hidden"
         animate="show"
-        className="w-full rounded-2xl bg-[#191f2f] p-5 shadow-xl border border-[#4d4635]/40 flex flex-col gap-3"
+        className="w-full rounded-2xl luxury-card-surface p-5 flex flex-col gap-3"
       >
         {/* Section Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
-          <div className="flex flex-col">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-0.5">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="material-symbols-outlined text-[#f2ca50] text-lg">
                 {chartMetric === 'xp' ? 'show_chart' : 'trending_up'}
               </span>
               <h3 className="font-serif text-base sm:text-lg text-[#dce2f8] font-bold">
-                {chartMetric === 'xp' ? 'Mon historique de progression • 7 Jours' : 'Mon historique de progression (Score %)'}
+                {chartMetric === 'xp' ? 'Historique de progression · 7 Jours' : 'Historique de précision · 7 Jours'}
               </h3>
+              <span aria-hidden="true" className="text-[#99907c]">·</span>
               <span
-                className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${
+                className={`text-xs font-mono font-semibold ${
                   dataSource === 'firestore'
-                    ? 'bg-emerald-950/60 text-emerald-400 border-emerald-500/40'
+                    ? 'text-emerald-400'
                     : dataSource === 'indexeddb'
-                    ? 'bg-sky-950/60 text-sky-400 border-sky-500/40'
-                    : 'bg-[#232a3a] text-[#d4c78f] border-[#f2ca50]/20'
+                    ? 'text-sky-400'
+                    : 'text-[#d4c78f]'
                 }`}
                 title="Origine des métriques d'apprentissage"
               >
@@ -972,13 +972,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   ? 'Cloud Firestore'
                   : dataSource === 'indexeddb'
                   ? 'IndexedDB (Hors-Ligne)'
-                  : 'Cache & Démo'}
+                  : 'Cache Local'}
               </span>
             </div>
             <span className="text-xs text-[#d0c5af]/80">
               {chartMetric === 'xp'
-                ? 'Graphique linéaire Recharts • Visualisation de la régularité et progression quotidienne des points'
-                : 'Historique des dictées, flashcards et quiz consolidé (synchronisation automatique)'}
+                ? 'Régularité et points acquis quotidiennement (objectif 300 XP/jour)'
+                : 'Moyenne pondérée des dictées, flashcards et quiz'}
             </span>
           </div>
 
@@ -994,16 +994,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 onClick={() => loadHistory()}
                 disabled={isRefreshing}
                 aria-label="Synchroniser avec Cloud Firestore"
-                className="p-1.5 rounded-xl bg-[#070e1d] border border-[#4d4635]/40 text-[#f2ca50] hover:text-[#ffe088] transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                className="min-h-[36px] min-w-[36px] p-2 rounded-lg luxury-btn-surface disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] cursor-pointer flex items-center justify-center"
               >
-                <span className={`material-symbols-outlined text-base ${isRefreshing ? 'animate-spin' : ''}`}>
+                <span className={`material-symbols-outlined text-base text-[#f2ca50] ${isRefreshing ? 'animate-spin' : ''}`}>
                   sync
                 </span>
               </button>
             </MotionTooltip>
 
-            {/* Toggle between Recharts Line Charts (XP Regularity vs Accuracy Score) */}
-            <div className="flex items-center p-0.5 rounded-xl bg-[#070e1d] border border-[#4d4635]/40">
+            {/* Segmented Control (XP vs Score) */}
+            <div className="flex items-center gap-1 p-1 rounded-lg luxury-hairline-panel" role="group" aria-label="Métrique du graphique 7 jours">
               <MotionTooltip
                 title="Courbe XP"
                 content="Visualiser les XP gagnés quotidiennement sur les 7 derniers jours."
@@ -1012,10 +1012,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setChartMetric('xp')}
-                  className={`px-3 py-1 rounded-lg text-xs font-semibold font-mono transition-all flex items-center gap-1 cursor-pointer ${
+                  aria-pressed={chartMetric === 'xp'}
+                  className={`min-h-[32px] px-3 py-1 rounded-md text-xs font-semibold font-mono whitespace-nowrap shrink-0 transition-all flex items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] cursor-pointer ${
                     chartMetric === 'xp'
-                      ? 'bg-[#f2ca50] text-[#3c2f00] shadow-sm font-bold'
-                      : 'text-[#d0c5af] hover:text-[#dce2f8]'
+                      ? 'luxury-btn-gold font-bold'
+                      : 'text-[#d0c5af] hover:text-[#ffe8a3] hover:bg-white/5'
                   }`}
                 >
                   <span className="material-symbols-outlined text-[14px]">bolt</span>
@@ -1030,10 +1031,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setChartMetric('score')}
-                  className={`px-3 py-1 rounded-lg text-xs font-semibold font-mono transition-all flex items-center gap-1 cursor-pointer ${
+                  aria-pressed={chartMetric === 'score'}
+                  className={`min-h-[32px] px-3 py-1 rounded-md text-xs font-semibold font-mono whitespace-nowrap shrink-0 transition-all flex items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] cursor-pointer ${
                     chartMetric === 'score'
-                      ? 'bg-[#f2ca50] text-[#3c2f00] shadow-sm font-bold'
-                      : 'text-[#d0c5af] hover:text-[#dce2f8]'
+                      ? 'luxury-btn-gold font-bold'
+                      : 'text-[#d0c5af] hover:text-[#ffe8a3] hover:bg-white/5'
                   }`}
                 >
                   <span className="material-symbols-outlined text-[14px]">percent</span>
@@ -1044,77 +1046,68 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* Recharts LineChart Container with Framer Motion Entrance Animation */}
+        {/* Loading skeleton on initial fetch, otherwise animated Recharts container */}
+        {isRefreshing && scoreData.length === 0 ? (
+          <ChartSectionSkeleton heightClass="h-52" showKpis kpiCount={4} label="Chargement de l'historique 7 jours" />
+        ) : (
         <AnimatePresence mode="wait">
           {chartMetric === 'xp' ? (
             /* RECHARTS LINE CHART FOR WEEKLY XP & REGULARITY */
             <motion.div
               key="chart-metric-xp-recharts"
-              initial={{ opacity: 0, y: 14 }}
+              initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.35, ease: luxuryEase }}
               className="w-full pt-2"
             >
-              {/* Quick Regularity & XP KPI ribbon */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pb-2.5 border-b border-[#232a3a] mb-2 font-mono text-xs">
-                <div className="flex items-center gap-1.5 text-[#d4c78f] bg-[#070e1d]/80 px-2.5 py-1.5 rounded-lg border border-[#232a3a]">
-                  <span className="material-symbols-outlined text-[15px] text-[#f2ca50]">bolt</span>
-                  <div>
-                    <span className="text-[10px] text-[#99907c] block">Total Semaine</span>
-                    <strong className="text-[#f2ca50]">
-                      <FramerRollingCounter
-                        value={scoreData.reduce((acc, curr) => acc + curr.xp, 0)}
-                        formatLocale
-                        suffix=" XP"
-                      />
-                    </strong>
-                  </div>
+              {/* Hairline-divided KPI strip (no nested card boxes) */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-[#232a3a] rounded-xl luxury-hairline-panel mb-3 font-mono text-xs tabular-nums">
+                <div className="px-3.5 py-2.5">
+                  <span className="text-[11px] text-[#99907c] block">Total Semaine</span>
+                  <strong className="text-sm text-[#f2ca50]">
+                    <FramerRollingCounter
+                      value={scoreData.reduce((acc, curr) => acc + curr.xp, 0)}
+                      formatLocale
+                      suffix=" XP"
+                    />
+                  </strong>
                 </div>
 
-                <div className="flex items-center gap-1.5 text-[#d4c78f] bg-[#070e1d]/80 px-2.5 py-1.5 rounded-lg border border-[#232a3a]">
-                  <span className="material-symbols-outlined text-[15px] text-[#38bdf8]">calendar_view_week</span>
-                  <div>
-                    <span className="text-[10px] text-[#99907c] block">Régularité</span>
-                    <strong className="text-[#38bdf8]">
-                      <FramerRollingCounter value={scoreData.filter((d) => d.xp > 0).length} />/7 jours (
-                      <FramerRollingCounter
-                        value={Math.round((scoreData.filter((d) => d.xp > 0).length / (scoreData.length || 7)) * 100)}
-                        suffix="%"
-                      />
-                      )
-                    </strong>
-                  </div>
+                <div className="px-3.5 py-2.5">
+                  <span className="text-[11px] text-[#99907c] block">Régularité</span>
+                  <strong className="text-sm text-[#38bdf8]">
+                    <FramerRollingCounter value={scoreData.filter((d) => d.xp > 0).length} />/7 jours (
+                    <FramerRollingCounter
+                      value={Math.round((scoreData.filter((d) => d.xp > 0).length / (scoreData.length || 7)) * 100)}
+                      suffix="%"
+                    />
+                    )
+                  </strong>
                 </div>
 
-                <div className="flex items-center gap-1.5 text-[#d4c78f] bg-[#070e1d]/80 px-2.5 py-1.5 rounded-lg border border-[#232a3a]">
-                  <span className="material-symbols-outlined text-[15px] text-amber-400">speed</span>
-                  <div>
-                    <span className="text-[10px] text-[#99907c] block">Moyenne / Jour</span>
-                    <strong className="text-amber-300">
-                      <FramerRollingCounter
-                        prefix="~"
-                        value={Math.round(scoreData.reduce((acc, curr) => acc + curr.xp, 0) / (scoreData.length || 7))}
-                        suffix=" XP/j"
-                      />
-                    </strong>
-                  </div>
+                <div className="px-3.5 py-2.5">
+                  <span className="text-[11px] text-[#99907c] block">Moyenne / Jour</span>
+                  <strong className="text-sm text-amber-300">
+                    <FramerRollingCounter
+                      prefix="~"
+                      value={Math.round(scoreData.reduce((acc, curr) => acc + curr.xp, 0) / (scoreData.length || 7))}
+                      suffix=" XP/j"
+                    />
+                  </strong>
                 </div>
 
-                <div className="flex items-center gap-1.5 text-[#d4c78f] bg-[#070e1d]/80 px-2.5 py-1.5 rounded-lg border border-[#232a3a]">
-                  <span className="material-symbols-outlined text-[15px] text-emerald-400">emoji_events</span>
-                  <div>
-                    <span className="text-[10px] text-[#99907c] block">Pic Hebdo</span>
-                    <strong className="text-emerald-300">
-                      <FramerRollingCounter
-                        prefix="+"
-                        value={Math.max(0, ...scoreData.map((d) => d.xp))}
-                        formatLocale
-                        suffix=" XP"
-                      />{' '}
-                      ({scoreData.find((d) => d.xp === Math.max(0, ...scoreData.map((x) => x.xp)))?.day || 'Dim'})
-                    </strong>
-                  </div>
+                <div className="px-3.5 py-2.5">
+                  <span className="text-[11px] text-[#99907c] block">Pic Hebdo</span>
+                  <strong className="text-sm text-emerald-300">
+                    <FramerRollingCounter
+                      prefix="+"
+                      value={Math.max(0, ...scoreData.map((d) => d.xp))}
+                      formatLocale
+                      suffix=" XP"
+                    />{' '}
+                    ({scoreData.find((d) => d.xp === Math.max(0, ...scoreData.map((x) => x.xp)))?.day || 'Dim'})
+                  </strong>
                 </div>
               </div>
 
@@ -1215,14 +1208,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               className="w-full pt-2"
             >
               {/* Quick KPI ribbon */}
-              <div className="flex items-center justify-between text-xs pb-2 border-b border-[#232a3a] mb-2 font-mono">
-                <div className="flex items-center gap-1.5 text-[#d4c78f]">
-                  <span className="w-2 h-2 rounded-full bg-[#f2ca50]" />
-                  <span>Moyenne 7J : <strong className="text-[#f2ca50]">{avgScore.toFixed(1)}%</strong></span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[#d0c5af]">Pic : <strong className="text-[#f2ca50]">{peakScore}%</strong> ({peakDay})</span>
-                  <span className="px-1.5 py-0.2 rounded bg-[#f2ca50]/15 text-[#f2ca50] font-bold text-[10px]">
+              <div className="flex items-center justify-between text-xs pb-2 border-b border-[#232a3a] mb-2 font-mono tabular-nums">
+                <span className="text-[#d4c78f]">
+                  Moyenne 7J : <strong className="text-[#f2ca50]">{avgScore.toFixed(1)}%</strong>
+                </span>
+                <div className="flex items-center gap-2 text-[#d0c5af]">
+                  <span>
+                    Pic : <strong className="text-[#f2ca50]">{peakScore}%</strong> ({peakDay})
+                  </span>
+                  <span aria-hidden="true">·</span>
+                  <span className="text-emerald-400 font-bold">
                     +{Math.max(0, peakScore - (scoreData[0]?.score || 80))}%
                   </span>
                 </div>
@@ -1297,6 +1292,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </motion.div>
           )}
         </AnimatePresence>
+        )}
       </motion.section>
 
       <motion.div variants={dashboardCardVariants} initial="hidden" animate="show">
@@ -1317,13 +1313,29 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </motion.div>
       )}
 
+      {(dashboardTab === 'all' || dashboardTab === 'analytics' || dashboardTab === 'skill-analytics') && (
+        <SkillAnalyticsRadialD3
+          user={user}
+          avgScore={avgScore}
+          scoreData={scoreData}
+          onOpenMasterSkills={() => setDashboardTab('master-skills')}
+        />
+      )}
+
       {(dashboardTab === 'all' || dashboardTab === 'mastery') && (
-        <motion.div variants={dashboardCardVariants} initial="hidden" animate="show">
-          <VocabularyMasterySummary
+        <>
+          <ActiveMemoryPanel
             user={user}
             onOpenFlashcards={onOpenFlashcards}
           />
-        </motion.div>
+
+          <motion.div variants={dashboardCardVariants} initial="hidden" animate="show">
+            <VocabularyMasterySummary
+              user={user}
+              onOpenFlashcards={onOpenFlashcards}
+            />
+          </motion.div>
+        </>
       )}
 
       {(dashboardTab === 'all' || dashboardTab === 'curriculum') && (
@@ -1350,16 +1362,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         variants={dashboardCardVariants}
         initial="hidden"
         animate="show"
-        className="w-full rounded-2xl bg-[#191f2f] p-5 shadow-xl border border-[#4d4635]/40 flex flex-col gap-3.5 overflow-hidden"
+        className="w-full rounded-2xl luxury-card-surface p-5 flex flex-col gap-3.5 overflow-hidden"
       >
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col">
-            <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-0.5">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="material-symbols-outlined text-[#f2ca50] text-lg">auto_stories</span>
               <h3 className="font-serif text-base sm:text-lg text-[#dce2f8] font-bold">
                 Programme des Leçons & Folios Cursus
               </h3>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#f2ca50]/15 text-[#f2ca50] border border-[#f2ca50]/30">
+              <span aria-hidden="true" className="text-[#99907c]">·</span>
+              <span className="text-xs font-mono font-semibold text-[#f2ca50]">
                 Cursus Actif
               </span>
             </div>
@@ -1377,7 +1390,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <button
               type="button"
               onClick={onResumePractice}
-              className="inline-flex items-center gap-1.5 text-xs text-[#f2ca50] hover:text-[#ffe088] font-semibold transition-colors cursor-pointer"
+              className="min-h-[36px] px-3 py-1.5 rounded-lg luxury-btn-amber-soft inline-flex items-center gap-1.5 text-xs font-semibold whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] cursor-pointer"
             >
               <span>Ouvrir les modules</span>
               <span className="material-symbols-outlined text-sm">arrow_forward</span>
@@ -1394,26 +1407,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <motion.div
               key={folio.id}
               variants={lessonCardVariants}
-              whileHover={{ y: -3, transition: { duration: 0.18 } }}
-              className="group relative rounded-xl bg-[#151b2b]/85 hover:bg-[#151b2b] p-4 border border-[#4d4635]/30 hover:border-[#f2ca50]/50 transition-all shadow-sm flex flex-col justify-between gap-3 overflow-hidden"
+              whileHover={shouldReduceMotion ? undefined : { y: -2, transition: { duration: 0.16 } }}
+              className="group relative rounded-xl luxury-hairline-panel hover:border-[#f2ca50]/55 p-4 transition-colors flex flex-col justify-between gap-3"
             >
-              {/* Subtle gold corner ambient glow */}
-              <div className="absolute top-0 right-0 w-24 h-24 bg-[#f2ca50]/5 rounded-bl-full pointer-events-none group-hover:bg-[#f2ca50]/10 transition-colors" />
-
-              <div className="flex flex-col gap-2 relative z-10">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded bg-[#232a3a] border border-[#f2ca50]/30 text-[#f2ca50] text-[10px] font-mono font-bold">
-                      {folio.folioNumber}
-                    </span>
-                    <span className="px-1.5 py-0.5 rounded bg-[#f2ca50]/15 text-[#f2ca50] text-[10px] font-mono font-bold">
-                      {folio.level}
-                    </span>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between gap-2 text-xs font-mono text-[#99907c]">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[#f2ca50] font-bold">{folio.folioNumber}</span>
+                    <span aria-hidden="true">·</span>
+                    <span className="text-[#d4c78f] font-semibold">{folio.level}</span>
                   </div>
-                  <span className="text-[10px] text-[#99907c] font-mono flex items-center gap-1">
-                    <span className="material-symbols-outlined text-xs">schedule</span>
-                    {folio.duration}
-                  </span>
+                  <span>{folio.duration}</span>
                 </div>
 
                 <div className="flex flex-col">
@@ -1450,7 +1454,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <div className="flex items-center justify-between pt-1 gap-2 flex-wrap">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     {/* Native accent switch (🇬🇧 UK vs 🇺🇸 US) */}
-                    <div className="inline-flex rounded-lg bg-[#0c1322] p-0.5 border border-[#374151]/60 shadow-inner">
+                    <div className="inline-flex rounded-lg luxury-hairline-panel p-0.5 gap-0.5">
                       <button
                         type="button"
                         onClick={(e) => {
@@ -1461,13 +1465,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                             setPlayingFolioId(null);
                           }
                         }}
-                        className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold transition-all cursor-pointer flex items-center gap-0.5 ${
+                        className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold transition-all cursor-pointer flex items-center gap-0.5 ${
                           (folioAccents[folio.id] ||
                             (folio.accent.toLowerCase().includes('american')
                               ? 'en-US'
                               : 'en-GB')) === 'en-GB'
-                            ? 'bg-[#f2ca50] text-[#3c2f00] font-extrabold'
-                            : 'text-[#94a3b8] hover:text-white'
+                            ? 'luxury-btn-gold font-extrabold'
+                            : 'text-[#cbd5e1] hover:text-[#ffe8a3] hover:bg-white/5'
                         }`}
                         title="Voix native britannique (UK)"
                       >
@@ -1484,13 +1488,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                             setPlayingFolioId(null);
                           }
                         }}
-                        className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold transition-all cursor-pointer flex items-center gap-0.5 ${
+                        className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold transition-all cursor-pointer flex items-center gap-0.5 ${
                           (folioAccents[folio.id] ||
                             (folio.accent.toLowerCase().includes('american')
                               ? 'en-US'
                               : 'en-GB')) === 'en-US'
-                            ? 'bg-[#f2ca50] text-[#3c2f00] font-extrabold'
-                            : 'text-[#94a3b8] hover:text-white'
+                            ? 'luxury-btn-gold font-extrabold'
+                            : 'text-[#cbd5e1] hover:text-[#ffe8a3] hover:bg-white/5'
                         }`}
                         title="Voix native américaine (US)"
                       >
@@ -1511,10 +1515,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           e.stopPropagation();
                           handlePlayFolioAudio(folio);
                         }}
-                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold font-mono transition-all active:scale-95 cursor-pointer shadow-sm ${
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold font-mono cursor-pointer ${
                           playingFolioId === folio.id
-                            ? 'bg-[#f2ca50] text-[#3c2f00] ring-1 ring-[#f2ca50] animate-pulse font-extrabold'
-                            : 'bg-[#151b2b] hover:bg-[#f2ca50]/20 text-[#f2ca50] border border-[#f2ca50]/40'
+                            ? 'luxury-btn-gold font-extrabold'
+                            : 'luxury-btn-amber-soft'
                         }`}
                       >
                         <span className="material-symbols-outlined text-xs">
@@ -1536,7 +1540,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <button
                       type="button"
                       onClick={onResumePractice}
-                      className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-[#232a3a] hover:bg-[#f2ca50] text-[#d4c78f] hover:text-[#3c2f00] text-xs font-bold font-mono transition-all active:scale-95 cursor-pointer shadow-sm"
+                      className="inline-flex items-center gap-1 px-3 py-1 rounded-lg luxury-btn-surface text-xs font-bold font-mono cursor-pointer"
                     >
                       <span>{folio.progressPercent > 0 ? 'Continuer' : 'Débuter'}</span>
                       <span className="material-symbols-outlined text-xs">arrow_forward</span>
@@ -1553,159 +1557,119 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       )}
 
       {(dashboardTab === 'all' || dashboardTab === 'analytics') && (
-      /* Recent Validated Trials (Staggered items) */
+      /* Recent Validated Trials — Unified Hairline-Divided Table/List */
       <motion.section
         variants={dashboardCardVariants}
         initial="hidden"
         animate="show"
-        className="flex flex-col gap-2.5"
+        className="w-full rounded-2xl luxury-card-surface p-5 flex flex-col gap-3"
       >
-        <div className="flex items-center justify-between">
-          <h3 className="font-serif text-base sm:text-lg text-[#dce2f8] font-semibold">
-            Dernières Épreuves Validées
-          </h3>
-          <span className="text-xs text-[#f2ca50] font-mono uppercase tracking-wider">
-            Contrôle Continu
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <h3 className="font-serif text-base sm:text-lg text-[#dce2f8] font-bold">
+              Dernières Épreuves Validées
+            </h3>
+            <p className="text-xs text-[#d0c5af]/80">
+              Contrôle continu et évaluations récentes
+            </p>
+          </div>
+          <span className="text-xs text-[#f2ca50] font-mono font-semibold">
+            {recentAttempts.length > 0 ? `${Math.min(3, recentAttempts.length)} récentes` : 'Étalon académique'}
           </span>
         </div>
 
-        {/* Dynamic Recent Trials List with Staggered Fade-in */}
-        <motion.div
-          variants={staggeredListContainerVariants}
-          initial="hidden"
-          animate="show"
-          className="flex flex-col gap-2.5"
-        >
+        <div className="divide-y divide-[#232a3a] rounded-xl luxury-hairline-panel overflow-hidden">
           {recentAttempts.length > 0 ? (
             recentAttempts.slice(0, 3).map((att) => (
-              <motion.div
+              <div
                 key={att.attemptId}
-                variants={subItemVariants}
-                whileHover={{ x: 3, transition: { duration: 0.15 } }}
-                className="flex items-center justify-between p-3.5 rounded-xl bg-[#191f2f] border border-[#4d4635]/30 hover:border-[#f2ca50]/30 transition-all shadow-sm"
+                className="px-4 py-3 flex items-center justify-between gap-3 hover:bg-[#191f2f]/70 transition-colors"
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-[#232a3a] flex items-center justify-center shrink-0 text-[#f2ca50]">
-                    <span className="material-symbols-outlined text-xl">
-                      {att.moduleType === 'dictation'
-                        ? 'edit_note'
-                        : att.moduleType === 'quiz'
-                        ? 'quiz'
-                        : att.moduleType === 'speaking'
-                        ? 'mic'
-                        : 'style'}
-                    </span>
-                  </div>
+                  <span className="material-symbols-outlined text-lg text-[#f2ca50] shrink-0">
+                    {att.moduleType === 'dictation'
+                      ? 'edit_note'
+                      : att.moduleType === 'quiz'
+                      ? 'quiz'
+                      : att.moduleType === 'speaking'
+                      ? 'mic'
+                      : 'style'}
+                  </span>
                   <div className="flex flex-col min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-sm text-[#dce2f8] truncate">
-                        {att.title}
-                      </span>
-                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#f2ca50]/15 text-[#f2ca50] font-bold font-mono">
-                        {att.level}
-                      </span>
-                    </div>
-                    <span className="text-xs text-[#d0c5af]/80">
-                      {att.completedAt ? new Date(att.completedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : 'Récemment'} • {att.moduleType.toUpperCase()}
+                    <span className="font-semibold text-sm text-[#dce2f8] truncate">
+                      {att.title}
+                    </span>
+                    <span className="text-xs text-[#99907c] font-mono">
+                      {att.level} · {att.completedAt ? new Date(att.completedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : 'Récemment'} · {att.moduleType.toUpperCase()}
                     </span>
                   </div>
                 </div>
-                <div className="flex flex-col items-end shrink-0 pl-2">
-                  <span className="text-sm font-bold text-[#f2ca50] font-mono">{att.score}%</span>
-                  <span className="text-[10px] text-[#d4c78f] uppercase">
+                <div className="flex flex-col items-end shrink-0 pl-2 font-mono tabular-nums">
+                  <span className="text-sm font-bold text-[#f2ca50]">{att.score}%</span>
+                  <span className="text-[11px] text-[#d4c78f]">
                     {att.score >= 95 ? 'Émérite' : att.score >= 85 ? 'Maîtrisé' : 'Acquis'}
                   </span>
                 </div>
-              </motion.div>
+              </div>
             ))
           ) : (
             <>
-              {/* Fallback Benchmark Module 1 */}
-              <motion.div
-                variants={subItemVariants}
-                whileHover={{ x: 3, transition: { duration: 0.15 } }}
-                className="flex items-center justify-between p-3.5 rounded-xl bg-[#191f2f] border border-[#4d4635]/30 hover:border-[#f2ca50]/30 transition-all shadow-sm"
-              >
+              <div className="px-4 py-3 flex items-center justify-between gap-3 hover:bg-[#191f2f]/70 transition-colors">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-[#232a3a] flex items-center justify-center shrink-0 text-[#f2ca50]">
-                    <span className="material-symbols-outlined text-xl">history_edu</span>
-                  </div>
+                  <span className="material-symbols-outlined text-lg text-[#f2ca50] shrink-0">history_edu</span>
                   <div className="flex flex-col min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-sm text-[#dce2f8] truncate">
-                        Dictée C1 — Édition Élysée
-                      </span>
-                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#f2ca50]/15 text-[#f2ca50] font-bold font-mono">
-                        C1
-                      </span>
-                    </div>
-                    <span className="text-xs text-[#d0c5af]/80">Durée: 14 min • Transcription audio</span>
+                    <span className="font-semibold text-sm text-[#dce2f8] truncate">
+                      Dictée C1 — Édition Élysée
+                    </span>
+                    <span className="text-xs text-[#99907c] font-mono">
+                      C1 · 14 min · Transcription audio
+                    </span>
                   </div>
                 </div>
-                <div className="flex flex-col items-end shrink-0 pl-2">
-                  <span className="text-sm font-bold text-[#f2ca50] font-mono">96%</span>
-                  <span className="text-[10px] text-[#d4c78f] uppercase">Émérite</span>
+                <div className="flex flex-col items-end shrink-0 pl-2 font-mono tabular-nums">
+                  <span className="text-sm font-bold text-[#f2ca50]">96%</span>
+                  <span className="text-[11px] text-[#d4c78f]">Émérite</span>
                 </div>
-              </motion.div>
+              </div>
 
-              {/* Fallback Benchmark Module 2 */}
-              <motion.div
-                variants={subItemVariants}
-                whileHover={{ x: 3, transition: { duration: 0.15 } }}
-                className="flex items-center justify-between p-3.5 rounded-xl bg-[#191f2f] border border-[#4d4635]/30 hover:border-[#d4c78f]/30 transition-all shadow-sm"
-              >
+              <div className="px-4 py-3 flex items-center justify-between gap-3 hover:bg-[#191f2f]/70 transition-colors">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-[#232a3a] flex items-center justify-center shrink-0 text-[#d4c78f]">
-                    <span className="material-symbols-outlined text-xl">auto_stories</span>
-                  </div>
+                  <span className="material-symbols-outlined text-lg text-[#d4c78f] shrink-0">auto_stories</span>
                   <div className="flex flex-col min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-sm text-[#dce2f8] truncate">
-                        Flashcards Idiomes B2/C1
-                      </span>
-                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#d4c78f]/15 text-[#d4c78f] font-bold font-mono">
-                        B2+
-                      </span>
-                    </div>
-                    <span className="text-xs text-[#d0c5af]/80">Durée: 08 min • Rétention espacée</span>
+                    <span className="font-semibold text-sm text-[#dce2f8] truncate">
+                      Flashcards Idiomes B2/C1
+                    </span>
+                    <span className="text-xs text-[#99907c] font-mono">
+                      B2+ · 08 min · Rétention espacée
+                    </span>
                   </div>
                 </div>
-                <div className="flex flex-col items-end shrink-0 pl-2">
-                  <span className="text-sm font-bold text-[#d4c78f] font-mono">100%</span>
-                  <span className="text-[10px] text-[#d4c78f] uppercase">Parfait</span>
+                <div className="flex flex-col items-end shrink-0 pl-2 font-mono tabular-nums">
+                  <span className="text-sm font-bold text-[#d4c78f]">100%</span>
+                  <span className="text-[11px] text-[#d4c78f]">Parfait</span>
                 </div>
-              </motion.div>
+              </div>
 
-              {/* Fallback Benchmark Module 3 */}
-              <motion.div
-                variants={subItemVariants}
-                whileHover={{ x: 3, transition: { duration: 0.15 } }}
-                className="flex items-center justify-between p-3.5 rounded-xl bg-[#191f2f] border border-[#4d4635]/30 hover:border-[#f2ca50]/30 transition-all shadow-sm"
-              >
+              <div className="px-4 py-3 flex items-center justify-between gap-3 hover:bg-[#191f2f]/70 transition-colors">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-[#232a3a] flex items-center justify-center shrink-0 text-[#f2ca50]">
-                    <span className="material-symbols-outlined text-xl">record_voice_over</span>
-                  </div>
+                  <span className="material-symbols-outlined text-lg text-[#f2ca50] shrink-0">record_voice_over</span>
                   <div className="flex flex-col min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-sm text-[#dce2f8] truncate">
-                        Speaking — Oxford Debates
-                      </span>
-                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#f2ca50]/15 text-[#f2ca50] font-bold font-mono">
-                        C2
-                      </span>
-                    </div>
-                    <span className="text-xs text-[#d0c5af]/80">Durée: 22 min • Analyse de fluidité</span>
+                    <span className="font-semibold text-sm text-[#dce2f8] truncate">
+                      Speaking — Oxford Debates
+                    </span>
+                    <span className="text-xs text-[#99907c] font-mono">
+                      C2 · 22 min · Analyse de fluidité
+                    </span>
                   </div>
                 </div>
-                <div className="flex flex-col items-end shrink-0 pl-2">
-                  <span className="text-sm font-bold text-[#f2ca50] font-mono">92%</span>
-                  <span className="text-[10px] text-[#d4c78f] uppercase">Maîtrisé</span>
+                <div className="flex flex-col items-end shrink-0 pl-2 font-mono tabular-nums">
+                  <span className="text-sm font-bold text-[#f2ca50]">92%</span>
+                  <span className="text-[11px] text-[#d4c78f]">Maîtrisé</span>
                 </div>
-              </motion.div>
+              </div>
             </>
           )}
-        </motion.div>
+        </div>
       </motion.section>
       )}
 
@@ -1715,112 +1679,73 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         variants={dashboardCardVariants}
         initial="hidden"
         animate="show"
-        className="w-full rounded-2xl bg-[#070e1d]/90 p-5 border border-[#4d4635]/40 flex flex-col gap-3.5 relative overflow-hidden shadow-xl"
+        className="w-full rounded-2xl luxury-card-surface p-5 flex flex-col gap-4"
       >
-        <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#f2ca50]/50 to-transparent" />
-        
         {/* Header row */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-[#232a3a] border border-[#f2ca50]/30 flex items-center justify-center text-[#f2ca50]">
-              <span className="material-symbols-outlined text-lg">database</span>
-            </div>
+          <div className="flex items-center gap-2.5">
+            <span className="material-symbols-outlined text-lg text-[#f2ca50]">database</span>
             <div>
-              <div className="flex items-center gap-2">
-                <h4 className="font-serif font-bold text-sm text-[#dce2f8]">
-                  Stockage Local Persistant IndexedDB
-                </h4>
-                <span className="px-1.5 py-0.2 rounded bg-[#f2ca50]/15 text-[#f2ca50] text-[10px] font-mono font-bold">
-                  v1.0 ACTIF
-                </span>
-              </div>
-              <p className="text-[11px] text-[#99907c]">
-                Fonctionnement autonome sans connexion internet • Synchronisation automatique en arrière-plan
+              <h4 className="font-serif font-bold text-sm sm:text-base text-[#dce2f8]">
+                Stockage Local Persistant IndexedDB
+              </h4>
+              <p className="text-xs text-[#99907c]">
+                Fonctionnement autonome sans connexion · Synchronisation automatique en arrière-plan
               </p>
             </div>
           </div>
 
-          {/* Network State Pill */}
-          <div className="flex items-center gap-2 self-start sm:self-auto">
-            <div
-              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-semibold border ${
-                isOnline
-                  ? 'bg-emerald-950/60 text-emerald-400 border-emerald-500/40'
-                  : 'bg-amber-950/70 text-amber-300 border-amber-500/50'
-              }`}
-            >
-              <span
-                className={`w-2 h-2 rounded-full ${
-                  isOnline ? 'bg-emerald-400' : 'bg-amber-400'
-                }`}
-              />
-              <span>{isOnline ? 'En Ligne • Synchronisé' : 'Mode Hors-Ligne Actif'}</span>
-            </div>
+          <div
+            className={`inline-flex items-center gap-1.5 text-xs font-mono font-semibold self-start sm:self-auto ${
+              isOnline ? 'text-emerald-400' : 'text-amber-300'
+            }`}
+          >
+            <span className="material-symbols-outlined text-base">
+              {isOnline ? 'cloud_done' : 'wifi_off'}
+            </span>
+            <span>{isOnline ? 'En ligne · Synchronisé' : 'Mode hors-ligne actif'}</span>
           </div>
         </div>
 
-        {/* 3 Metric Mini Cards with Staggered Entrance */}
-        <motion.div
-          variants={staggeredListContainerVariants}
-          className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1"
-        >
-          <motion.div
-            variants={subItemVariants}
-            whileHover={{ y: -2, transition: { duration: 0.15 } }}
-            className="p-3 rounded-xl bg-[#151b2b] border border-[#232a3a] hover:border-[#f2ca50]/30 transition-all flex flex-col gap-0.5 shadow-sm"
-          >
-            <span className="text-[10px] uppercase font-mono text-[#d0c5af]">Épreuves Enregistrées</span>
+        {/* Hairline-divided 3-metric strip */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-[#232a3a] rounded-xl luxury-hairline-panel font-mono tabular-nums">
+          <div className="p-3.5 flex flex-col gap-0.5">
+            <span className="text-[11px] text-[#d0c5af]">Épreuves Enregistrées</span>
             <div className="flex items-baseline gap-1.5">
-              <span className="text-base font-bold text-[#f2ca50] font-mono">
-                {totalOfflineRecords}
-              </span>
+              <span className="text-base font-bold text-[#f2ca50]">{totalOfflineRecords}</span>
               <span className="text-[11px] text-[#99907c]">dans IndexedDB</span>
             </div>
-          </motion.div>
+          </div>
 
-          <motion.div
-            variants={subItemVariants}
-            whileHover={{ y: -2, transition: { duration: 0.15 } }}
-            className="p-3 rounded-xl bg-[#151b2b] border border-[#232a3a] hover:border-[#f2ca50]/30 transition-all flex flex-col gap-0.5 shadow-sm"
-          >
-            <span className="text-[10px] uppercase font-mono text-[#d0c5af]">File d'Attente Sync</span>
+          <div className="p-3.5 flex flex-col gap-0.5">
+            <span className="text-[11px] text-[#d0c5af]">File d'Attente Sync</span>
             <div className="flex items-baseline gap-1.5">
-              <span
-                className={`text-base font-bold font-mono ${
-                  pendingCount > 0 ? 'text-amber-400' : 'text-emerald-400'
-                }`}
-              >
+              <span className={`text-base font-bold ${pendingCount > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
                 {pendingCount}
               </span>
               <span className="text-[11px] text-[#99907c]">
                 {pendingCount === 0 ? 'À jour' : 'en attente'}
               </span>
             </div>
-          </motion.div>
+          </div>
 
-          <motion.div
-            variants={subItemVariants}
-            whileHover={{ y: -2, transition: { duration: 0.15 } }}
-            className="p-3 rounded-xl bg-[#151b2b] border border-[#232a3a] hover:border-[#f2ca50]/30 transition-all flex flex-col gap-0.5 shadow-sm"
-          >
-            <span className="text-[10px] uppercase font-mono text-[#d0c5af]">Dernière Synchronisation</span>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-xs font-bold text-[#dce2f8] font-mono truncate">
-                {lastSyncTime
-                  ? new Date(lastSyncTime).toLocaleTimeString('fr-FR', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      second: '2-digit'
-                    })
-                  : 'Récemment'}
-              </span>
-            </div>
-          </motion.div>
-        </motion.div>
+          <div className="p-3.5 flex flex-col gap-0.5">
+            <span className="text-[11px] text-[#d0c5af]">Dernière Synchronisation</span>
+            <span className="text-sm font-bold text-[#dce2f8] truncate">
+              {lastSyncTime
+                ? new Date(lastSyncTime).toLocaleTimeString('fr-FR', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                  })
+                : 'Récemment'}
+            </span>
+          </div>
+        </div>
 
         {/* Sync Action and Reassurance text */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2 border-t border-[#191f2f]">
-          <p className="text-xs text-[#d0c5af]/80 leading-relaxed">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2 border-t border-[#232a3a]">
+          <p className="text-xs text-[#d0c5af]/85 leading-relaxed">
             Même sans réseau, vos dictées, quiz, cartes SM-2 et points XP sont conservés de façon persistante dans le navigateur.
           </p>
 
@@ -1834,16 +1759,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               type="button"
               onClick={handleManualSync}
               disabled={isSyncing}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-[#232a3a] hover:bg-[#2e3545] border border-[#f2ca50]/30 text-xs font-bold text-[#f2ca50] hover:text-[#ffe088] transition-all active:scale-95 shrink-0 disabled:opacity-50 cursor-pointer"
+              className="min-h-[40px] inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg luxury-btn-amber-soft text-xs font-bold whitespace-nowrap shrink-0 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] cursor-pointer"
             >
               <span className={`material-symbols-outlined text-base ${isSyncing ? 'animate-spin' : ''}`}>
                 sync
               </span>
-              <span>{isSyncing ? 'Synchronisation...' : 'Synchroniser Maintenant'}</span>
+              <span>{isSyncing ? 'Synchronisation...' : 'Synchroniser maintenant'}</span>
             </button>
           </MotionTooltip>
         </div>
       </motion.section>
+      )}
+      {dashboardTab === 'master-skills' && (
+        <MasterSkillsView user={user} avgScore={avgScore} scoreData={scoreData} />
       )}
       {dashboardTab === 'skills' && (
         <SkillsAdminView />
@@ -1864,7 +1792,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           whileTap={{ scale: 0.98 }}
           type="button"
           onClick={onResumePractice}
-          className="w-full py-3.5 px-6 rounded-xl bg-[#f2ca50] text-[#3c2f00] font-bold text-base shadow-xl shadow-[#f2ca50]/20 hover:bg-[#ffe088] transition-all flex items-center justify-center gap-2 cursor-pointer"
+          className="w-full py-3.5 px-6 rounded-xl luxury-btn-gold font-bold text-base flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffe088] cursor-pointer"
         >
           <span className="material-symbols-outlined text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>
             play_circle
@@ -1876,19 +1804,25 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* Modal d'ajustement du rythme */}
       {showAdjustModal && (
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="adjust-target-modal-title"
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fadeIn"
           onClick={() => setShowAdjustModal(false)}
         >
           <div
-            className="w-full max-w-sm rounded-2xl bg-[#191f2f] p-6 border border-[#f2ca50]/40 shadow-2xl flex flex-col gap-4"
+            className="w-full max-w-sm rounded-2xl luxury-card-surface p-6 flex flex-col gap-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h3 className="font-serif text-lg font-bold text-[#dce2f8]">Rythme & Contrat</h3>
+              <h3 id="adjust-target-modal-title" className="font-serif text-lg font-bold text-[#dce2f8]">
+                Rythme & Contrat
+              </h3>
               <button
                 type="button"
+                aria-label="Fermer la fenêtre d'ajustement du rythme"
                 onClick={() => setShowAdjustModal(false)}
-                className="w-8 h-8 rounded-full bg-[#232a3a] flex items-center justify-center text-[#d0c5af] hover:text-[#f2ca50]"
+                className="min-w-[36px] min-h-[36px] rounded-lg luxury-btn-surface flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] cursor-pointer"
               >
                 <span className="material-symbols-outlined text-base">close</span>
               </button>
@@ -1904,10 +1838,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   key={mins}
                   type="button"
                   onClick={() => setSelectedTarget(mins)}
-                  className={`py-2.5 rounded-xl text-xs font-bold font-mono transition-all ${
+                  className={`min-h-[40px] py-2 rounded-lg text-xs font-bold font-mono focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] cursor-pointer ${
                     selectedTarget === mins
-                      ? 'bg-[#f2ca50] text-[#3c2f00] shadow-md shadow-[#f2ca50]/30'
-                      : 'bg-[#232a3a] text-[#dce2f8] hover:bg-[#2e3545]'
+                      ? 'luxury-btn-gold'
+                      : 'luxury-btn-surface'
                   }`}
                 >
                   {mins} min
@@ -1918,9 +1852,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <button
               type="button"
               onClick={handleSaveTarget}
-              className="w-full py-2.5 rounded-xl bg-[#f2ca50] text-[#3c2f00] font-bold text-xs uppercase tracking-wider shadow-lg hover:bg-[#ffe088] transition-colors"
+              className="w-full min-h-[42px] py-2.5 rounded-lg luxury-btn-gold font-bold text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffe088] cursor-pointer"
             >
-              Enregistrer l’Engagement
+              Enregistrer l’engagement
             </button>
           </div>
         </div>

@@ -13,8 +13,10 @@ import {
   type AccentType
 } from '../services/speechService';
 import { playSelectCue } from '../utils/soundEffects';
+import { useAppTheme } from '../theme/ThemeContext';
 
 export const FavoriteQuotesSection: React.FC = () => {
+  const { isDark } = useAppTheme();
   const [favorites, setFavorites] = useState<FavoriteQuoteItem[]>(() => getFavoriteQuotes());
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeSpeechKey, setActiveSpeechKey] = useState<string | null>(null);
@@ -109,12 +111,12 @@ export const FavoriteQuotesSection: React.FC = () => {
   return (
     <section
       aria-label="Citations Favorites de Lord Chesterfield"
-      className="p-5 rounded-2xl bg-gradient-to-br from-[#191f2f] via-[#151b2b] to-[#0f1626] border border-[#f2ca50]/40 shadow-xl flex flex-col gap-3.5"
+      className="p-5 sm:p-6 rounded-2xl luxury-card-surface flex flex-col gap-3.5"
     >
       {/* Header */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-9 h-9 rounded-xl bg-rose-500/15 border border-rose-400/40 flex items-center justify-center text-rose-300 shadow-inner shrink-0">
+          <div className="w-9 h-9 rounded-xl luxury-btn-ruby flex items-center justify-center shrink-0">
             <span
               className="material-symbols-outlined text-xl"
               style={{ fontVariationSettings: "'FILL' 1" }}
@@ -123,23 +125,23 @@ export const FavoriteQuotesSection: React.FC = () => {
             </span>
           </div>
           <div className="flex flex-col min-w-0">
-            <span className="text-[10px] text-[#f2ca50] font-bold uppercase tracking-wider font-mono">
-              COLLECTION LOCALE PERSISTANTE
+            <span className={`text-[10px] font-bold uppercase tracking-wider font-mono ${isDark ? 'text-[#f2ca50]' : 'text-[#8a640b]'}`}>
+              Florilège personnel persistant
             </span>
-            <h3 className="font-serif font-bold text-base text-[#f3f4f6] truncate">
+            <h3 className={`font-serif font-bold text-base truncate ${isDark ? 'text-[#f3f4f6]' : 'text-[#1c1917]'}`}>
               Mes Citations Favorites de Lord Chesterfield
             </h3>
           </div>
         </div>
 
-        <span className="px-2.5 py-1 rounded-full bg-rose-500/15 text-rose-200 border border-rose-400/35 text-[11px] font-mono font-bold shrink-0">
+        <span className={`text-xs font-mono font-bold tabular-nums shrink-0 ${isDark ? 'text-[#f2ca50]' : 'text-[#8a640b]'}`}>
           {favorites.length} {favorites.length > 1 ? 'citations' : 'citation'}
         </span>
       </div>
 
       {/* Search bar when collection grows */}
       {favorites.length >= 3 && (
-        <div className="relative">
+        <div className="relative luxury-hairline-panel rounded-xl">
           <span className="material-symbols-outlined text-base text-[#99907c] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
             search
           </span>
@@ -148,14 +150,17 @@ export const FavoriteQuotesSection: React.FC = () => {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Rechercher dans vos citations favorites (anglais ou français)..."
-            className="w-full pl-9 pr-8 py-2 rounded-xl bg-[#0c1322] border border-[#232a3a] focus:border-[#f2ca50]/60 focus:outline-none text-xs text-[#dce2f8] placeholder-[#78859e]"
+            aria-label="Rechercher dans vos citations favorites"
+            className={`w-full pl-9 pr-8 py-2 rounded-xl border border-transparent focus:border-[#f2ca50]/60 focus:outline-none text-xs ${
+              isDark ? 'bg-transparent text-[#dce2f8] placeholder-[#78859e]' : 'bg-transparent text-[#1c1917] placeholder-[#78716c]'
+            }`}
           />
           {searchQuery && (
             <button
               type="button"
               onClick={() => setSearchQuery('')}
               aria-label="Effacer la recherche"
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#99907c] hover:text-white cursor-pointer"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#99907c] hover:text-[#f2ca50] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] rounded"
             >
               <span className="material-symbols-outlined text-sm">close</span>
             </button>
@@ -165,12 +170,12 @@ export const FavoriteQuotesSection: React.FC = () => {
 
       {/* Empty State or Favorites List */}
       {favorites.length === 0 ? (
-        <div className="p-4 rounded-xl bg-[#0c1322]/80 border border-[#232a3a] flex items-start gap-3">
-          <span className="material-symbols-outlined text-rose-300/80 text-xl shrink-0 mt-0.5">
+        <div className="p-4 rounded-xl luxury-hairline-panel flex items-start gap-3">
+          <span className={`material-symbols-outlined text-xl shrink-0 mt-0.5 ${isDark ? 'text-rose-300/80' : 'text-rose-700'}`}>
             favorite_border
           </span>
-          <div className="flex flex-col gap-1 text-xs text-[#d0c5af] leading-relaxed">
-            <span className="font-semibold text-[#dce2f8]">
+          <div className={`flex flex-col gap-1 text-xs leading-relaxed ${isDark ? 'text-[#d0c5af]' : 'text-[#57534e]'}`}>
+            <span className={`font-semibold ${isDark ? 'text-[#dce2f8]' : 'text-[#1c1917]'}`}>
               Aucune citation enregistrée pour le moment.
             </span>
             <span>
@@ -179,7 +184,7 @@ export const FavoriteQuotesSection: React.FC = () => {
           </div>
         </div>
       ) : filteredFavorites.length === 0 ? (
-        <div className="p-4 rounded-xl bg-[#0c1322]/80 border border-[#232a3a] text-center text-xs text-[#99907c]">
+        <div className="p-4 rounded-xl luxury-hairline-panel text-center text-xs text-[#99907c]">
           Aucune citation ne correspond à « {searchQuery} ».
         </div>
       ) : (
@@ -195,14 +200,14 @@ export const FavoriteQuotesSection: React.FC = () => {
             return (
               <article
                 key={item.id}
-                className="p-3.5 rounded-xl bg-[#0c1322]/95 border border-[#232a3a] hover:border-[#f2ca50]/45 transition-all flex flex-col gap-2.5"
+                className="p-3.5 rounded-xl luxury-hairline-panel hover:border-[#f2ca50]/45 transition-all flex flex-col gap-2.5"
               >
                 <div className="flex items-start justify-between gap-2.5">
                   <div className="space-y-1.5 min-w-0 flex-1">
-                    <blockquote className="font-serif italic text-sm text-white leading-snug select-text">
+                    <blockquote className={`font-serif italic text-sm leading-snug select-text ${isDark ? 'text-[#f3f4f6]' : 'text-[#1c1917]'}`}>
                       “{item.quoteEn}”
                     </blockquote>
-                    <p className="font-sans italic text-xs text-[#d4c78f] border-l-2 border-[#f2ca50]/35 pl-2.5 leading-relaxed select-text">
+                    <p className={`font-sans italic text-xs leading-relaxed select-text ${isDark ? 'text-[#d4c78f]' : 'text-[#57534e]'}`}>
                       « {item.quoteFr} »
                     </p>
                   </div>
@@ -212,23 +217,23 @@ export const FavoriteQuotesSection: React.FC = () => {
                     onClick={() => handleRemove(item)}
                     aria-label="Retirer cette citation des favoris"
                     title="Retirer cette citation des favoris"
-                    className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 transition-colors cursor-pointer shrink-0 active:scale-90"
+                    className="p-1.5 rounded-lg luxury-btn-ruby cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
                   >
                     <span className="material-symbols-outlined text-sm">delete</span>
                   </button>
                 </div>
 
                 {/* Metadata & Audio Actions */}
-                <div className="pt-2 border-t border-[#1e2638] flex items-center justify-between gap-2 flex-wrap">
-                  <div className="flex items-center gap-1.5 flex-wrap text-[10px] font-mono text-[#94a3b8]">
-                    <span className="text-[#dce2f8] font-sans font-medium">
+                <div className={`pt-2 border-t flex items-center justify-between gap-2 flex-wrap ${isDark ? 'border-[#1e2638]' : 'border-[#e2d9cc]'}`}>
+                  <div className={`flex items-center gap-1.5 flex-wrap text-[11px] font-mono ${isDark ? 'text-[#94a3b8]' : 'text-[#57534e]'}`}>
+                    <span className={`font-sans font-medium ${isDark ? 'text-[#dce2f8]' : 'text-[#1c1917]'}`}>
                       {item.sourceWork} ({item.year})
                     </span>
-                    <span>&bull;</span>
-                    <span className="text-[#f2ca50]">{item.cefrFocus}</span>
+                    <span aria-hidden="true">·</span>
+                    <span className={`font-bold ${isDark ? 'text-[#f2ca50]' : 'text-[#8a640b]'}`}>{item.cefrFocus}</span>
                     {item.savedAt && (
                       <>
-                        <span className="hidden sm:inline">&bull;</span>
+                        <span aria-hidden="true" className="hidden sm:inline">·</span>
                         <span className="hidden sm:inline">
                           Ajoutée le {formatSavedDate(item.savedAt)}
                         </span>
@@ -241,13 +246,12 @@ export const FavoriteQuotesSection: React.FC = () => {
                       type="button"
                       onClick={() => handlePlayEnglish(item, 'en-GB')}
                       title="Écouter en Anglais Britannique (UK)"
-                      className={`px-2 py-1 rounded-lg text-[10px] font-mono font-bold border flex items-center gap-1 cursor-pointer transition-all ${
-                        isPlayingUK
-                          ? 'bg-[#f2ca50] text-[#3c2f00] border-[#f2ca50]'
-                          : 'bg-[#151b2b] hover:bg-[#1e273d] text-[#f2ca50] border-[#f2ca50]/30'
+                      aria-label="Écouter en Anglais Britannique"
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold flex items-center gap-1 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] ${
+                        isPlayingUK ? 'luxury-btn-gold' : 'luxury-btn-amber-soft'
                       }`}
                     >
-                      <span>🇬🇧</span>
+                      <span>UK</span>
                       <span className="material-symbols-outlined text-xs">
                         {isPlayingUK ? 'graphic_eq' : 'volume_up'}
                       </span>
@@ -257,13 +261,12 @@ export const FavoriteQuotesSection: React.FC = () => {
                       type="button"
                       onClick={() => handlePlayEnglish(item, 'en-US')}
                       title="Écouter en Anglais Américain (US)"
-                      className={`px-2 py-1 rounded-lg text-[10px] font-mono font-bold border flex items-center gap-1 cursor-pointer transition-all ${
-                        isPlayingUS
-                          ? 'bg-[#38bdf8] text-[#0c1322] border-[#38bdf8]'
-                          : 'bg-[#151b2b] hover:bg-[#1e273d] text-[#38bdf8] border-[#38bdf8]/30'
+                      aria-label="Écouter en Anglais Américain"
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold flex items-center gap-1 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#38bdf8] ${
+                        isPlayingUS ? 'luxury-btn-gold' : 'luxury-btn-sapphire'
                       }`}
                     >
-                      <span>🇺🇸</span>
+                      <span>US</span>
                       <span className="material-symbols-outlined text-xs">
                         {isPlayingUS ? 'graphic_eq' : 'volume_up'}
                       </span>
@@ -273,13 +276,12 @@ export const FavoriteQuotesSection: React.FC = () => {
                       type="button"
                       onClick={() => handlePlayFrench(item)}
                       title="Écouter la traduction française"
-                      className={`px-2 py-1 rounded-lg text-[10px] font-mono font-bold border flex items-center gap-1 cursor-pointer transition-all ${
-                        isPlayingFR
-                          ? 'bg-emerald-500 text-white border-emerald-400'
-                          : 'bg-[#151b2b] hover:bg-[#1e273d] text-[#dce2f8] border-[#374461]'
+                      aria-label="Écouter la traduction française"
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold flex items-center gap-1 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 ${
+                        isPlayingFR ? 'luxury-btn-gold' : 'luxury-btn-emerald'
                       }`}
                     >
-                      <span>🇫🇷</span>
+                      <span>FR</span>
                       <span className="material-symbols-outlined text-xs">
                         {isPlayingFR ? 'graphic_eq' : 'volume_up'}
                       </span>
@@ -290,10 +292,8 @@ export const FavoriteQuotesSection: React.FC = () => {
                       onClick={() => handleCopy(item)}
                       title="Copier la citation bilingue"
                       aria-label="Copier la citation bilingue"
-                      className={`px-2 py-1 rounded-lg text-[10px] font-mono border flex items-center gap-1 cursor-pointer transition-all ${
-                        isCopied
-                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/50'
-                          : 'bg-[#151b2b] hover:bg-[#1e273d] text-[#cbd5e1] border-[#2e3b55]'
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-mono flex items-center gap-1 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] ${
+                        isCopied ? 'luxury-btn-emerald' : 'luxury-btn-surface'
                       }`}
                     >
                       <span className="material-symbols-outlined text-xs">

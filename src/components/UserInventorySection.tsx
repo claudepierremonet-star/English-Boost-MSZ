@@ -11,10 +11,10 @@ import {
   getTransactionHistory,
   equipCharacter,
   sellCharacterOnMarketplace,
-  formatEditionNumber,
   type OwnedCardInstance
 } from '../utils/mszCoinsManager';
 import { MszCard3D } from './MszCard3D';
+import { useAppTheme } from '../theme/ThemeContext';
 
 interface UserInventorySectionProps {
   onOpenShop?: () => void;
@@ -25,11 +25,12 @@ export const UserInventorySection: React.FC<UserInventorySectionProps> = ({
   onOpenShop,
   onProfileUpdated
 }) => {
+  const { isDark } = useAppTheme();
   const [activeSubTab, setActiveSubTab] = useState<'cards' | 'transactions'>('cards');
-  const [instances, setInstances] = useState<OwnedCardInstance[]>(getOwnedCardInstances());
-  const [equippedId, setEquippedId] = useState<string>(getEquippedCharacterId());
-  const [balance, setBalance] = useState<number>(getMszCoinsBalance());
-  const [transactions, setTransactions] = useState<MszTransaction[]>(getTransactionHistory());
+  const [instances, setInstances] = useState<OwnedCardInstance[]>(() => getOwnedCardInstances());
+  const [equippedId, setEquippedId] = useState<string>(() => getEquippedCharacterId());
+  const [balance, setBalance] = useState<number>(() => getMszCoinsBalance());
+  const [transactions, setTransactions] = useState<MszTransaction[]>(() => getTransactionHistory());
 
   // Filter & Search
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -179,43 +180,45 @@ export const UserInventorySection: React.FC<UserInventorySectionProps> = ({
   return (
     <div className="flex flex-col gap-4 animate-fadeIn">
       {/* Portfolio Header HUD */}
-      <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#121c32] via-[#1a1236] to-[#0d1629] border border-[#f2ca50]/50 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#f2ca50] to-[#b4830c] text-[#2c1d00] flex items-center justify-center font-bold shadow-lg shadow-[#f2ca50]/20 shrink-0">
+      <div className="p-4 sm:p-5 rounded-2xl luxury-card-surface flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-12 h-12 rounded-2xl luxury-btn-gold flex items-center justify-center font-bold shrink-0">
             <span className="material-symbols-outlined text-2xl">style</span>
           </div>
 
-          <div className="flex flex-col">
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-mono text-[#f2ca50] font-bold uppercase tracking-widest bg-[#f2ca50]/15 px-2 py-0.5 rounded-full border border-[#f2ca50]/30">
-                REGISTRE OFFICIEL MSZ
+          <div className="flex flex-col min-w-0">
+            <div className="flex items-center gap-2 flex-wrap text-[10px] font-mono">
+              <span className={`font-bold uppercase tracking-widest ${isDark ? 'text-[#f2ca50]' : 'text-[#8a640b]'}`}>
+                Registre Officiel MSZ
               </span>
-              <span className="text-[10px] font-mono text-[#38bdf8]">
+              <span aria-hidden="true" className="text-[#99907c]">·</span>
+              <span className={isDark ? 'text-[#38bdf8]' : 'text-[#0369a1]'}>
                 Tirages 1/100 Certifiés
               </span>
             </div>
-            <h3 className="font-serif text-lg sm:text-xl font-bold text-white mt-0.5">
-              Mon Inventaire de Cartes & Transactions
+            <h3 className={`font-serif text-lg sm:text-xl font-bold mt-0.5 ${isDark ? 'text-[#f3f4f6]' : 'text-[#1c1917]'}`}>
+              Mon Inventaire de Cartes &amp; Transactions
             </h3>
-            <p className="text-xs text-[#cbd5e1]">
-              Consultez vos cartes acquises, leur numéro d'identité officiel et l'historique complet de votre portefeuille.
+            <p className={`text-xs ${isDark ? 'text-[#cbd5e1]' : 'text-[#57534e]'}`}>
+              Consultez vos cartes acquises, leur matricule certifié et l&apos;historique complet de votre portefeuille.
             </p>
           </div>
         </div>
 
-        {/* Stats Badges */}
+        {/* Stats Metrics */}
         <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto justify-between sm:justify-end">
-          <div className="flex flex-col items-center sm:items-end px-3 py-1.5 rounded-xl bg-[#070e1d] border border-white/10">
-            <span className="text-[9px] font-mono uppercase text-[#8391ac]">Cartes Détenues</span>
-            <span className="font-mono text-base font-black text-[#ffd700]">
-              {instances.length} <span className="text-xs text-[#8391ac] font-normal">/ {MSZ_CHARACTERS.length}</span>
+          <div className="flex flex-col items-center sm:items-end px-3 py-1.5 rounded-xl luxury-hairline-panel">
+            <span className="text-[9px] font-mono uppercase text-[#99907c]">Cartes</span>
+            <span className={`font-mono text-base font-black tabular-nums ${isDark ? 'text-[#ffd700]' : 'text-[#8a640b]'}`}>
+              {instances.length}{' '}
+              <span className="text-xs text-[#99907c] font-normal">/ {MSZ_CHARACTERS.length}</span>
             </span>
           </div>
 
-          <div className="flex flex-col items-center sm:items-end px-3 py-1.5 rounded-xl bg-[#070e1d] border border-[#f2ca50]/40">
-            <span className="text-[9px] font-mono uppercase text-[#f2ca50]">Valeur Estimée</span>
-            <span className="font-mono text-base font-black text-[#f2ca50]">
-              {portfolioEstimatedValue} <span className="text-xs font-normal">MSZ</span>
+          <div className="flex flex-col items-center sm:items-end px-3 py-1.5 rounded-xl luxury-hairline-panel">
+            <span className={`text-[9px] font-mono uppercase ${isDark ? 'text-[#f2ca50]' : 'text-[#8a640b]'}`}>Valeur</span>
+            <span className={`font-mono text-base font-black tabular-nums ${isDark ? 'text-[#f2ca50]' : 'text-[#8a640b]'}`}>
+              {portfolioEstimatedValue.toLocaleString()} <span className="text-xs font-normal">MSZ</span>
             </span>
           </div>
 
@@ -223,7 +226,7 @@ export const UserInventorySection: React.FC<UserInventorySectionProps> = ({
             <button
               type="button"
               onClick={onOpenShop}
-              className="px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-[#f2ca50] to-[#ffd700] hover:from-[#ffe088] text-[#2c2000] text-xs font-mono font-bold flex items-center gap-1 shadow-md active:scale-95 transition-all cursor-pointer shrink-0"
+              className="px-3.5 py-2.5 rounded-xl luxury-btn-gold text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer shrink-0 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffe088]"
               title="Acheter de nouvelles cartes dans la boutique"
             >
               <span className="material-symbols-outlined text-sm">storefront</span>
@@ -234,51 +237,48 @@ export const UserInventorySection: React.FC<UserInventorySectionProps> = ({
       </div>
 
       {/* Sub Tabs: Cartes Acquises vs Historique des Transactions */}
-      <div className="flex items-center justify-between gap-2 border-b border-[#232a3a] pb-2">
-        <div className="flex items-center gap-2">
+      <div className={`flex items-center justify-between gap-2 border-b pb-2.5 flex-wrap ${isDark ? 'border-[#232a3a]' : 'border-[#e2d9cc]'}`}>
+        <div className="flex items-center gap-2 flex-wrap" role="tablist" aria-label="Sections inventaire">
           <button
             type="button"
+            role="tab"
+            aria-selected={activeSubTab === 'cards'}
             onClick={() => setActiveSubTab('cards')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-              activeSubTab === 'cards'
-                ? 'bg-[#f2ca50] text-[#0c1322] shadow-md shadow-[#f2ca50]/20'
-                : 'bg-[#151f33] text-[#8391ac] hover:text-white'
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] ${
+              activeSubTab === 'cards' ? 'luxury-btn-gold' : 'luxury-btn-surface'
             }`}
           >
             <span className="material-symbols-outlined text-sm">style</span>
-            <span>Mes Cartes Acquises ({instances.length})</span>
+            <span>Mes Cartes ({instances.length})</span>
           </button>
 
           <button
             type="button"
+            role="tab"
+            aria-selected={activeSubTab === 'transactions'}
             onClick={() => setActiveSubTab('transactions')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-              activeSubTab === 'transactions'
-                ? 'bg-[#f2ca50] text-[#0c1322] shadow-md shadow-[#f2ca50]/20'
-                : 'bg-[#151f33] text-[#8391ac] hover:text-white'
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] ${
+              activeSubTab === 'transactions' ? 'luxury-btn-gold' : 'luxury-btn-surface'
             }`}
           >
             <span className="material-symbols-outlined text-sm">receipt_long</span>
-            <span>Historique des Transactions ({transactions.length})</span>
+            <span>Transactions ({transactions.length})</span>
           </button>
         </div>
 
-        <div className="hidden sm:flex items-center gap-1 text-[11px] font-mono text-[#d4c78f]">
-          <span className="material-symbols-outlined text-xs text-[#f2ca50]">monetization_on</span>
-          <span>Solde : {balance} MSZ</span>
+        <div className={`flex items-center gap-1 text-xs font-mono font-bold tabular-nums ${isDark ? 'text-[#d4c78f]' : 'text-[#785b24]'}`}>
+          <span className="material-symbols-outlined text-sm text-[#f2ca50]">monetization_on</span>
+          <span>Solde : {balance.toLocaleString()} MSZ</span>
         </div>
       </div>
 
-      {/* ================================================================ */}
-      {/* SUB-TAB 1: CARTES ACQUISES (WITH UNIQUE SERIAL NUMBER 1/100) */}
-      {/* ================================================================ */}
+      {/* SUB-TAB 1: CARTES ACQUISES */}
       {activeSubTab === 'cards' && (
         <div className="flex flex-col gap-3">
           {/* Controls: Search, Rarity Filter & Sort */}
-          <div className="p-3 rounded-xl bg-[#121929] border border-[#232a3a] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-            {/* Search */}
-            <div className="relative w-full sm:w-56">
-              <span className="material-symbols-outlined absolute left-2.5 top-2 text-sm text-[#8391ac]">
+          <div className="p-3 rounded-xl luxury-hairline-panel flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+            <div className="relative w-full sm:w-60">
+              <span className="material-symbols-outlined absolute left-2.5 top-2 text-sm text-[#99907c] pointer-events-none">
                 search
               </span>
               <input
@@ -286,18 +286,26 @@ export const UserInventorySection: React.FC<UserInventorySectionProps> = ({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Rechercher carte, matricule..."
-                className="w-full bg-[#0a101f] border border-[#2e3b55] rounded-lg pl-8 pr-2.5 py-1.5 text-xs text-white focus:border-[#f2ca50] focus:outline-none"
+                aria-label="Rechercher une carte ou un matricule"
+                className={`w-full rounded-lg pl-8 pr-2.5 py-1.5 text-xs border focus:border-[#f2ca50] focus:outline-none ${
+                  isDark
+                    ? 'bg-[#0a101f] border-[#2e3b55] text-white placeholder-[#78859e]'
+                    : 'bg-white border-[#d6cebe] text-[#1c1917] placeholder-[#78716c]'
+                }`}
               />
             </div>
 
-            {/* Rarity & Sort */}
             <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end flex-wrap">
-              <div className="flex items-center gap-1">
-                <span className="text-[10px] uppercase font-mono text-[#8391ac]">Rareté :</span>
+              <label className="flex items-center gap-1.5">
+                <span className="text-[10px] uppercase font-mono text-[#99907c]">Rareté</span>
                 <select
                   value={rarityFilter}
                   onChange={(e) => setRarityFilter(e.target.value)}
-                  className="bg-[#0a101f] border border-[#2e3b55] rounded-lg px-2 py-1 text-xs text-white font-mono focus:border-[#f2ca50] focus:outline-none"
+                  className={`rounded-lg px-2 py-1 text-xs font-mono border focus:border-[#f2ca50] focus:outline-none cursor-pointer ${
+                    isDark
+                      ? 'bg-[#0a101f] border-[#2e3b55] text-white'
+                      : 'bg-white border-[#d6cebe] text-[#1c1917]'
+                  }`}
                 >
                   <option value="all">Toutes</option>
                   <option value="Commune">Commune</option>
@@ -307,30 +315,37 @@ export const UserInventorySection: React.FC<UserInventorySectionProps> = ({
                   <option value="Mythique">Mythique</option>
                   <option value="Souveraine">Souveraine</option>
                 </select>
-              </div>
+              </label>
 
-              <div className="flex items-center gap-1">
-                <span className="text-[10px] uppercase font-mono text-[#8391ac]">Tri :</span>
+              <label className="flex items-center gap-1.5">
+                <span className="text-[10px] uppercase font-mono text-[#99907c]">Tri</span>
                 <select
                   value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as any)}
-                  className="bg-[#0a101f] border border-[#2e3b55] rounded-lg px-2 py-1 text-xs text-white font-mono focus:border-[#f2ca50] focus:outline-none"
+                  onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                  className={`rounded-lg px-2 py-1 text-xs font-mono border focus:border-[#f2ca50] focus:outline-none cursor-pointer ${
+                    isDark
+                      ? 'bg-[#0a101f] border-[#2e3b55] text-white'
+                      : 'bg-white border-[#d6cebe] text-[#1c1917]'
+                  }`}
                 >
                   <option value="serial_asc">N° Série (1 → 100)</option>
                   <option value="serial_desc">N° Série (100 → 1)</option>
                   <option value="level_desc">Niveau (Décroissant)</option>
                   <option value="date_desc">Obtention Récente</option>
                 </select>
-              </div>
+              </label>
             </div>
           </div>
 
-          {/* Cards List / Grid */}
           {displayedCards.length === 0 ? (
-            <div className="p-8 rounded-2xl bg-[#121929] border border-dashed border-[#232a3a] text-center flex flex-col items-center justify-center gap-2">
-              <span className="material-symbols-outlined text-4xl text-[#8391ac]">inventory_2</span>
-              <p className="text-sm font-serif text-[#dce2f8]">Aucune carte ne correspond à ces critères</p>
-              <p className="text-xs text-[#8391ac]">Ajustez vos filtres ou explorez la boutique pour débloquer de nouveaux personnages.</p>
+            <div className="p-8 rounded-2xl luxury-hairline-panel border-dashed text-center flex flex-col items-center justify-center gap-2">
+              <span className="material-symbols-outlined text-4xl text-[#99907c]">inventory_2</span>
+              <p className={`text-sm font-serif ${isDark ? 'text-[#dce2f8]' : 'text-[#1c1917]'}`}>
+                Aucune carte ne correspond à ces critères
+              </p>
+              <p className="text-xs text-[#99907c]">
+                Ajustez vos filtres ou explorez la boutique pour débloquer de nouveaux personnages.
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
@@ -342,22 +357,23 @@ export const UserInventorySection: React.FC<UserInventorySectionProps> = ({
                 return (
                   <div
                     key={`${character.id}-${instance.editionNumber}`}
-                    className={`p-3.5 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
-                      isEquipped
-                        ? 'bg-gradient-to-br from-[#1c273c] to-[#121c2e] border-[#ffd700] ring-1 ring-[#ffd700]/50 shadow-lg shadow-[#ffd700]/10'
-                        : 'bg-[#121929] border-[#232a3a] hover:border-[#f2ca50]/50'
+                    className={`p-4 rounded-2xl luxury-card-surface luxury-card-interactive flex flex-col justify-between gap-3 ${
+                      isEquipped ? 'ring-1 ring-[#f2ca50]/70' : ''
                     }`}
                   >
-                    {/* Top Row: Artwork, Name, Serial Number Badge */}
+                    {/* Top Row */}
                     <div className="flex items-start gap-3">
-                      <div
+                      <button
+                        type="button"
                         onClick={() => handleInspect(character, instance)}
-                        className="w-18 h-18 sm:w-20 sm:h-20 rounded-xl overflow-hidden border-2 border-white/20 shrink-0 bg-[#070e1d] shadow-md cursor-pointer group relative"
+                        className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden border border-[#f2ca50]/50 shrink-0 bg-[#070e1d] shadow-md cursor-pointer group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50]"
                         title="Cliquer pour inspecter la carte en 3D (Recto / Verso)"
+                        aria-label={`Inspecter ${character.name} en 3D`}
                       >
                         <img
                           src={character.image}
                           alt={character.name}
+                          referrerPolicy="no-referrer"
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                           onError={(e) => {
                             const target = e.currentTarget;
@@ -369,75 +385,70 @@ export const UserInventorySection: React.FC<UserInventorySectionProps> = ({
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
                           <span className="material-symbols-outlined text-sm">3d_rotation</span>
                         </div>
-                      </div>
+                      </button>
 
                       <div className="flex flex-col flex-1 min-w-0">
-                        {/* Serial Number & Edition Badge */}
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="px-2 py-0.5 rounded-md bg-gradient-to-r from-amber-400/25 to-yellow-300/25 text-[#ffd700] border border-[#f2ca50]/50 font-mono text-[10px] font-black tracking-wide shadow-sm">
+                        <div className="flex items-center gap-1.5 flex-wrap text-[10px] font-mono">
+                          <span className={`font-black tabular-nums ${isDark ? 'text-[#ffd700]' : 'text-[#8a640b]'}`}>
                             N° {instance.editionNumber}/{instance.maxSupply || 100}
                           </span>
-
                           {isFounder ? (
-                            <span className="px-1.5 py-0.2 rounded bg-amber-500/30 text-amber-200 border border-amber-300/60 font-mono text-[9px] font-black uppercase">
-                              ★ 1ère ÉDITION
-                            </span>
+                            <>
+                              <span aria-hidden="true" className="text-[#99907c]">·</span>
+                              <span className="font-bold text-amber-400">1ère Édition</span>
+                            </>
                           ) : isTopTen ? (
-                            <span className="px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-200 border border-cyan-400/50 font-mono text-[9px] font-bold">
-                              TOP 10 MINT
-                            </span>
+                            <>
+                              <span aria-hidden="true" className="text-[#99907c]">·</span>
+                              <span className={isDark ? 'text-cyan-300 font-bold' : 'text-cyan-700 font-bold'}>Top 10 Mint</span>
+                            </>
                           ) : null}
-
-                          <span className="text-[9px] font-mono text-[#8391ac] px-1.5 py-0.2 rounded bg-[#070e1d]">
-                            Niv. {character.level}
-                          </span>
+                          <span aria-hidden="true" className="text-[#99907c]">·</span>
+                          <span className="text-[#99907c] tabular-nums">Niv. {character.level}</span>
                         </div>
 
-                        {/* Character Name & Element */}
-                        <h4 className="font-serif text-base font-bold text-white truncate mt-1">
+                        <h4 className={`font-serif text-base font-bold truncate mt-1 ${isDark ? 'text-[#f3f4f6]' : 'text-[#1c1917]'}`}>
                           {character.name}
                         </h4>
-                        <span className="text-[10px] text-[#38bdf8] font-mono truncate">
-                          {character.element} &bull; Série {character.categoryId}
+                        <span className={`text-[11px] font-mono truncate ${isDark ? 'text-[#38bdf8]' : 'text-[#0369a1]'}`}>
+                          {character.element} · Série {character.categoryId}
                         </span>
-
-                        {/* Full Serial Code */}
-                        <span className="text-[9px] font-mono text-[#8391ac] truncate mt-0.5">
-                          Matricule : <strong className="text-[#d4c78f]">{instance.serialCode}</strong>
+                        <span className="text-[10px] font-mono text-[#99907c] truncate mt-0.5">
+                          Matricule : <strong className={isDark ? 'text-[#d4c78f]' : 'text-[#785b24]'}>{instance.serialCode}</strong>
                         </span>
                       </div>
                     </div>
 
                     {/* Stats & Passive Preview */}
-                    <div className="p-2 rounded-xl bg-[#070e1d]/80 border border-white/5 flex flex-col gap-1.5 text-[10px]">
-                      <div className="grid grid-cols-4 gap-1 font-mono text-center">
-                        <div className="p-1 rounded bg-[#101726]">
-                          <span className="text-[8px] text-[#8391ac] block">ÉLOC</span>
-                          <span className="text-cyan-400 font-bold">{character.stats.elocution}</span>
+                    <div className="p-2.5 rounded-xl luxury-hairline-panel flex flex-col gap-1.5 text-[10px]">
+                      <div className="grid grid-cols-4 gap-1.5 font-mono text-center tabular-nums">
+                        <div className="p-1 rounded">
+                          <span className="text-[9px] text-[#99907c] block">ÉLOC</span>
+                          <span className={isDark ? 'text-cyan-300 font-bold' : 'text-cyan-700 font-bold'}>{character.stats.elocution}</span>
                         </div>
-                        <div className="p-1 rounded bg-[#101726]">
-                          <span className="text-[8px] text-[#8391ac] block">MÉM</span>
-                          <span className="text-purple-400 font-bold">{character.stats.memoire}</span>
+                        <div className="p-1 rounded">
+                          <span className="text-[9px] text-[#99907c] block">MÉM</span>
+                          <span className={isDark ? 'text-purple-300 font-bold' : 'text-purple-700 font-bold'}>{character.stats.memoire}</span>
                         </div>
-                        <div className="p-1 rounded bg-[#101726]">
-                          <span className="text-[8px] text-[#8391ac] block">VIT</span>
-                          <span className="text-amber-400 font-bold">{character.stats.vitesse}</span>
+                        <div className="p-1 rounded">
+                          <span className="text-[9px] text-[#99907c] block">VIT</span>
+                          <span className={isDark ? 'text-amber-300 font-bold' : 'text-amber-700 font-bold'}>{character.stats.vitesse}</span>
                         </div>
-                        <div className="p-1 rounded bg-[#101726]">
-                          <span className="text-[8px] text-[#8391ac] block">MAÎT</span>
-                          <span className="text-emerald-400 font-bold">{character.stats.maitrise}</span>
+                        <div className="p-1 rounded">
+                          <span className="text-[9px] text-[#99907c] block">MAÎT</span>
+                          <span className={isDark ? 'text-emerald-300 font-bold' : 'text-emerald-700 font-bold'}>{character.stats.maitrise}</span>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1 text-[9px] text-[#ffe082] truncate">
+                      <div className={`flex items-center gap-1.5 text-[10px] truncate ${isDark ? 'text-[#ffe082]' : 'text-[#785b24]'}`}>
                         <span className="material-symbols-outlined text-xs text-[#f2ca50] shrink-0">stars</span>
                         <span className="truncate">{character.passiveBonus}</span>
                       </div>
                     </div>
 
                     {/* Card Actions Footer */}
-                    <div className="flex items-center justify-between pt-1 border-t border-white/10 text-xs">
-                      <span className="text-[9px] font-mono text-[#8391ac]">
+                    <div className={`flex items-center justify-between pt-2 border-t text-xs ${isDark ? 'border-white/10' : 'border-[#e2d9cc]'}`}>
+                      <span className="text-[10px] font-mono text-[#99907c]">
                         Obtenu le {new Date(instance.obtainedAt).toLocaleDateString('fr-FR')}
                       </span>
 
@@ -445,7 +456,7 @@ export const UserInventorySection: React.FC<UserInventorySectionProps> = ({
                         <button
                           type="button"
                           onClick={() => handleInspect(character, instance)}
-                          className="px-2 py-1 rounded-lg bg-[#19243d] hover:bg-[#25355a] text-[#dce2f8] text-[10px] font-mono font-bold flex items-center gap-1 transition-all cursor-pointer"
+                          className="px-2.5 py-1 rounded-lg luxury-btn-sapphire text-[10px] font-mono font-bold flex items-center gap-1 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#38bdf8]"
                           title="Voir la carte en 3D avec son verso"
                         >
                           <span className="material-symbols-outlined text-xs">3d_rotation</span>
@@ -453,15 +464,15 @@ export const UserInventorySection: React.FC<UserInventorySectionProps> = ({
                         </button>
 
                         {isEquipped ? (
-                          <span className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-amber-400 to-yellow-300 text-slate-950 text-[10px] font-mono font-black flex items-center gap-1 shadow-sm">
+                          <span className="px-2.5 py-1 rounded-lg luxury-btn-gold text-[10px] font-mono font-black flex items-center gap-1">
                             <span className="material-symbols-outlined text-xs">verified</span>
-                            Équipé
+                            <span>Équipé</span>
                           </span>
                         ) : (
                           <button
                             type="button"
                             onClick={() => handleEquip(character)}
-                            className="px-2.5 py-1 rounded-lg bg-[#1e293b] hover:bg-[#f2ca50] text-[#ffe082] hover:text-[#0c1322] border border-[#f2ca50]/40 text-[10px] font-mono font-bold transition-all shadow-sm active:scale-95 cursor-pointer"
+                            className="px-2.5 py-1 rounded-lg luxury-btn-amber-soft text-[10px] font-mono font-bold cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50]"
                           >
                             Équiper
                           </button>
@@ -470,7 +481,7 @@ export const UserInventorySection: React.FC<UserInventorySectionProps> = ({
                         <button
                           type="button"
                           onClick={() => handleOpenSell(character, instance)}
-                          className="px-2 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white border border-rose-500/40 text-[10px] font-mono font-bold transition-all shadow-sm active:scale-95 cursor-pointer"
+                          className="px-2.5 py-1 rounded-lg luxury-btn-ruby text-[10px] font-mono font-bold cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
                           title="Vendre sur la bourse P2P"
                         >
                           Vendre
@@ -485,15 +496,12 @@ export const UserInventorySection: React.FC<UserInventorySectionProps> = ({
         </div>
       )}
 
-      {/* ================================================================ */}
-      {/* SUB-TAB 2: HISTORIQUE DES TRANSACTIONS (AUDIT LEDGER) */}
-      {/* ================================================================ */}
+      {/* SUB-TAB 2: TRANSACTIONS */}
       {activeSubTab === 'transactions' && (
         <div className="flex flex-col gap-3">
-          {/* Filter Pills for Transactions */}
-          <div className="p-3 rounded-xl bg-[#121929] border border-[#232a3a] flex items-center justify-between gap-2 text-xs overflow-x-auto">
+          <div className="p-3 rounded-xl luxury-hairline-panel flex items-center justify-between gap-2 text-xs overflow-x-auto">
             <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-mono uppercase text-[#8391ac] px-1">Filtrer :</span>
+              <span className="text-[10px] font-mono uppercase text-[#99907c] px-1">Filtrer</span>
               {[
                 { id: 'all', label: 'Toutes' },
                 { id: 'rewards', label: 'Gains Jeux & Cursus' },
@@ -504,10 +512,8 @@ export const UserInventorySection: React.FC<UserInventorySectionProps> = ({
                   key={tab.id}
                   type="button"
                   onClick={() => setTxTypeFilter(tab.id)}
-                  className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold transition-all cursor-pointer whitespace-nowrap ${
-                    txTypeFilter === tab.id
-                      ? 'bg-[#f2ca50] text-[#0c1322] shadow-sm'
-                      : 'bg-[#0a101f] text-[#8391ac] hover:text-white'
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold cursor-pointer whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] ${
+                    txTypeFilter === tab.id ? 'luxury-btn-gold' : 'luxury-btn-surface'
                   }`}
                 >
                   {tab.label}
@@ -515,15 +521,14 @@ export const UserInventorySection: React.FC<UserInventorySectionProps> = ({
               ))}
             </div>
 
-            <span className="text-[10px] font-mono text-[#8391ac] shrink-0">
-              {filteredTransactions.length} enregistrements
+            <span className="text-[10px] font-mono text-[#99907c] shrink-0 tabular-nums">
+              {filteredTransactions.length} opérations
             </span>
           </div>
 
-          {/* Transactions List */}
-          <div className="p-4 rounded-2xl bg-[#121929] border border-[#232a3a] shadow-lg flex flex-col divide-y divide-[#232a3a] max-h-[460px] overflow-y-auto">
+          <div className={`p-4 rounded-2xl luxury-card-surface flex flex-col divide-y max-h-[460px] overflow-y-auto ${isDark ? 'divide-[#232a3a]' : 'divide-[#e2d9cc]'}`}>
             {filteredTransactions.length === 0 ? (
-              <div className="py-8 text-center text-xs text-[#8391ac] font-mono">
+              <div className="py-8 text-center text-xs text-[#99907c] font-mono">
                 Aucune transaction enregistrée dans cette catégorie.
               </div>
             ) : (
@@ -552,42 +557,43 @@ export const UserInventorySection: React.FC<UserInventorySectionProps> = ({
                 return (
                   <div key={tx.id} className="py-3 flex items-center justify-between gap-3 text-xs">
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className={`w-9 h-9 rounded-xl bg-[#0a101f] border border-white/5 flex items-center justify-center shrink-0 ${iconColor}`}>
+                      <div className={`w-9 h-9 rounded-xl luxury-hairline-panel flex items-center justify-center shrink-0 ${iconColor}`}>
                         <span className="material-symbols-outlined text-lg">{iconName}</span>
                       </div>
 
                       <div className="flex flex-col min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-white font-medium truncate">
+                          <span className={`font-medium truncate ${isDark ? 'text-[#f3f4f6]' : 'text-[#1c1917]'}`}>
                             {tx.description}
                           </span>
                           {tx.serialCode && (
-                            <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-[#ffd700] border border-amber-400/40 font-mono text-[9px] font-bold">
-                              {tx.serialCode}
+                            <span className={`font-mono text-[10px] font-bold ${isDark ? 'text-[#ffd700]' : 'text-[#8a640b]'}`}>
+                              · {tx.serialCode}
                             </span>
                           )}
                         </div>
 
-                        <span className="text-[10px] text-[#8391ac] font-mono">
+                        <span className="text-[10px] text-[#99907c] font-mono">
                           {new Date(tx.date).toLocaleDateString('fr-FR', {
                             day: 'numeric',
                             month: 'short',
                             hour: '2-digit',
                             minute: '2-digit'
-                          })} &bull; {tx.type}
+                          })}{' '}
+                          · {tx.type}
                         </span>
                       </div>
                     </div>
 
                     <div className="flex flex-col items-end shrink-0">
                       <span
-                        className={`font-mono font-black text-sm ${
-                          isGain ? 'text-emerald-400' : 'text-rose-400'
+                        className={`font-mono font-black text-sm tabular-nums ${
+                          isGain ? (isDark ? 'text-emerald-400' : 'text-emerald-700') : isDark ? 'text-rose-400' : 'text-rose-700'
                         }`}
                       >
                         {isGain ? `+${tx.amount}` : tx.amount} MSZ
                       </span>
-                      <span className="text-[8px] font-mono text-[#8391ac] uppercase">
+                      <span className="text-[9px] font-mono text-[#99907c] uppercase">
                         {isGain ? 'Crédit' : 'Débit'}
                       </span>
                     </div>
@@ -599,19 +605,20 @@ export const UserInventorySection: React.FC<UserInventorySectionProps> = ({
         </div>
       )}
 
-      {/* ================================================================ */}
       {/* 3D INSPECT MODAL */}
-      {/* ================================================================ */}
       {inspectedChar && inspectedInstance && (
         <div
-          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-xl flex items-center justify-center p-4 animate-fadeIn"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Inspection 3D de ${inspectedChar.name}`}
+          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-xl flex items-center justify-center p-4"
           onClick={() => {
             setInspectedChar(null);
             setInspectedInstance(null);
           }}
         >
           <div
-            className="w-full max-w-md p-6 rounded-3xl bg-[#0c1426] border-2 border-[#f2ca50]/70 shadow-2xl flex flex-col items-center gap-5 relative animate-scaleUp"
+            className="w-full max-w-md p-6 rounded-3xl luxury-card-surface shadow-2xl flex flex-col items-center gap-5 relative"
             onClick={(e) => e.stopPropagation()}
           >
             <button
@@ -620,7 +627,8 @@ export const UserInventorySection: React.FC<UserInventorySectionProps> = ({
                 setInspectedChar(null);
                 setInspectedInstance(null);
               }}
-              className="absolute top-4 right-4 w-9 h-9 rounded-full bg-[#19243d] flex items-center justify-center text-[#8391ac] hover:text-white"
+              aria-label="Fermer l'inspection 3D"
+              className="absolute top-4 right-4 w-9 h-9 rounded-full luxury-btn-surface flex items-center justify-center cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50]"
             >
               <span className="material-symbols-outlined text-sm">close</span>
             </button>
@@ -642,25 +650,26 @@ export const UserInventorySection: React.FC<UserInventorySectionProps> = ({
         </div>
       )}
 
-      {/* ================================================================ */}
-      {/* SELL MODAL (P2P TRANSFER WITH SERIAL NUMBER) */}
-      {/* ================================================================ */}
+      {/* SELL MODAL */}
       {sellModalChar && sellModalInstance && (
         <div
-          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Vendre ${sellModalChar.name} sur la bourse P2P`}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
           onClick={() => {
             setSellModalChar(null);
             setSellModalInstance(null);
           }}
         >
           <div
-            className="w-full max-w-md p-6 rounded-2xl bg-[#0c1426] border border-[#f2ca50]/50 shadow-2xl flex flex-col gap-4 relative"
+            className="w-full max-w-md p-6 rounded-2xl luxury-card-surface shadow-2xl flex flex-col gap-4 relative"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <h3 className="font-serif text-lg font-bold text-white flex items-center gap-2">
+            <div className={`flex items-center justify-between border-b pb-3 ${isDark ? 'border-white/10' : 'border-[#e2d9cc]'}`}>
+              <h3 className={`font-serif text-lg font-bold flex items-center gap-2 ${isDark ? 'text-[#f3f4f6]' : 'text-[#1c1917]'}`}>
                 <span className="material-symbols-outlined text-rose-400">sell</span>
-                Vendre « {sellModalChar.name} » sur la Bourse P2P
+                <span>Vendre « {sellModalChar.name} »</span>
               </h3>
               <button
                 type="button"
@@ -668,37 +677,43 @@ export const UserInventorySection: React.FC<UserInventorySectionProps> = ({
                   setSellModalChar(null);
                   setSellModalInstance(null);
                 }}
-                className="text-[#8391ac] hover:text-white"
+                aria-label="Annuler la mise en vente"
+                className="w-8 h-8 rounded-full luxury-btn-surface flex items-center justify-center cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50]"
               >
                 <span className="material-symbols-outlined text-sm">close</span>
               </button>
             </div>
 
-            <div className="p-3 rounded-xl bg-[#070e1d] border border-[#ffd700]/30 flex items-center justify-between">
-              <span className="text-xs font-mono text-[#d4c78f]">Numéro d'Identité Transféré :</span>
-              <span className="text-xs font-mono font-black text-[#ffd700]">
+            <div className="p-3 rounded-xl luxury-hairline-panel flex items-center justify-between">
+              <span className={`text-xs font-mono ${isDark ? 'text-[#d4c78f]' : 'text-[#785b24]'}`}>
+                Numéro d&apos;identité transféré :
+              </span>
+              <span className={`text-xs font-mono font-black ${isDark ? 'text-[#ffd700]' : 'text-[#8a640b]'}`}>
                 {sellModalInstance.serialCode}
               </span>
             </div>
 
-            <p className="text-xs text-[#d0c5af] leading-relaxed">
-              Définissez votre prix de vente en MSZ Coins. La carte sera mise en ligne avec son numéro de série certifié, et vous recevrez immédiatement 90% du montant à titre d'avance.
+            <p className={`text-xs leading-relaxed ${isDark ? 'text-[#d0c5af]' : 'text-[#57534e]'}`}>
+              Définissez votre prix de vente en MSZ Coins. La carte sera mise en ligne avec son numéro de série certifié, et vous recevrez immédiatement 90% du montant à titre d&apos;avance.
             </p>
 
-            <div className="flex flex-col gap-1.5 bg-[#070e1d] p-4 rounded-xl border border-white/5">
-              <label className="text-xs font-mono text-[#8391ac]">Prix demandé (MSZ Coins) :</label>
+            <div className="flex flex-col gap-1.5 luxury-hairline-panel p-4 rounded-xl">
+              <label htmlFor="msz-sell-price-input" className="text-xs font-mono text-[#99907c]">
+                Prix demandé (MSZ Coins) :
+              </label>
               <div className="flex items-center gap-2">
                 <input
+                  id="msz-sell-price-input"
                   type="number"
                   min={10}
                   max={5000}
                   value={sellPriceInput}
-                  onChange={(e) => setSellPriceInput(parseInt(e.target.value, 10) || 10)}
-                  className="bg-[#121929] border border-[#2e3b55] rounded-xl px-3 py-2 text-base font-mono font-bold text-white focus:border-[#f2ca50] focus:outline-none w-36"
+                  onChange={(e) => setSellPriceInput(Math.max(10, parseInt(e.target.value, 10) || 10))}
+                  className="rounded-xl px-3 py-2 text-base font-mono font-bold border focus:border-[#f2ca50] focus:outline-none w-36 tabular-nums"
                 />
-                <span className="text-sm font-mono text-[#f2ca50] font-black">MSZ Coins</span>
+                <span className={`text-sm font-mono font-black ${isDark ? 'text-[#f2ca50]' : 'text-[#8a640b]'}`}>MSZ Coins</span>
               </div>
-              <span className="text-[10px] text-emerald-400 font-mono mt-1">
+              <span className={`text-[11px] font-mono mt-1 tabular-nums ${isDark ? 'text-emerald-400' : 'text-emerald-700'}`}>
                 Avance immédiate créditée : {Math.floor(sellPriceInput * 0.9)} MSZ Coins
               </span>
             </div>
@@ -710,14 +725,14 @@ export const UserInventorySection: React.FC<UserInventorySectionProps> = ({
                   setSellModalChar(null);
                   setSellModalInstance(null);
                 }}
-                className="px-4 py-2 rounded-xl bg-[#19243d] text-[#8391ac] text-xs font-mono"
+                className="px-4 py-2 rounded-xl luxury-btn-surface text-xs font-mono cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50]"
               >
                 Annuler
               </button>
               <button
                 type="button"
                 onClick={handleConfirmSell}
-                className="px-5 py-2 rounded-xl bg-gradient-to-r from-rose-500 to-amber-500 text-white font-mono font-bold text-xs shadow-md shadow-rose-500/20 active:scale-95 transition-all cursor-pointer"
+                className="px-5 py-2 rounded-xl luxury-btn-ruby font-mono font-bold text-xs cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
               >
                 Confirmer la Mise en Vente
               </button>
@@ -728,8 +743,8 @@ export const UserInventorySection: React.FC<UserInventorySectionProps> = ({
 
       {/* Floating Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 inset-x-6 z-50 flex justify-center pointer-events-none animate-fadeIn">
-          <div className="bg-[#152342]/95 border border-[#f2ca50]/70 text-[#ffe082] px-5 py-2.5 rounded-full shadow-2xl flex items-center gap-2 text-xs font-semibold backdrop-blur-md">
+        <div className="fixed bottom-20 inset-x-6 z-50 flex justify-center pointer-events-none">
+          <div className="luxury-card-surface text-[#ffe082] px-5 py-2.5 rounded-full shadow-2xl flex items-center gap-2 text-xs font-semibold backdrop-blur-md">
             <span className="material-symbols-outlined text-base text-[#f2ca50]">check_circle</span>
             <span>{toastMessage}</span>
           </div>

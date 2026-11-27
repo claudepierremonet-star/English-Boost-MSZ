@@ -323,17 +323,20 @@ export const BADGES_CATALOG: Omit<AcademicBadge, 'currentProgress' | 'isUnlocked
  * Dynamically evaluate all badges based on the user's live profile and attempt records
  */
 export function computeUserBadges(user: UserProfile, attempts: LearningAttempt[] = []): AcademicBadge[] {
-  const totalXp = user.stats.totalXp || 0;
-  const streak = user.stats.streakDays || 0;
-  const completedLessons = user.stats.completedModules || 0;
-  const advBossCount = user.englishAdventure?.bossDefeatedIslandIds?.length || 0;
-  const advTotalStars = user.englishAdventure?.totalStars || 0;
+  const stats = user?.stats;
+  const totalXp = stats?.totalXp ?? 0;
+  const streak = stats?.streakDays ?? 0;
+  const completedLessons = stats?.completedModules ?? 0;
+  const masteryPct = stats?.masteryPercentage ?? 0;
+  const studyMinutesToday = stats?.studyMinutesToday ?? 0;
+  const advBossCount = user?.englishAdventure?.bossDefeatedIslandIds?.length ?? 0;
+  const advTotalStars = user?.englishAdventure?.totalStars ?? 0;
 
   // Max dictation score recorded
   const dictationAttempts = attempts.filter((a) => a.moduleType === 'dictation');
   const bestDictationScore = dictationAttempts.length > 0
     ? Math.max(...dictationAttempts.map((a) => a.score || 0))
-    : (user.stats.masteryPercentage >= 75 ? 96 : 80); // aligned baseline
+    : (masteryPct >= 75 ? 96 : 80); // aligned baseline
 
   // Max quiz score recorded
   const quizAttempts = attempts.filter((a) => a.moduleType === 'quiz');
@@ -341,11 +344,11 @@ export function computeUserBadges(user: UserProfile, attempts: LearningAttempt[]
     ? Math.max(...quizAttempts.map((a) => a.score || 0))
     : 100;
 
-  const unlockedSet = new Set(user.unlockedBadgeIds || []);
+  const unlockedSet = new Set(user?.unlockedBadgeIds || []);
 
   // Check if study occurred in morning or has studyMinutesToday
   const hasMorningSession =
-    user.stats.studyMinutesToday > 0 ||
+    studyMinutesToday > 0 ||
     streak > 0 ||
     new Date().getHours() < 12;
 

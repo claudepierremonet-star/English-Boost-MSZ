@@ -171,6 +171,94 @@ export function selectAndLoadSkillsForTask(
   return { selection, context };
 }
 
+export interface GlobalAgentContextSnapshot {
+  sourceRegistry: 'skills/index.json';
+  generatedAt: string;
+  totalSkills: number;
+  enabledCount: number;
+  disabledCount: number;
+  loadedCount: number;
+  totalBytes: number;
+  activeSkillIds: string[];
+  disabledSkillIds: string[];
+  context: AgentWorkingContext;
+  hasSimulatedSkills: false;
+}
+
+export function buildGlobalAgentContext(workspaceRoot: string): GlobalAgentContextSnapshot {
+  const registry = readValidatedRegistry(workspaceRoot);
+  const enabledSkills = registry.skills.filter((s) => s.enabled);
+  const disabledSkills = registry.skills.filter((s) => !s.enabled);
+
+  const selectedMatches = enabledSkills.map((skill) => ({
+    skill,
+    score: skill.priority,
+    matchedTriggers: ['global-agent-context'],
+    reason: 'Activée dans le contexte global de l’agent (skills/index.json)'
+  }));
+
+  const context = loadSkillInstructionsIntoContext(
+    'Contexte global de l’agent (AI Studio Master Skills actives)',
+    selectedMatches,
+    { workspaceRoot }
+  );
+
+  const totalBytes = context.loadedSkills.reduce((sum, item) => sum + item.contentBytes, 0);
+
+  return {
+    sourceRegistry: 'skills/index.json',
+    generatedAt: context.generatedAt,
+    totalSkills: registry.skills.length,
+    enabledCount: enabledSkills.length,
+    disabledCount: disabledSkills.length,
+    loadedCount: context.loadedSkills.length,
+    totalBytes,
+    activeSkillIds: enabledSkills.map((s) => s.id),
+    disabledSkillIds: disabledSkills.map((s) => s.id),
+    context,
+    hasSimulatedSkills: false
+  };
+}
+
+export async function bulkToggleSkillsEnabled(
+  workspaceRoot: string,
+  enabled: boolean,
+  skillIds?: string[]
+): Promise<{ snapshot: SkillsRegistrySnapshot; globalContext: GlobalAgentContextSnapshot }> {
+  const targetSet =
+    Array.isArray(skillIds) && skillIds.length > 0
+      ? new Set(skillIds.filter((id) => /^[a-z0-9-]+$/.test(id)))
+      : null;
+
+  const task = writeMutex.then(async () => {
+    const filePath = getRegistryFilePath(workspaceRoot);
+    const registry = readValidatedRegistry(workspaceRoot);
+
+    registry.skills = registry.skills.map((skill) => {
+      if (targetSet && !targetSet.has(skill.id)) {
+        return skill;
+      }
+      return {
+        ...skill,
+        enabled: Boolean(enabled)
+      };
+    });
+    registry.updatedAt = new Date().toISOString();
+
+    const tempPath = `${filePath}.tmp`;
+    await fs.promises.writeFile(tempPath, `${JSON.stringify(registry, null, 2)}\n`, 'utf-8');
+    await fs.promises.rename(tempPath, filePath);
+  });
+
+  writeMutex = task.catch(() => undefined);
+  await task;
+
+  return {
+    snapshot: getRegistrySnapshot(workspaceRoot),
+    globalContext: buildGlobalAgentContext(workspaceRoot)
+  };
+}
+
 export function getSkillInstructionsDetails(
   workspaceRoot: string,
   skillId: string

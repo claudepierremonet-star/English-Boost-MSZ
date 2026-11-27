@@ -461,7 +461,7 @@ const MszShopCard3D: React.FC<{
           {/* Limited Edition Serial Badge (1/100) */}
           <div className="relative z-10 flex items-center justify-between px-2.5 py-1 rounded-xl bg-[#070e1d]/90 border border-[#f2ca50]/30 shadow-inner mt-1">
             <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#f2ca50] animate-pulse" />
+              <span className="w-1.5 h-1.5 rounded-full bg-[#f2ca50]" />
               <span className="text-[9px] font-mono text-[#d4c78f] uppercase font-bold tracking-wider">
                 {isOwned ? 'Exemplaire Certifié' : 'Tirage Limité 100 Ex.'}
               </span>
@@ -579,12 +579,12 @@ const MszShopCard3D: React.FC<{
                     e.stopPropagation();
                     onEquip(character);
                   }}
-                  className="px-2.5 py-1 rounded-xl bg-[#1e293b] hover:bg-[#f2ca50] text-[#ffe082] hover:text-[#0c1322] border border-[#f2ca50]/40 text-xs font-mono font-bold transition-all shadow-sm active:scale-95 cursor-pointer"
+                  className="px-2.5 py-1 rounded-xl luxury-btn-amber-soft text-xs font-mono font-bold cursor-pointer"
                 >
                   Équiper
                 </button>
               ) : isSoldOut ? (
-                <span className="px-2 py-1 rounded-xl bg-rose-950/70 border border-rose-500/50 text-rose-300 text-[10px] font-mono font-bold">
+                <span className="px-2 py-1 rounded-xl luxury-btn-ruby text-[10px] font-mono font-bold">
                   Bourse P2P
                 </span>
               ) : (
@@ -595,10 +595,10 @@ const MszShopCard3D: React.FC<{
                     onBuy(character);
                   }}
                   disabled={!canAfford}
-                  className={`px-3 py-1 rounded-xl text-xs font-mono font-black flex items-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer ${
+                  className={`px-3 py-1 rounded-xl text-xs font-mono font-black flex items-center gap-1.5 cursor-pointer ${
                     canAfford
-                      ? 'bg-gradient-to-r from-[#f2ca50] to-[#ffd700] hover:from-[#ffe088] hover:to-[#ffe566] text-[#2c2000]'
-                      : 'bg-[#1e293b]/90 border border-white/10 text-[#8391ac] opacity-75'
+                      ? 'luxury-btn-gold'
+                      : 'luxury-btn-surface opacity-70'
                   }`}
                   title={canAfford ? 'Acheter avec vos MSZ Coins' : 'MSZ Coins insuffisants'}
                 >
@@ -656,7 +656,7 @@ const MszShopCard3D: React.FC<{
                 e.stopPropagation();
                 setIsFlipped(false);
               }}
-              className="p-1.5 rounded-lg bg-[#19243d] hover:bg-[#25355a] border border-white/20 text-[#ffe082] text-xs transition-all shadow-sm active:scale-95 cursor-pointer"
+              className="p-1.5 rounded-lg luxury-btn-surface text-[#ffe082] text-xs cursor-pointer"
               title="Revenir au Recto"
             >
               <span className="material-symbols-outlined text-sm">undo</span>
@@ -763,7 +763,7 @@ const MszShopCard3D: React.FC<{
                       e.stopPropagation();
                       onEquip(character);
                     }}
-                    className="px-3 py-1.5 rounded-lg bg-[#1e293b] hover:bg-[#f2ca50] text-[#ffe082] hover:text-[#0c1322] border border-[#f2ca50]/40 text-xs font-mono font-bold transition-all shadow-sm active:scale-95 cursor-pointer"
+                    className="px-3 py-1.5 rounded-lg luxury-btn-amber-soft text-xs font-mono font-bold cursor-pointer"
                   >
                     Équiper
                   </button>
@@ -780,10 +780,10 @@ const MszShopCard3D: React.FC<{
                     onBuy(character);
                   }}
                   disabled={!canAfford}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1 transition-all shadow-md active:scale-95 cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1 cursor-pointer ${
                     canAfford
-                      ? 'bg-gradient-to-r from-[#f2ca50] to-[#ffd700] text-[#2c2000]'
-                      : 'bg-[#1e293b] text-[#8391ac] border border-white/10'
+                      ? 'luxury-btn-gold'
+                      : 'luxury-btn-surface opacity-70'
                   }`}
                 >
                   <span>Acheter ({character.price} MSZ)</span>

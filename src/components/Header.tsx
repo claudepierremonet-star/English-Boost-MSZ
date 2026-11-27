@@ -81,8 +81,8 @@ export const Header: React.FC<HeaderProps> = ({
     <header
       className={`fixed top-0 w-full z-40 transition-all duration-300 ${
         isReadingMode
-          ? 'bg-[#0c1322]/65 backdrop-blur-md border-b border-[#232a3a]/35 shadow-none'
-          : 'bg-[#0c1322]/90 backdrop-blur-xl border-b border-[#232a3a]/80 shadow-[0_4px_20px_rgba(0,0,0,0.5)]'
+          ? 'bg-[#090f1d]/70 backdrop-blur-md border-b border-[#d4af37]/15 shadow-none'
+          : 'bg-[#090f1d]/92 backdrop-blur-xl border-b border-[#d4af37]/22 shadow-[0_8px_28px_rgba(2,6,18,0.58)]'
       }`}
       style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 10px)' }}
     >
@@ -147,7 +147,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={triggerSync}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-950/80 border border-amber-500/50 text-[11px] text-amber-300 font-mono font-bold shadow-sm"
+              className="luxury-btn-amber-soft inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-mono font-bold shadow-sm cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50]"
               title="Mode Hors-Ligne : les exercices et le score sont enregistrés dans IndexedDB local"
             >
               <span className="material-symbols-outlined text-[13px]">wifi_off</span>
@@ -155,7 +155,7 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           ) : isSyncing ? (
             <div
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-[#232a3a] border border-[#f2ca50]/40 text-[11px] text-[#f2ca50] font-mono"
+              className="luxury-btn-surface inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] text-[#f2ca50] font-mono"
               title="Synchronisation automatique avec Cloud Firestore..."
             >
               <span className="material-symbols-outlined text-[13px] animate-spin">sync</span>
@@ -165,7 +165,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={triggerSync}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#f2ca50]/20 hover:bg-[#f2ca50]/30 border border-[#f2ca50]/50 text-[11px] text-[#f2ca50] font-mono font-bold transition-all active:scale-95"
+              className="luxury-btn-amber-soft inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-mono font-bold cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50]"
               title={`${pendingCount} opération(s) en attente. Cliquer pour synchroniser avec Cloud Firestore.`}
             >
               <span className="material-symbols-outlined text-[13px]">cloud_upload</span>
@@ -184,9 +184,9 @@ export const Header: React.FC<HeaderProps> = ({
                 type="button"
                 onClick={onNavigateCursus}
                 aria-label="Accéder au cursus 6e à Terminale"
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#232a3a]/80 hover:bg-[#2e3545] border border-[#f2ca50]/30 text-xs font-bold text-[#f2ca50] hover:text-[#ffe088] transition-all active:scale-95 cursor-pointer"
+                className="luxury-btn-surface inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold text-[#f2ca50] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50]"
               >
-                <span className="material-symbols-outlined text-[15px]">school</span>
+                <span className="material-symbols-outlined text-[15px] text-[#f2ca50]">school</span>
                 <span className="font-mono text-[11px] uppercase tracking-wider">Cursus 6e-Tle</span>
               </button>
             </MotionTooltip>
@@ -203,11 +203,11 @@ export const Header: React.FC<HeaderProps> = ({
                 type="button"
                 onClick={onOpenLevelCelebration}
                 aria-label={`Niveau Académique ${academicLevel}`}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-500/20 via-[#f2ca50]/20 to-amber-600/20 hover:from-amber-500/35 hover:to-[#f2ca50]/40 border border-[#f2ca50]/60 text-xs font-bold text-[#f2ca50] hover:text-[#ffe088] transition-all active:scale-95 shadow-sm cursor-pointer"
+                className="luxury-btn-amber-soft inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold shadow-sm cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50]"
               >
-                <span className="material-symbols-outlined text-[15px] text-[#f2ca50]">military_tech</span>
+                <span className="material-symbols-outlined text-[15px] text-[#fce28b]">military_tech</span>
                 <span className="font-mono text-[11px] font-extrabold tracking-wide">Niv. {academicLevel}</span>
-                <span className="hidden lg:inline text-[9px] font-mono text-[#d0c5af]/80">({xpInLevel}%)</span>
+                <span className="hidden lg:inline text-[9px] font-mono opacity-80">({xpInLevel}%)</span>
               </button>
             </MotionTooltip>
           )}
@@ -223,9 +223,9 @@ export const Header: React.FC<HeaderProps> = ({
                 type="button"
                 onClick={onNavigateLeaderboard}
                 aria-label="Consulter le classement hebdomadaire"
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-[#b45309]/30 to-[#f59e0b]/20 hover:from-[#b45309]/50 hover:to-[#f59e0b]/30 border border-[#f2ca50]/50 text-xs font-bold text-[#f2ca50] hover:text-[#ffe088] transition-all active:scale-95 shadow-sm cursor-pointer"
+                className="luxury-btn-amber-soft inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold shadow-sm cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50]"
               >
-                <span className="material-symbols-outlined text-[15px] text-[#f2ca50]">emoji_events</span>
+                <span className="material-symbols-outlined text-[15px] text-[#fce28b]">emoji_events</span>
                 <span className="hidden sm:inline font-mono text-[11px]">Top Hebdo</span>
               </button>
             </MotionTooltip>
@@ -242,7 +242,7 @@ export const Header: React.FC<HeaderProps> = ({
                 type="button"
                 onClick={onOpenShop}
                 aria-label="Ouvrir la boutique MSZ Coins"
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#182338] hover:bg-[#202f4a] border border-[#f2ca50]/50 text-xs font-bold text-[#ffd700] hover:text-white transition-all active:scale-95 shadow-sm cursor-pointer"
+                className="luxury-btn-surface inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold text-[#ffe27a] shadow-sm cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50]"
               >
                 <span
                   className="material-symbols-outlined text-[15px] text-[#f2ca50]"
@@ -250,8 +250,8 @@ export const Header: React.FC<HeaderProps> = ({
                 >
                   monetization_on
                 </span>
-                <span className="font-mono text-[11px] font-black">{mszCoins.toLocaleString()}</span>
-                <span className="hidden xl:inline text-[9px] text-[#f2ca50] font-mono">MSZ</span>
+                <span className="font-mono text-[11px] font-black tabular-nums">{mszCoins.toLocaleString()}</span>
+                <span className="hidden xl:inline text-[9px] text-[#d4c78f] font-mono">MSZ</span>
               </button>
             </MotionTooltip>
           )}
@@ -265,14 +265,14 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={() => setSoundEnabled(toggleSoundEffects())}
-              className={`p-1.5 rounded-full border transition-all active:scale-95 flex items-center justify-center cursor-pointer ${
+              className={`p-1.5 rounded-full flex items-center justify-center cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] ${
                 soundEnabled
-                  ? 'bg-[#232a3a]/80 hover:bg-[#2e3545] border-[#f2ca50]/30 text-[#f2ca50] hover:text-[#ffe088]'
-                  : 'bg-[#151b2b]/80 hover:bg-[#232a3a] border-[#232a3a] text-[#99907c] hover:text-[#dce2f8]'
+                  ? 'luxury-btn-surface text-[#f2ca50]'
+                  : 'luxury-btn-surface opacity-75 text-[#99907c]'
               }`}
               aria-label={soundEnabled ? 'Couper les indices sonores' : 'Activer les indices sonores'}
             >
-              <span className="material-symbols-outlined text-[19px]">
+              <span className="material-symbols-outlined text-[18px]">
                 {soundEnabled ? 'volume_up' : 'volume_off'}
               </span>
             </button>
@@ -289,9 +289,9 @@ export const Header: React.FC<HeaderProps> = ({
                 type="button"
                 onClick={onOpenThemeSelector}
                 aria-label="Changer le thème de l'application"
-                className="p-1.5 rounded-full bg-[#232a3a]/80 hover:bg-[#2e3545] border border-[#f2ca50]/30 text-[#f2ca50] hover:text-[#ffe088] transition-all active:scale-95 flex items-center justify-center cursor-pointer"
+                className="luxury-btn-surface p-1.5 rounded-full text-[#f2ca50] flex items-center justify-center cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50]"
               >
-                <span className="material-symbols-outlined text-[19px]">palette</span>
+                <span className="material-symbols-outlined text-[18px]">palette</span>
               </button>
             </MotionTooltip>
           )}
@@ -307,10 +307,10 @@ export const Header: React.FC<HeaderProps> = ({
                 type="button"
                 onClick={onOpenAccentStudio}
                 aria-label="Ouvrir le studio d'accent américain"
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#101e33] hover:bg-[#192b47] border border-[#38bdf8]/40 hover:border-[#38bdf8] text-xs font-semibold text-[#7dd3fc] transition-all active:scale-95 shadow-sm cursor-pointer"
+                className="luxury-btn-sapphire inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold shadow-sm cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#38bdf8]"
               >
                 <span className="text-[13px]">🇺🇸</span>
-                <span className="hidden sm:inline font-mono text-[11px] font-bold text-[#38bdf8]">Accent US</span>
+                <span className="hidden sm:inline font-mono text-[11px] font-bold">Accent US</span>
               </button>
             </MotionTooltip>
           )}
@@ -326,7 +326,7 @@ export const Header: React.FC<HeaderProps> = ({
                 type="button"
                 onClick={onOpenInstallModal}
                 aria-label="Installer l'application sur mobile"
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#1b263e] hover:bg-[#243354] border border-[#f2ca50]/40 text-xs font-semibold text-[#ffe082] transition-all active:scale-95 shadow-sm cursor-pointer"
+                className="luxury-btn-surface inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold shadow-sm cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50]"
               >
                 <span className="material-symbols-outlined text-[15px] text-[#f2ca50]">install_mobile</span>
                 <span className="hidden md:inline font-mono text-[11px]">Icône Mobile</span>
@@ -337,7 +337,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* School Grade Indicator + CEFR Level Quick Selector */}
           <div className="flex items-center gap-1.5">
             <span
-              className="hidden md:inline-flex items-center px-2 py-1 rounded-full bg-[#151b2b] border border-[#f2ca50]/25 text-[10px] font-mono font-bold text-[#d4c78f] uppercase"
+              className="hidden md:inline-flex items-center px-2 py-1 rounded-full bg-[#12192b] border border-[#d4af37]/25 text-[10px] font-mono font-bold text-[#d4c78f] uppercase"
               title="Classe scolaire configurée"
             >
               {(user.schoolGrade || inferGradeFromCefr(currentLevel)) === 'terminale'
@@ -349,7 +349,7 @@ export const Header: React.FC<HeaderProps> = ({
                 aria-label="Sélectionner votre niveau CECRL"
                 value={currentLevel}
                 onChange={(e) => onLevelChange(e.target.value as CEFRLevel)}
-                className="appearance-none cursor-pointer inline-flex items-center gap-1.5 pl-3 pr-7 py-1 rounded-full bg-[#232a3a]/90 hover:bg-[#2e3545] border border-[#f2ca50]/30 text-xs font-bold text-[#f2ca50] tracking-wider uppercase transition-colors focus:outline-none focus:ring-1 focus:ring-[#f2ca50]"
+                className="luxury-btn-surface appearance-none cursor-pointer inline-flex items-center gap-1.5 pl-3 pr-7 py-1 rounded-full text-xs font-bold text-[#f2ca50] tracking-wider uppercase focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50]"
               >
                 <option value="A1" className="bg-[#151b2b] text-[#dce2f8]">A1 DÉCOUVERTE</option>
                 <option value="A2" className="bg-[#151b2b] text-[#dce2f8]">A2 ÉLÉMENTAIRE</option>
@@ -369,7 +369,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={onOpenAuthModal}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-[#f2ca50] to-[#e0b73b] hover:from-[#ffe088] hover:to-[#f2ca50] text-[#3c2f00] font-bold text-xs shadow-md transition-all active:scale-95 cursor-pointer"
+              className="luxury-btn-gold inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-bold text-xs cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffe088]"
               title="Connexion Google — Sauvegarder sur Firebase Cloud"
             >
               <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24">

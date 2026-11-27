@@ -478,11 +478,11 @@ export const StudyCalendarWidget: React.FC<StudyCalendarWidgetProps> = ({
   const weekDayLabels = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
   return (
-    <div className="w-full rounded-2xl bg-[#191f2f] p-5 sm:p-6 shadow-xl border border-[#4d4635]/40 flex flex-col gap-5 text-[#dce2f8] select-none">
+    <div className="w-full rounded-2xl luxury-card-surface p-5 sm:p-6 flex flex-col gap-5 text-[#dce2f8] select-none">
       {/* WIDGET HEADER WITH TABS */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#232a3a] pb-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-[#232a3a] border border-[#f2ca50]/40 flex items-center justify-center text-[#f2ca50] shadow-md shrink-0">
+          <div className="w-10 h-10 rounded-xl luxury-btn-amber-soft flex items-center justify-center shrink-0">
             <span className="material-symbols-outlined text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>
               calendar_month
             </span>
@@ -490,7 +490,7 @@ export const StudyCalendarWidget: React.FC<StudyCalendarWidgetProps> = ({
           <div>
             <h3 className="font-serif text-lg sm:text-xl font-bold text-[#dce2f8] flex items-center gap-2">
               <span>Calendrier d’Étude & Objectifs</span>
-              <span className="px-2 py-0.5 rounded-full bg-[#f2ca50]/15 text-[#f2ca50] text-[10px] font-mono font-bold">
+              <span className="px-2 py-0.5 rounded-md luxury-hairline-panel text-[#f2ca50] text-[10px] font-mono font-bold">
                 {user.stats.streakDays}j Série
               </span>
             </h3>
@@ -501,14 +501,14 @@ export const StudyCalendarWidget: React.FC<StudyCalendarWidgetProps> = ({
         </div>
 
         {/* Tab switchers */}
-        <div className="flex items-center gap-1 p-1 rounded-xl bg-[#0c1322] border border-[#232a3a] shrink-0 self-start sm:self-auto">
+        <div className="flex items-center gap-1 p-1 rounded-xl luxury-hairline-panel shrink-0 self-start sm:self-auto">
           <button
             type="button"
             onClick={() => setActiveTab('calendar')}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
               activeTab === 'calendar'
-                ? 'bg-[#f2ca50] text-[#3c2f00] font-bold shadow-sm'
-                : 'text-[#d0c5af] hover:text-white'
+                ? 'luxury-btn-gold font-bold'
+                : 'text-[#d0c5af] hover:text-[#ffe8a3] hover:bg-white/5'
             }`}
           >
             <span className="material-symbols-outlined text-sm">calendar_month</span>
@@ -520,8 +520,8 @@ export const StudyCalendarWidget: React.FC<StudyCalendarWidgetProps> = ({
             onClick={() => setActiveTab('goals')}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
               activeTab === 'goals'
-                ? 'bg-[#f2ca50] text-[#3c2f00] font-bold shadow-sm'
-                : 'text-[#d0c5af] hover:text-white'
+                ? 'luxury-btn-gold font-bold'
+                : 'text-[#d0c5af] hover:text-[#ffe8a3] hover:bg-white/5'
             }`}
           >
             <span className="material-symbols-outlined text-sm">flag</span>
@@ -533,8 +533,8 @@ export const StudyCalendarWidget: React.FC<StudyCalendarWidgetProps> = ({
             onClick={() => setActiveTab('reminders')}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
               activeTab === 'reminders'
-                ? 'bg-[#f2ca50] text-[#3c2f00] font-bold shadow-sm'
-                : 'text-[#d0c5af] hover:text-white'
+                ? 'luxury-btn-gold font-bold'
+                : 'text-[#d0c5af] hover:text-[#ffe8a3] hover:bg-white/5'
             }`}
           >
             <span className="material-symbols-outlined text-sm">notifications_active</span>
@@ -552,7 +552,7 @@ export const StudyCalendarWidget: React.FC<StudyCalendarWidgetProps> = ({
               <button
                 type="button"
                 onClick={handlePrevMonth}
-                className="w-8 h-8 rounded-lg bg-[#232a3a] hover:bg-[#2e3545] border border-[#232a3a] text-[#dce2f8] flex items-center justify-center transition-all cursor-pointer"
+                className="w-8 h-8 rounded-lg luxury-btn-surface flex items-center justify-center cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50]"
                 title="Mois précédent"
               >
                 <span className="material-symbols-outlined text-base">chevron_left</span>
@@ -565,7 +565,7 @@ export const StudyCalendarWidget: React.FC<StudyCalendarWidgetProps> = ({
               <button
                 type="button"
                 onClick={handleNextMonth}
-                className="w-8 h-8 rounded-lg bg-[#232a3a] hover:bg-[#2e3545] border border-[#232a3a] text-[#dce2f8] flex items-center justify-center transition-all cursor-pointer"
+                className="w-8 h-8 rounded-lg luxury-btn-surface flex items-center justify-center cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50]"
                 title="Mois suivant"
               >
                 <span className="material-symbols-outlined text-base">chevron_right</span>
@@ -574,7 +574,7 @@ export const StudyCalendarWidget: React.FC<StudyCalendarWidgetProps> = ({
               <button
                 type="button"
                 onClick={handleCurrentMonth}
-                className="px-2.5 py-1 rounded-lg bg-[#151b2b] hover:bg-[#232a3a] border border-[#232a3a] text-[#d4c78f] text-[11px] font-mono cursor-pointer transition-colors ml-1"
+                className="px-2.5 py-1 rounded-lg luxury-btn-amber-soft text-[11px] font-mono cursor-pointer ml-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50]"
               >
                 Ce mois
               </button>
@@ -669,7 +669,7 @@ export const StudyCalendarWidget: React.FC<StudyCalendarWidgetProps> = ({
                         {day.dayNumber}
                       </span>
                       {day.isToday && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#f2ca50] animate-ping" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#f2ca50]" />
                       )}
                     </div>
 
@@ -736,7 +736,7 @@ export const StudyCalendarWidget: React.FC<StudyCalendarWidgetProps> = ({
                   <button
                     type="button"
                     onClick={() => setSelectedDayDetail(null)}
-                    className="w-6 h-6 rounded-full bg-[#232a3a] text-[#99907c] hover:text-white flex items-center justify-center text-xs"
+                    className="w-6 h-6 rounded-full luxury-btn-surface flex items-center justify-center text-xs cursor-pointer"
                   >
                     ✕
                   </button>
@@ -817,7 +817,7 @@ export const StudyCalendarWidget: React.FC<StudyCalendarWidgetProps> = ({
             <button
               type="button"
               onClick={onResumePractice}
-              className="text-xs font-bold text-[#f2ca50] hover:text-[#ffe088] flex items-center gap-1 transition-colors cursor-pointer"
+              className="px-3 py-1.5 rounded-lg luxury-btn-amber-soft text-xs font-bold flex items-center gap-1 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50]"
             >
               <span>Continuer à étudier</span>
               <span className="material-symbols-outlined text-sm">arrow_forward</span>
@@ -940,10 +940,10 @@ export const StudyCalendarWidget: React.FC<StudyCalendarWidgetProps> = ({
                       key={num}
                       type="button"
                       onClick={() => updateGoals({ targetDaysPerWeek: num })}
-                      className={`py-2 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                      className={`py-2 rounded-lg text-xs font-mono font-bold cursor-pointer ${
                         goals.targetDaysPerWeek === num
-                          ? 'bg-[#f2ca50] text-[#3c2f00] shadow-sm'
-                          : 'bg-[#151b2b] text-[#dce2f8] hover:bg-[#232a3a]'
+                          ? 'luxury-btn-gold'
+                          : 'luxury-btn-surface'
                       }`}
                     >
                       {num}j
@@ -961,10 +961,10 @@ export const StudyCalendarWidget: React.FC<StudyCalendarWidgetProps> = ({
                       key={xpVal}
                       type="button"
                       onClick={() => updateGoals({ targetWeeklyXp: xpVal })}
-                      className={`py-2 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                      className={`py-2 rounded-lg text-xs font-mono font-bold cursor-pointer ${
                         goals.targetWeeklyXp === xpVal
-                          ? 'bg-[#f2ca50] text-[#3c2f00] shadow-sm'
-                          : 'bg-[#151b2b] text-[#dce2f8] hover:bg-[#232a3a]'
+                          ? 'luxury-btn-gold'
+                          : 'luxury-btn-surface'
                       }`}
                     >
                       {xpVal}
@@ -982,10 +982,10 @@ export const StudyCalendarWidget: React.FC<StudyCalendarWidgetProps> = ({
                       key={mins}
                       type="button"
                       onClick={() => updateGoals({ dailyMinutesTarget: mins })}
-                      className={`py-2 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                      className={`py-2 rounded-lg text-xs font-mono font-bold cursor-pointer ${
                         goals.dailyMinutesTarget === mins
-                          ? 'bg-[#f2ca50] text-[#3c2f00] shadow-sm'
-                          : 'bg-[#151b2b] text-[#dce2f8] hover:bg-[#232a3a]'
+                          ? 'luxury-btn-gold'
+                          : 'luxury-btn-surface'
                       }`}
                     >
                       {mins}m
@@ -1080,10 +1080,10 @@ export const StudyCalendarWidget: React.FC<StudyCalendarWidgetProps> = ({
                             : [...reminders.daysOfWeek, day.id];
                           updateReminders({ daysOfWeek: newDays });
                         }}
-                        className={`w-8 h-8 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                        className={`w-8 h-8 rounded-lg text-xs font-mono font-bold cursor-pointer ${
                           isChecked
-                            ? 'bg-[#f2ca50] text-[#3c2f00]'
-                            : 'bg-[#151b2b] text-[#99907c] hover:text-[#dce2f8]'
+                            ? 'luxury-btn-gold'
+                            : 'luxury-btn-surface'
                         }`}
                       >
                         {day.label}
@@ -1114,10 +1114,10 @@ export const StudyCalendarWidget: React.FC<StudyCalendarWidgetProps> = ({
               <button
                 type="button"
                 onClick={handleRequestPushPermission}
-                className={`px-3 py-1.5 rounded-lg border text-xs font-mono flex items-center gap-1.5 cursor-pointer transition-all ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono flex items-center gap-1.5 cursor-pointer ${
                   notificationPermission === 'granted'
-                    ? 'bg-emerald-950/40 text-emerald-400 border-emerald-500/30'
-                    : 'bg-[#151b2b] text-[#d4c78f] border-[#232a3a] hover:border-[#f2ca50]/40'
+                    ? 'luxury-btn-emerald'
+                    : 'luxury-btn-surface'
                 }`}
               >
                 <span className="material-symbols-outlined text-sm">

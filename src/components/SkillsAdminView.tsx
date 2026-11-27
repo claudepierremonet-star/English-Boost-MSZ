@@ -254,7 +254,7 @@ export const SkillsAdminView: React.FC = () => {
   return (
     <div className="w-full flex flex-col gap-5 select-text">
       {/* Header & KPI Strip */}
-      <section className="w-full rounded-2xl bg-[#191f2f] border border-[#4d4635]/40 p-5 space-y-4">
+      <section className="w-full rounded-2xl luxury-card-surface p-5 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="space-y-1">
             <p className="text-xs text-[#d4c78f] font-medium">
@@ -270,7 +270,7 @@ export const SkillsAdminView: React.FC = () => {
           <button
             type="button"
             onClick={loadRegistry}
-            className="min-h-[40px] px-4 py-2 rounded-lg bg-[#151b2b] hover:bg-[#232a3a] border border-[#4d4635]/60 text-xs font-semibold text-[#dce2f8] whitespace-nowrap shrink-0 flex items-center gap-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] cursor-pointer"
+            className="luxury-btn-surface min-h-[40px] px-4 py-2 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] cursor-pointer"
           >
             <span className="material-symbols-outlined text-base text-[#f2ca50]">refresh</span>
             <span>Actualiser</span>
@@ -343,7 +343,7 @@ export const SkillsAdminView: React.FC = () => {
       </section>
 
       {/* Task-Based Skill Selector & Real Context Loader */}
-      <section className="w-full rounded-2xl bg-[#191f2f] border border-[#4d4635]/40 p-5 space-y-4">
+      <section className="w-full rounded-2xl luxury-card-surface p-5 space-y-4">
         <div className="space-y-1">
           <h4 className="font-serif text-lg font-bold text-[#dce2f8]">
             Sélection & Chargement Contextuel par Tâche
@@ -359,7 +359,7 @@ export const SkillsAdminView: React.FC = () => {
               key={preset.label}
               type="button"
               onClick={() => handleSelectForTask(preset.task)}
-              className="min-h-[36px] px-3 py-1.5 rounded-lg bg-[#151b2b] hover:bg-[#232a3a] border border-[#2e3545] text-xs font-medium text-[#d4c78f] hover:text-[#f2ca50] transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] cursor-pointer"
+              className="luxury-btn-surface min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-medium text-[#d4c78f] whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] cursor-pointer"
             >
               {preset.label}
             </button>
@@ -383,12 +383,12 @@ export const SkillsAdminView: React.FC = () => {
             onChange={(e) => setTaskInput(e.target.value)}
             maxLength={500}
             placeholder="Ex : Ajouter un endpoint Express sécurisé avec validation et tests..."
-            className="flex-1 min-h-[42px] px-3.5 py-2 rounded-lg bg-[#0c1322] border border-[#2e3545] focus:border-[#f2ca50] text-sm text-[#dce2f8] placeholder-[#99907c] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50]"
+            className="flex-1 min-h-[42px] px-3.5 py-2 rounded-lg bg-[#090f1d] border border-[#2e3852] focus:border-[#f2ca50] text-sm text-[#dce2f8] placeholder-[#99907c] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50]"
           />
           <button
             type="submit"
             disabled={isSelecting}
-            className="min-h-[42px] px-5 py-2 rounded-lg bg-[#f2ca50] hover:bg-[#ffe088] disabled:opacity-60 text-[#3c2f00] text-xs font-bold whitespace-nowrap shrink-0 flex items-center justify-center gap-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffe088] cursor-pointer"
+            className="luxury-btn-gold min-h-[42px] px-5 py-2 rounded-lg disabled:opacity-60 text-xs font-bold whitespace-nowrap shrink-0 flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffe088] cursor-pointer"
           >
             <span className={`material-symbols-outlined text-base ${isSelecting ? 'animate-spin' : ''}`}>
               {isSelecting ? 'sync' : 'playlist_add_check'}
@@ -631,7 +631,9 @@ export const SkillsAdminView: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => handleInspectSkill(skill.id)}
-                        className="min-h-[40px] px-3 py-1.5 rounded-lg bg-[#0c1322] hover:bg-[#232a3a] border border-[#2e3545] text-xs font-semibold text-[#dce2f8] whitespace-nowrap shrink-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] cursor-pointer"
+                        className={`min-h-[40px] px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] cursor-pointer ${
+                          isInspected ? 'luxury-btn-amber-soft' : 'luxury-btn-surface'
+                        }`}
                       >
                         {isInspected ? 'Fermer' : 'Instructions'}
                       </button>
@@ -643,10 +645,10 @@ export const SkillsAdminView: React.FC = () => {
                         aria-label={`${skill.enabled ? 'Désactiver' : 'Activer'} la compétence ${skill.name}`}
                         disabled={isBusy}
                         onClick={() => handleToggleSkill(skill)}
-                        className={`min-h-[40px] min-w-[118px] px-3 py-1.5 rounded-lg border text-xs font-bold whitespace-nowrap shrink-0 flex items-center justify-center gap-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] cursor-pointer disabled:opacity-50 ${
+                        className={`min-h-[40px] min-w-[118px] px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap shrink-0 flex items-center justify-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] cursor-pointer disabled:opacity-50 ${
                           skill.enabled
-                            ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-300 hover:bg-emerald-950/80'
-                            : 'bg-[#0c1322] border-[#4d4635]/50 text-[#99907c] hover:text-[#dce2f8]'
+                            ? 'luxury-btn-emerald'
+                            : 'luxury-btn-surface opacity-80'
                         }`}
                       >
                         <span className="material-symbols-outlined text-base">

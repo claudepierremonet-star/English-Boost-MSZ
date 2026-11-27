@@ -126,12 +126,12 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
       />
 
       {/* Featured Synthesis Challenge Card */}
-      <section className="relative p-5 rounded-2xl bg-gradient-to-br from-[#232a3a] via-[#191f2f] to-[#0c1322] border border-[#f2ca50]/30 shadow-xl overflow-hidden">
+      <section className="relative p-5 rounded-2xl luxury-card-surface overflow-hidden">
         <div className="absolute -right-8 -top-8 w-36 h-36 rounded-full bg-[#f2ca50]/10 blur-2xl pointer-events-none" />
 
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-[#f2ca50] animate-ping" />
+            <span className="material-symbols-outlined text-sm text-[#f2ca50]">auto_awesome</span>
             <span className="text-[10px] uppercase tracking-widest text-[#f2ca50] font-bold">
               Défi Magistral du Jour
             </span>
@@ -140,14 +140,14 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
         </div>
 
         <div className="flex gap-4 items-center mt-2">
-          <div className="relative w-20 h-20 rounded-xl overflow-hidden shrink-0 shadow-md border border-[#4d4635]/40">
+          <div className="relative w-20 h-20 rounded-xl overflow-hidden shrink-0 shadow-md border border-[#d4af37]/40">
             <img
               src="https://lh3.googleusercontent.com/aida-public/AB6AXuAlH-sqSL7qrPlcH__keLRikgyPe8g_2AtcwPEXQXXvvNw_fOsRNBRnZ0YKeIF32p4JGfRQTAKTV-pmM-VIXhvfyhYPQtMrtYIYgbFLzA0nraXulfqikyl3p_99IsiE4WG4rQ4sAeLHIpfRkimusGs0O7v69_JUQyKYHZ0qbNq8a05liZWm02sgP-MUl9wXfHb-HCDzxuD8JKDyFtI4tQn9kSOFyVzXvqEoGXxrJ0UMaZr3Tb2nGHIZ"
               alt="Fountain pen on open editorial journal"
               className="w-full h-full object-cover"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-[#070e1d]/80 via-transparent to-transparent" />
-            <div className="absolute bottom-1 right-1 flex items-center justify-center w-6 h-6 rounded-full bg-[#f2ca50] text-[#3c2f00]">
+            <div className="absolute bottom-1 right-1 flex items-center justify-center w-6 h-6 rounded-full luxury-btn-gold">
               <span className="material-symbols-outlined text-xs" style={{ fontVariationSettings: "'FILL' 1" }}>
                 play_arrow
               </span>
@@ -177,7 +177,7 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
         <button
           type="button"
           onClick={onOpenDictation}
-          className="mt-4 w-full py-2.5 px-4 rounded-xl bg-[#f2ca50] text-[#3c2f00] font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md hover:bg-[#ffe088] active:scale-[0.98] transition-all"
+          className="mt-4 w-full py-2.5 px-4 rounded-xl luxury-btn-gold font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffe088] cursor-pointer"
         >
           <span>Initier le Défi de Synthèse</span>
           <span className="material-symbols-outlined text-sm">arrow_forward</span>
@@ -188,10 +188,10 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
       {onOpenGames && (
         <section
           onClick={onOpenGames}
-          className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-950/60 via-[#172133] to-[#121927] border border-[#f2ca50]/50 shadow-xl flex items-center justify-between gap-4 cursor-pointer hover:border-[#f2ca50] transition-all group"
+          className="p-4 sm:p-5 rounded-2xl luxury-card-surface luxury-card-interactive flex items-center justify-between gap-4 cursor-pointer group"
         >
           <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#f2ca50] via-amber-500 to-amber-700 flex items-center justify-center text-[#3c2f00] shadow-md group-hover:scale-105 transition-transform shrink-0">
+            <div className="w-12 h-12 rounded-xl luxury-btn-gold flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
               <span className="material-symbols-outlined text-2xl font-bold">sports_esports</span>
             </div>
             <div>
@@ -199,7 +199,8 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
                 <span className="text-[10px] font-mono text-[#f2ca50] font-bold uppercase tracking-wider">
                   SALLE D'ARCADE LINGUISTIQUE
                 </span>
-                <span className="px-2 py-0.2 rounded-full bg-amber-500/20 text-amber-300 text-[9px] font-mono font-bold">
+                <span aria-hidden="true" className="text-[#99907c]">·</span>
+                <span className="text-amber-300 text-[10px] font-mono font-bold">
                   20 JEUX INTERACTIFS
                 </span>
               </div>
@@ -213,7 +214,7 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
           </div>
           <button
             type="button"
-            className="px-4 py-2.5 rounded-xl bg-[#f2ca50] text-[#3c2f00] font-bold text-xs uppercase tracking-wider hidden sm:flex items-center gap-1 shrink-0 group-hover:bg-[#ffe088] shadow-md"
+            className="px-4 py-2.5 rounded-xl luxury-btn-gold font-bold text-xs uppercase tracking-wider hidden sm:flex items-center gap-1 shrink-0 cursor-pointer"
           >
             <span>Jouer</span>
             <span className="material-symbols-outlined text-sm">play_arrow</span>
@@ -225,10 +226,10 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
       {onOpenAdventure && (
         <section
           onClick={onOpenAdventure}
-          className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#17263f] via-[#121a2d] to-[#0c1322] border border-[#f2ca50]/55 shadow-xl flex items-center justify-between gap-4 cursor-pointer hover:border-[#f2ca50] transition-all group"
+          className="p-4 sm:p-5 rounded-2xl luxury-card-surface luxury-card-interactive flex items-center justify-between gap-4 cursor-pointer group"
         >
           <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-xl bg-[#0c1322] border border-[#f2ca50]/55 flex items-center justify-center text-[#f2ca50] shadow-md group-hover:scale-105 transition-transform shrink-0">
+            <div className="w-12 h-12 rounded-xl luxury-btn-sapphire flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
               <span className="material-symbols-outlined text-2xl">public</span>
             </div>
             <div>
@@ -247,7 +248,7 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
           </div>
           <button
             type="button"
-            className="px-4 py-2.5 rounded-xl bg-[#f2ca50] text-[#3c2f00] font-bold text-xs uppercase tracking-wider hidden sm:flex items-center gap-1 shrink-0 group-hover:bg-[#ffe088] shadow-md"
+            className="px-4 py-2.5 rounded-xl luxury-btn-gold font-bold text-xs uppercase tracking-wider hidden sm:flex items-center gap-1 shrink-0 cursor-pointer"
           >
             <span>Explorer l&apos;Archipel</span>
             <span className="material-symbols-outlined text-sm">explore</span>
@@ -259,10 +260,10 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
       {onOpenCityMap && (
         <section
           onClick={onOpenCityMap}
-          className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#191f2f] via-[#151b2b] to-[#0c1322] border border-[#f2ca50]/45 shadow-xl flex items-center justify-between gap-4 cursor-pointer hover:border-[#f2ca50] transition-all group"
+          className="p-4 sm:p-5 rounded-2xl luxury-card-surface luxury-card-interactive flex items-center justify-between gap-4 cursor-pointer group"
         >
           <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-xl bg-[#0c1322] border border-[#f2ca50]/50 flex items-center justify-center text-[#f2ca50] shadow-md group-hover:scale-105 transition-transform shrink-0">
+            <div className="w-12 h-12 rounded-xl luxury-btn-emerald flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
               <span className="material-symbols-outlined text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>
                 map
               </span>
@@ -283,7 +284,7 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
           </div>
           <button
             type="button"
-            className="px-4 py-2.5 rounded-xl bg-[#f2ca50] text-[#3c2f00] font-bold text-xs uppercase tracking-wider hidden sm:flex items-center gap-1 shrink-0 group-hover:bg-[#ffe088] shadow-md"
+            className="px-4 py-2.5 rounded-xl luxury-btn-gold font-bold text-xs uppercase tracking-wider hidden sm:flex items-center gap-1 shrink-0 cursor-pointer"
           >
             <span>Explorer le Plan</span>
             <span className="material-symbols-outlined text-sm">explore</span>
@@ -345,10 +346,10 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
             <button
               type="button"
               onClick={onOpenAiTutor}
-              className="p-4 rounded-2xl bg-gradient-to-br from-[#1b2438] to-[#0e1526] border border-[#f2ca50]/45 hover:border-[#f2ca50] text-left flex items-center justify-between gap-3 shadow-lg transition-all cursor-pointer group"
+              className="p-4 rounded-2xl luxury-card-surface luxury-card-interactive text-left flex items-center justify-between gap-3 cursor-pointer group"
             >
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-11 h-11 rounded-xl bg-[#f2ca50] text-[#3c2f00] flex items-center justify-center shrink-0 shadow">
+                <div className="w-11 h-11 rounded-xl luxury-btn-gold flex items-center justify-center shrink-0">
                   <span className="material-symbols-outlined text-2xl">psychology</span>
                 </div>
                 <div className="min-w-0">
@@ -371,10 +372,10 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
             <button
               type="button"
               onClick={onOpenEscapeRoom}
-              className="p-4 rounded-2xl bg-gradient-to-br from-[#1f2236] to-[#0e1424] border border-amber-500/40 hover:border-[#f2ca50] text-left flex items-center justify-between gap-3 shadow-lg transition-all cursor-pointer group"
+              className="p-4 rounded-2xl luxury-card-surface luxury-card-interactive text-left flex items-center justify-between gap-3 cursor-pointer group"
             >
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-11 h-11 rounded-xl bg-[#232a3a] border border-[#f2ca50]/45 text-[#f2ca50] flex items-center justify-center shrink-0">
+                <div className="w-11 h-11 rounded-xl luxury-btn-amber-soft flex items-center justify-center shrink-0">
                   <span className="material-symbols-outlined text-2xl">lock_open</span>
                 </div>
                 <div className="min-w-0">
@@ -397,10 +398,10 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
             <button
               type="button"
               onClick={onOpenListeningCinema}
-              className="p-4 rounded-2xl bg-gradient-to-br from-[#23192b] to-[#0d1323] border border-rose-500/40 hover:border-[#f2ca50] text-left flex items-center justify-between gap-3 shadow-lg transition-all cursor-pointer group"
+              className="p-4 rounded-2xl luxury-card-surface luxury-card-interactive text-left flex items-center justify-between gap-3 cursor-pointer group"
             >
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-11 h-11 rounded-xl bg-[#232a3a] border border-rose-400/40 text-rose-300 flex items-center justify-center shrink-0">
+                <div className="w-11 h-11 rounded-xl luxury-btn-ruby flex items-center justify-center shrink-0">
                   <span className="material-symbols-outlined text-2xl">movie</span>
                 </div>
                 <div className="min-w-0">
@@ -423,10 +424,10 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
             <button
               type="button"
               onClick={onOpenGrammarBattle}
-              className="p-4 rounded-2xl bg-gradient-to-br from-[#142536] to-[#0c1322] border border-cyan-500/40 hover:border-[#f2ca50] text-left flex items-center justify-between gap-3 shadow-lg transition-all cursor-pointer group"
+              className="p-4 rounded-2xl luxury-card-surface luxury-card-interactive text-left flex items-center justify-between gap-3 cursor-pointer group"
             >
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-11 h-11 rounded-xl bg-[#232a3a] border border-cyan-400/40 text-cyan-300 flex items-center justify-center shrink-0">
+                <div className="w-11 h-11 rounded-xl luxury-btn-sapphire flex items-center justify-center shrink-0">
                   <span className="material-symbols-outlined text-2xl">gavel</span>
                 </div>
                 <div className="min-w-0">
@@ -449,11 +450,11 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
 
       {/* Featured Atelier 500 Dialogues Engine Card */}
       {onOpenDialogues && (
-        <section className="relative rounded-2xl bg-gradient-to-br from-[#191f2f] via-[#151b2b] to-[#0c1322] p-5 border border-[#f2ca50]/50 shadow-xl overflow-hidden">
+        <section className="relative rounded-2xl luxury-card-surface p-5 overflow-hidden">
           <div className="absolute -right-10 -top-10 w-44 h-44 rounded-full bg-[#f2ca50]/10 blur-2xl pointer-events-none" />
           <div className="flex flex-wrap items-start justify-between gap-3 relative z-10">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-[#f2ca50] text-[#3c2f00] flex items-center justify-center shadow-md shrink-0">
+              <div className="w-12 h-12 rounded-xl luxury-btn-gold flex items-center justify-center shrink-0">
                 <span className="material-symbols-outlined text-2xl">forum</span>
               </div>
               <div>
@@ -461,7 +462,8 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
                   <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#f2ca50]">
                     Moteur 00 • Conversations Réelles
                   </span>
-                  <span className="px-2 py-0.5 rounded-full bg-[#f2ca50]/15 border border-[#f2ca50]/40 text-[10px] font-mono font-bold text-[#f2ca50]">
+                  <span aria-hidden="true" className="text-[#99907c]">·</span>
+                  <span className="text-[10px] font-mono font-bold text-[#d4c78f]">
                     500 DIALOGUES
                   </span>
                 </div>
@@ -474,7 +476,7 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
             <button
               type="button"
               onClick={() => onOpenDialogues('all')}
-              className="px-4 py-2.5 rounded-xl bg-[#f2ca50] hover:bg-[#ffe088] text-[#3c2f00] font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-md cursor-pointer shrink-0 transition-colors"
+              className="px-4 py-2.5 rounded-xl luxury-btn-gold font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffe088]"
             >
               <span>Ouvrir les 500 Dialogues</span>
               <span className="material-symbols-outlined text-sm">arrow_forward</span>
@@ -491,13 +493,13 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
                 key={theme.id}
                 type="button"
                 onClick={() => onOpenDialogues(theme.id)}
-                className="p-2.5 rounded-xl bg-[#070e1d]/85 hover:bg-[#191f2f] border border-[#232a3a] hover:border-[#f2ca50]/60 text-left flex items-center gap-2 transition-all cursor-pointer group"
+                className="p-2.5 rounded-xl luxury-btn-surface text-left flex items-center gap-2 cursor-pointer group"
               >
                 <span className="material-symbols-outlined text-base text-[#f2ca50] shrink-0">
                   {theme.icon}
                 </span>
                 <div className="min-w-0">
-                  <span className="block text-xs font-bold text-[#dce2f8] group-hover:text-[#f2ca50] truncate">
+                  <span className="block text-xs font-bold text-[#dce2f8] group-hover:text-[#ffe8a3] truncate">
                     {theme.shortLabel}
                   </span>
                   <span className="block text-[10px] font-mono text-[#99907c]">
@@ -513,10 +515,10 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
       {/* The Core Engines List */}
       <section className="flex flex-col gap-4">
         {/* ENGINE 1: Dictation Engine */}
-        <div className="group relative rounded-2xl bg-[#191f2f] p-5 border border-[#4d4635]/40 shadow-xl overflow-hidden transition-all hover:border-[#f2ca50]/50">
+        <div className="group relative rounded-2xl luxury-card-surface luxury-card-interactive p-5 overflow-hidden">
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-[#232a3a] border border-[#f2ca50]/30 flex items-center justify-center text-[#f2ca50] shadow-inner shrink-0">
+              <div className="w-12 h-12 rounded-xl luxury-hairline-panel border-[#f2ca50]/35 flex items-center justify-center text-[#f2ca50] shrink-0">
                 <span className="material-symbols-outlined text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>
                   headphones
                 </span>
@@ -537,11 +539,11 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
 
             <div className="flex flex-col items-end gap-1">
               {recommendedAtelierAction === 'dictation' && (
-                <span className="px-2 py-0.5 rounded-full bg-[#f2ca50] text-[#3c2f00] text-[9px] font-mono font-black uppercase">
+                <span className="px-2 py-0.5 rounded-md luxury-btn-gold text-[9px] font-mono font-black uppercase">
                   Focus · {weakestSkillLabel}
                 </span>
               )}
-              <span className="px-2 py-0.5 rounded-full bg-[#070e1d] text-[10px] font-bold text-[#f2ca50] font-mono border border-[#f2ca50]/30">
+              <span className="px-2 py-0.5 rounded-md luxury-hairline-panel text-[10px] font-bold text-[#f2ca50] font-mono">
                 500 SESSIONS
               </span>
               <span className="text-[11px] text-[#d0c5af]/80 mt-0.5">6e à Terminale • 10 Thèmes</span>
@@ -553,15 +555,15 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
           </p>
 
           <div className="grid grid-cols-3 gap-2 mt-3 pt-1">
-            <div className="flex items-center gap-1.5 p-2 rounded-lg bg-[#070e1d]/70 text-xs text-[#d0c5af]">
+            <div className="flex items-center gap-1.5 p-2 rounded-lg luxury-hairline-panel text-xs text-[#d0c5af]">
               <span className="material-symbols-outlined text-[#f2ca50] text-sm">flip</span>
               <span className="truncate">Deck Recto-Verso</span>
             </div>
-            <div className="flex items-center gap-1.5 p-2 rounded-lg bg-[#070e1d]/70 text-xs text-[#d0c5af]">
+            <div className="flex items-center gap-1.5 p-2 rounded-lg luxury-hairline-panel text-xs text-[#d0c5af]">
               <span className="material-symbols-outlined text-[#f2ca50] text-sm">record_voice_over</span>
               <span className="truncate">Dual UK & US</span>
             </div>
-            <div className="flex items-center gap-1.5 p-2 rounded-lg bg-[#070e1d]/70 text-xs text-[#d0c5af]">
+            <div className="flex items-center gap-1.5 p-2 rounded-lg luxury-hairline-panel text-xs text-[#d0c5af]">
               <span className="material-symbols-outlined text-[#f2ca50] text-sm">history_edu</span>
               <span className="truncate">Étymologie & Sens</span>
             </div>
@@ -578,7 +580,7 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
             <button
               type="button"
               onClick={onOpenDictation}
-              className="px-4 py-2 rounded-xl bg-[#232a3a] text-[#dce2f8] hover:text-[#f2ca50] hover:bg-[#2e3545] font-semibold text-xs flex items-center gap-1 shadow-sm active:scale-95 transition-all shrink-0 ml-2"
+              className="px-4 py-2 rounded-xl luxury-btn-surface font-semibold text-xs flex items-center gap-1 shrink-0 ml-2 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50]"
             >
               <span>Ouvrir l'Atelier</span>
               <span className="material-symbols-outlined text-sm">chevron_right</span>
@@ -587,10 +589,10 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
         </div>
 
         {/* ENGINE 2: Spaced Repetition Cards */}
-        <div className="group relative rounded-2xl bg-[#191f2f] p-5 border border-[#4d4635]/40 shadow-xl overflow-hidden transition-all hover:border-[#f2ca50]/50">
+        <div className="group relative rounded-2xl luxury-card-surface luxury-card-interactive p-5 overflow-hidden">
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-[#232a3a] border border-[#d4c78f]/30 flex items-center justify-center text-[#d4c78f] shadow-inner shrink-0">
+              <div className="w-12 h-12 rounded-xl luxury-hairline-panel border-[#d4c78f]/35 flex items-center justify-center text-[#d4c78f] shrink-0">
                 <span className="material-symbols-outlined text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>
                   style
                 </span>
@@ -611,11 +613,11 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
 
             <div className="flex flex-col items-end gap-1">
               {recommendedAtelierAction === 'flashcards' && (
-                <span className="px-2 py-0.5 rounded-full bg-[#f2ca50] text-[#3c2f00] text-[9px] font-mono font-black uppercase">
+                <span className="px-2 py-0.5 rounded-md luxury-btn-gold text-[9px] font-mono font-black uppercase">
                   Focus · {weakestSkillLabel}
                 </span>
               )}
-              <span className="px-2 py-0.5 rounded-full bg-[#070e1d] text-[10px] font-bold text-[#d4c78f] font-mono">
+              <span className="px-2 py-0.5 rounded-md luxury-hairline-panel text-[10px] font-bold text-[#d4c78f] font-mono">
                 {assessment.dueVocabularyCount} CARTES DUES
               </span>
               <span className="text-[11px] text-[#d0c5af]/80 mt-0.5">Rétention {assessment.vocabularyRetentionRate}%</span>
@@ -642,7 +644,7 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
                   setMiniCardFlipped((prev) => !prev);
                 }
               }}
-              className="relative p-4 rounded-xl bg-gradient-to-br from-[#0e1628] via-[#0a1120] to-[#070e1d] border border-[#f2ca50]/50 hover:border-[#f2ca50] shadow-lg cursor-pointer transition-all overflow-hidden"
+              className="relative p-4 rounded-xl luxury-hairline-panel border-[#f2ca50]/45 hover:border-[#f2ca50] shadow-lg cursor-pointer transition-all overflow-hidden"
             >
               <span aria-hidden="true" className="pointer-events-none absolute top-1.5 left-1.5 w-2.5 h-2.5 border-t border-l border-[#f2ca50]/70" />
               <span aria-hidden="true" className="pointer-events-none absolute top-1.5 right-1.5 w-2.5 h-2.5 border-t border-r border-[#f2ca50]/70" />
@@ -652,7 +654,7 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
               {!miniCardFlipped ? (
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
-                    <span className="w-8 h-8 rounded-lg bg-[#f2ca50] text-[#3c2f00] flex items-center justify-center font-bold text-xs font-serif shrink-0 shadow">
+                    <span className="w-8 h-8 rounded-lg luxury-btn-gold flex items-center justify-center font-bold text-xs font-serif shrink-0">
                       IV
                     </span>
                     <div className="flex flex-col min-w-0">
@@ -675,7 +677,7 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
                         naturalProsody: true
                       });
                     }}
-                    className="w-8 h-8 rounded-full bg-[#191f2f] border border-[#f2ca50]/45 text-[#f2ca50] flex items-center justify-center shrink-0 hover:bg-[#f2ca50] hover:text-[#3c2f00] transition-colors cursor-pointer"
+                    className="w-8 h-8 rounded-full luxury-btn-amber-soft flex items-center justify-center shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50]"
                     title="Écouter en voix naturelle"
                   >
                     <span className="material-symbols-outlined text-base">volume_up</span>
@@ -713,7 +715,7 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
                 <button
                   type="button"
                   onClick={onOpenDialogueFlashcards}
-                  className="px-3 py-2 rounded-xl bg-[#151f33] hover:bg-[#1c2c4d] text-[#f2ca50] border border-[#f2ca50]/40 font-semibold text-xs flex items-center gap-1 shadow-sm active:scale-95 transition-all cursor-pointer"
+                  className="px-3 py-2 rounded-xl luxury-btn-sapphire font-semibold text-xs flex items-center gap-1 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#38bdf8]"
                   title="Réviser les expressions issues des 500 dialogues"
                 >
                   <span className="material-symbols-outlined text-sm">forum</span>
@@ -724,7 +726,7 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
                 <button
                   type="button"
                   onClick={onOpenFlashcardsFocus}
-                  className="px-3 py-2 rounded-xl bg-[#151f33] hover:bg-[#1c2c4d] text-[#ffe082] border border-[#f2ca50]/40 font-semibold text-xs flex items-center gap-1 shadow-sm active:scale-95 transition-all cursor-pointer"
+                  className="px-3 py-2 rounded-xl luxury-btn-amber-soft font-semibold text-xs flex items-center gap-1 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50]"
                   title="Ouvrir directement en Mode Focus Lecture"
                 >
                   <span className="material-symbols-outlined text-sm">center_focus_strong</span>
@@ -734,7 +736,7 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
               <button
                 type="button"
                 onClick={onOpenFlashcards}
-                className="px-4 py-2 rounded-xl bg-[#f2ca50] text-[#3c2f00] hover:bg-[#ffe088] font-bold text-xs flex items-center gap-1 shadow-sm active:scale-95 transition-all cursor-pointer"
+                className="px-4 py-2 rounded-xl luxury-btn-gold font-bold text-xs flex items-center gap-1 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffe088]"
               >
                 <span>Passer en Revue</span>
                 <span className="material-symbols-outlined text-sm">chevron_right</span>
@@ -744,10 +746,10 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
         </div>
 
         {/* ENGINE 3: Grammar & Nuance Quiz */}
-        <div className="group relative rounded-2xl bg-[#191f2f] p-5 border border-[#4d4635]/40 shadow-xl overflow-hidden transition-all hover:border-[#f2ca50]/50">
+        <div className="group relative rounded-2xl luxury-card-surface luxury-card-interactive p-5 overflow-hidden">
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-[#232a3a] border border-[#f2ca50]/30 flex items-center justify-center text-[#f2ca50] shadow-inner shrink-0">
+              <div className="w-12 h-12 rounded-xl luxury-hairline-panel border-[#f2ca50]/35 flex items-center justify-center text-[#f2ca50] shrink-0">
                 <span className="material-symbols-outlined text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>
                   quiz
                 </span>
@@ -768,11 +770,11 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
 
             <div className="flex flex-col items-end gap-1">
               {(recommendedAtelierAction === 'quiz' || recommendedAtelierAction === 'grammar_battle') && (
-                <span className="px-2 py-0.5 rounded-full bg-[#f2ca50] text-[#3c2f00] text-[9px] font-mono font-black uppercase">
+                <span className="px-2 py-0.5 rounded-md luxury-btn-gold text-[9px] font-mono font-black uppercase">
                   Focus · {weakestSkillLabel}
                 </span>
               )}
-              <span className="px-2 py-0.5 rounded-full bg-[#070e1d] text-[10px] font-bold text-[#f2ca50] font-mono">
+              <span className="px-2 py-0.5 rounded-md luxury-hairline-panel text-[10px] font-bold text-[#f2ca50] font-mono">
                 NIVEAU {assessment.dynamicDirective.targetCefrForExercises}
               </span>
               <span className="text-[11px] text-[#d0c5af]/80 mt-0.5">Soutien adaptatif</span>
@@ -794,7 +796,7 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
             <button
               type="button"
               onClick={onOpenQuiz}
-              className="px-4 py-2 rounded-xl bg-[#232a3a] text-[#dce2f8] hover:text-[#f2ca50] hover:bg-[#2e3545] font-semibold text-xs flex items-center gap-1 shadow-sm active:scale-95 transition-all shrink-0 ml-2"
+              className="px-4 py-2 rounded-xl luxury-btn-surface font-semibold text-xs flex items-center gap-1 shrink-0 ml-2 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50]"
             >
               <span>Défier le Quiz</span>
               <span className="material-symbols-outlined text-sm">chevron_right</span>
@@ -803,10 +805,10 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
         </div>
 
         {/* ENGINE 4: Speaking Studio */}
-        <div className="group relative rounded-2xl bg-[#191f2f] p-5 border border-[#4d4635]/40 shadow-xl overflow-hidden transition-all hover:border-[#f2ca50]/50">
+        <div className="group relative rounded-2xl luxury-card-surface luxury-card-interactive p-5 overflow-hidden">
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-[#232a3a] border border-[#e9cd67]/30 flex items-center justify-center text-[#e9cd67] shadow-inner shrink-0">
+              <div className="w-12 h-12 rounded-xl luxury-hairline-panel border-[#e9cd67]/35 flex items-center justify-center text-[#e9cd67] shrink-0">
                 <span className="material-symbols-outlined text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>
                   mic
                 </span>
@@ -829,11 +831,11 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
 
             <div className="flex flex-col items-end gap-1">
               {recommendedAtelierAction === 'speaking' && (
-                <span className="px-2 py-0.5 rounded-full bg-[#f2ca50] text-[#3c2f00] text-[9px] font-mono font-black uppercase">
+                <span className="px-2 py-0.5 rounded-md luxury-btn-gold text-[9px] font-mono font-black uppercase">
                   Focus · {weakestSkillLabel}
                 </span>
               )}
-              <span className="px-2 py-0.5 rounded-full bg-[#070e1d] text-[10px] font-bold text-[#f2ca50] font-mono border border-[#f2ca50]/30">
+              <span className="px-2 py-0.5 rounded-md luxury-hairline-panel text-[10px] font-bold text-[#f2ca50] font-mono">
                 RECONNAISSANCE IA
               </span>
               <span className="text-[11px] text-[#d0c5af]/80 mt-0.5">Dictée & Phonétique</span>
@@ -855,7 +857,7 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
             <button
               type="button"
               onClick={onOpenSpeaking}
-              className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#f2ca50] to-[#ffd700] text-[#2c2000] hover:from-[#ffe088] hover:to-[#ffe566] font-bold text-xs flex items-center gap-1 shadow-md shadow-[#f2ca50]/20 active:scale-95 transition-all shrink-0 ml-2 cursor-pointer"
+              className="px-4 py-2 rounded-xl luxury-btn-gold font-bold text-xs flex items-center gap-1 shrink-0 ml-2 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffe088]"
             >
               <span>Ouvrir le Studio d'Élocution</span>
               <span className="material-symbols-outlined text-sm">chevron_right</span>
@@ -865,8 +867,8 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
       </section>
 
       {/* Cloud Security Guarantee */}
-      <section className="p-4 rounded-xl bg-[#151b2b] border border-[#4d4635]/30 flex items-start gap-3">
-        <div className="p-2 rounded-lg bg-[#232a3a] text-[#f2ca50] shrink-0">
+      <section className="p-4 rounded-xl luxury-hairline-panel flex items-start gap-3">
+        <div className="p-2 rounded-lg luxury-btn-surface text-[#f2ca50] shrink-0">
           <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>
             security
           </span>

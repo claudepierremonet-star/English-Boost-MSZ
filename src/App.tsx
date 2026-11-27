@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'framer-motion';
 import { Header } from './components/Header';
 import { BottomNav, type TabKey } from './components/BottomNav';
@@ -9,27 +9,13 @@ import { DailyChallengeCard } from './components/DailyChallengeCard';
 import { SevenDayStreakSection } from './components/SevenDayStreakSection';
 import { GlobalRankCard } from './components/GlobalRankCard';
 import { CabinetCuriosities } from './components/CabinetCuriosities';
-import { DashboardView } from './components/DashboardView';
-import { ProgressHistorySection } from './components/ProgressHistorySection';
-import { PracticeView } from './components/PracticeView';
-import { DictationModal } from './components/DictationModal';
-import { FlashcardsModal, type FlashcardDeckMode } from './components/FlashcardsModal';
-import { AtelierDialoguesModal } from './components/AtelierDialoguesModal';
+import type { FlashcardDeckMode } from './components/FlashcardsModal';
 import type { DialogueThemeId } from './data/atelierDialoguesTypes';
-import { QuizModal } from './components/QuizModal';
-import { SpeakingStudioModal } from './components/SpeakingStudioModal';
-import { ProfileModal } from './components/ProfileModal';
 import { FloralBorderFrame } from './components/FloralBorderFrame';
-import { ThemeSelectorModal } from './components/ThemeSelectorModal';
-import { InstallAppModal } from './components/InstallAppModal';
-import { AuthModal } from './components/AuthModal';
-import { SchoolCurriculumView } from './components/SchoolCurriculumView';
-import { TwentyGamesHub } from './components/TwentyGamesHub';
-import { LeaderboardView } from './components/LeaderboardView';
 import { DiscreteWeatherBar } from './components/DiscreteWeatherBar';
-import { AmericanAccentStudioModal } from './components/AmericanAccentStudioModal';
 import { useSyncStatus } from './offline/useSyncStatus';
 import {
+  DEFAULT_USER_PROFILE,
   getLocalUserProfile,
   subscribeToAuthState,
   updateUserProfile,
@@ -38,29 +24,113 @@ import {
   toggleFavoriteLesson
 } from './firebase/client';
 import type { UserProfile, CEFRLevel, SchoolGrade } from './firebase/types';
-import { ALL_200_LESSONS, type StudyFolio, type CurioWord, type SchoolLesson } from './data/curriculum';
+import { ALL_200_LESSONS, type StudyFolio, type SchoolLesson } from './data/curriculum';
 import { calculateLevel } from './utils/levelUtils';
 import { LevelUpCelebrationModal, type LevelUpData } from './components/LevelUpCelebrationModal';
 import { XpGainToast, type XpToastInfo } from './components/XpGainToast';
-import { MszShopModal } from './components/MszShopModal';
 import { GlobalSearchBar } from './components/GlobalSearchBar';
 import { FloatingSpeakingStudioShortcut } from './components/FloatingSpeakingStudioShortcut';
-import { LessonDetailModal } from './components/LessonDetailModal';
 import { FavoriteLessonsQuickAccess } from './components/FavoriteLessonsQuickAccess';
-import { CityQuizMapView } from './components/CityQuizMapView';
-import { EnglishAdventureView } from './components/EnglishAdventureView';
 import { GlassSlidingCapsule } from './components/GlassSlidingCapsule';
 import { getCityMapProgression } from './utils/cityMapManager';
 import { SmartEcosystemHub, type EcosystemLaunchTarget } from './components/SmartEcosystemHub';
-import { AITutorModal } from './components/AITutorModal';
-import { EnglishEscapeRoomModal } from './components/EnglishEscapeRoomModal';
-import { ListeningCinemaModal } from './components/ListeningCinemaModal';
-import { GrammarBattleModal } from './components/GrammarBattleModal';
-import { AdaptivePlacementModal } from './components/AdaptivePlacementModal';
 import { inferGradeFromCefr, markLessonCompletedLocally } from './services/adaptiveEngine';
 import { useAppTheme } from './theme/ThemeContext';
 import { useReadingMode } from './context/ReadingModeContext';
 import { ReadingModeToggleButton } from './components/ReadingModeToggleButton';
+
+const DashboardView = lazy(() =>
+  import('./components/DashboardView').then((m) => ({ default: m.DashboardView }))
+);
+const ProgressHistorySection = lazy(() =>
+  import('./components/ProgressHistorySection').then((m) => ({ default: m.ProgressHistorySection }))
+);
+const PracticeView = lazy(() =>
+  import('./components/PracticeView').then((m) => ({ default: m.PracticeView }))
+);
+const SchoolCurriculumView = lazy(() =>
+  import('./components/SchoolCurriculumView').then((m) => ({ default: m.SchoolCurriculumView }))
+);
+const TwentyGamesHub = lazy(() =>
+  import('./components/TwentyGamesHub').then((m) => ({ default: m.TwentyGamesHub }))
+);
+const LeaderboardView = lazy(() =>
+  import('./components/LeaderboardView').then((m) => ({ default: m.LeaderboardView }))
+);
+const CityQuizMapView = lazy(() =>
+  import('./components/CityQuizMapView').then((m) => ({ default: m.CityQuizMapView }))
+);
+const EnglishAdventureView = lazy(() =>
+  import('./components/EnglishAdventureView').then((m) => ({ default: m.EnglishAdventureView }))
+);
+const ProfileModal = lazy(() =>
+  import('./components/ProfileModal').then((m) => ({ default: m.ProfileModal }))
+);
+const DictationModal = lazy(() =>
+  import('./components/DictationModal').then((m) => ({ default: m.DictationModal }))
+);
+const FlashcardsModal = lazy(() =>
+  import('./components/FlashcardsModal').then((m) => ({ default: m.FlashcardsModal }))
+);
+const AtelierDialoguesModal = lazy(() =>
+  import('./components/AtelierDialoguesModal').then((m) => ({ default: m.AtelierDialoguesModal }))
+);
+const QuizModal = lazy(() =>
+  import('./components/QuizModal').then((m) => ({ default: m.QuizModal }))
+);
+const SpeakingStudioModal = lazy(() =>
+  import('./components/SpeakingStudioModal').then((m) => ({ default: m.SpeakingStudioModal }))
+);
+const ThemeSelectorModal = lazy(() =>
+  import('./components/ThemeSelectorModal').then((m) => ({ default: m.ThemeSelectorModal }))
+);
+const InstallAppModal = lazy(() =>
+  import('./components/InstallAppModal').then((m) => ({ default: m.InstallAppModal }))
+);
+const AuthModal = lazy(() =>
+  import('./components/AuthModal').then((m) => ({ default: m.AuthModal }))
+);
+const AmericanAccentStudioModal = lazy(() =>
+  import('./components/AmericanAccentStudioModal').then((m) => ({ default: m.AmericanAccentStudioModal }))
+);
+const MszShopModal = lazy(() =>
+  import('./components/MszShopModal').then((m) => ({ default: m.MszShopModal }))
+);
+const LessonDetailModal = lazy(() =>
+  import('./components/LessonDetailModal').then((m) => ({ default: m.LessonDetailModal }))
+);
+const AITutorModal = lazy(() =>
+  import('./components/AITutorModal').then((m) => ({ default: m.AITutorModal }))
+);
+const EnglishEscapeRoomModal = lazy(() =>
+  import('./components/EnglishEscapeRoomModal').then((m) => ({ default: m.EnglishEscapeRoomModal }))
+);
+const ListeningCinemaModal = lazy(() =>
+  import('./components/ListeningCinemaModal').then((m) => ({ default: m.ListeningCinemaModal }))
+);
+const GrammarBattleModal = lazy(() =>
+  import('./components/GrammarBattleModal').then((m) => ({ default: m.GrammarBattleModal }))
+);
+const AdaptivePlacementModal = lazy(() =>
+  import('./components/AdaptivePlacementModal').then((m) => ({ default: m.AdaptivePlacementModal }))
+);
+
+const LazyViewFallback: React.FC = () => (
+  <div
+    role="status"
+    aria-label="Chargement de la vue"
+    className="w-full max-w-4xl mx-auto px-4 sm:px-6 py-12 flex flex-col items-center justify-center gap-3"
+  >
+    <div className="w-10 h-10 rounded-2xl luxury-btn-amber-soft flex items-center justify-center">
+      <span className="material-symbols-outlined text-xl animate-spin text-[#f2ca50]">
+        progress_activity
+      </span>
+    </div>
+    <span className="text-xs font-mono uppercase tracking-widest text-[#d4c78f]">
+      Chargement du module…
+    </span>
+  </div>
+);
 
 const TAB_ORDER: Record<TabKey, number> = {
   accueil: 0,
@@ -526,17 +596,17 @@ export default function App() {
       {/* Pending Sync Notification Banner (when online with pending queue items) */}
       {isOnline && pendingCount > 0 && (
         <div
-          className="fixed left-0 right-0 z-30 bg-[#191f2f]/95 border-b border-[#f2ca50]/50 px-4 py-2 text-center text-xs text-[#dce2f8] font-medium flex items-center justify-center gap-3 backdrop-blur-md shadow-lg animate-fadeIn"
+          className="fixed left-0 right-0 z-30 bg-[#0d1527]/95 border-b border-[#d4af37]/45 px-4 py-2 text-center text-xs text-[#dce2f8] font-medium flex items-center justify-center gap-3 backdrop-blur-md shadow-lg animate-fadeIn"
           style={{ top: 'calc(max(env(safe-area-inset-top, 0px), 10px) + 90px)' }}
         >
-          <span className="material-symbols-outlined text-sm text-[#f2ca50] animate-pulse">cloud_upload</span>
+          <span className="material-symbols-outlined text-sm text-[#f2ca50]">cloud_upload</span>
           <span>
             <strong>{pendingCount}</strong> modification(s) enregistrée(s) hors-ligne en attente de synchronisation Cloud Firestore.
           </span>
           <button
             type="button"
             onClick={() => triggerSync()}
-            className="px-2.5 py-0.5 rounded-full bg-[#f2ca50] text-[#3c2f00] text-[10px] font-bold uppercase tracking-wider hover:bg-[#ffe088] transition-colors shadow-sm"
+            className="px-3 py-1 rounded-lg luxury-btn-gold text-[10px] font-bold uppercase tracking-wider focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffe088] cursor-pointer"
           >
             Synchroniser maintenant
           </button>
@@ -588,7 +658,7 @@ export default function App() {
               return (
                 <section
                   aria-label="Concentration sur la leçon active en Mode Lecture"
-                  className="mx-4 sm:mx-6 mt-3 mb-4 p-5 sm:p-7 rounded-2xl bg-[#151b2b] border border-[#f2ca50]/55 shadow-2xl space-y-4"
+                  className="mx-4 sm:mx-6 mt-3 mb-4 p-5 sm:p-7 rounded-2xl luxury-card-surface space-y-4"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#232a3a]/60 pb-4">
                     <div className="space-y-1.5 min-w-0 flex-1">
@@ -612,7 +682,7 @@ export default function App() {
                   </div>
 
                   <div className="space-y-3">
-                    <div className="p-4 rounded-xl bg-[#0c1322] border border-[#232a3a]/60 space-y-1.5">
+                    <div className="p-4 rounded-xl luxury-hairline-panel space-y-1.5">
                       <p className={`text-xs font-mono font-bold uppercase tracking-wider ${isDark ? 'text-[#f2ca50]' : 'text-[#785b24]'}`}>
                         Grammaire · {focusLesson.grammar.title}
                       </p>
@@ -636,7 +706,7 @@ export default function App() {
                           {focusLesson.model_phrases.slice(0, 2).map((phrase, idx) => (
                             <div
                               key={idx}
-                              className="p-3.5 rounded-xl bg-[#0c1322] border border-[#232a3a] space-y-1"
+                              className="p-3.5 rounded-xl luxury-hairline-panel space-y-1"
                             >
                               <p className="text-sm font-serif font-semibold text-[#dce2f8]">
                                 {phrase.en}
@@ -659,7 +729,7 @@ export default function App() {
                       <button
                         type="button"
                         onClick={() => setActiveTab('cursus')}
-                        className="px-3.5 py-2 rounded-xl bg-[#191f2f] hover:bg-[#232a3a] border border-[#232a3a] text-xs font-semibold text-[#dce2f8] transition-colors cursor-pointer"
+                        className="px-3.5 py-2 rounded-xl luxury-btn-surface text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50] cursor-pointer"
                       >
                         Changer de leçon
                       </button>
@@ -669,7 +739,7 @@ export default function App() {
                           setActiveSelectedLesson(focusLesson);
                           setSearchLessonForDetail(focusLesson);
                         }}
-                        className="px-4 py-2 rounded-xl bg-[#f2ca50] hover:bg-[#ffe088] text-[#3c2f00] text-xs font-bold uppercase tracking-wider shadow-md transition-colors cursor-pointer flex items-center gap-1.5"
+                        className="px-4 py-2 rounded-xl luxury-btn-gold text-xs font-bold uppercase tracking-wider focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffe088] cursor-pointer flex items-center gap-1.5"
                       >
                         <span className="material-symbols-outlined text-sm">auto_stories</span>
                         <span>Ouvrir la leçon complète</span>
@@ -744,12 +814,12 @@ export default function App() {
             {/* Google Authentication & Firebase Cloud Sync Banner */}
             {!isAuthenticated && (
               <div
-                className={`mx-4 sm:mx-6 my-2 p-4 rounded-2xl bg-gradient-to-r from-[#172133] via-[#121927] to-[#1c273c] border border-[#f2ca50]/40 shadow-xl flex items-center justify-between gap-4 transition-opacity duration-300 ${
+                className={`mx-4 sm:mx-6 my-2 p-4 rounded-2xl luxury-card-surface luxury-card-interactive flex items-center justify-between gap-4 transition-opacity duration-300 ${
                   isReadingMode ? 'opacity-15 hover:opacity-85' : 'opacity-100'
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#0c1322] border border-[#f2ca50]/40 flex items-center justify-center shadow-md shrink-0">
+                  <div className="w-10 h-10 rounded-xl luxury-hairline-panel flex items-center justify-center shrink-0">
                     <svg className="w-5 h-5" viewBox="0 0 24 24">
                       <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
                       <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
@@ -762,7 +832,8 @@ export default function App() {
                       <span className="text-[10px] font-mono text-[#f2ca50] font-bold uppercase tracking-widest">
                         FIREBASE CLOUD FIRESTORE
                       </span>
-                      <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                      <span aria-hidden="true" className="text-[#99907c]">·</span>
+                      <span className="text-[10px] font-mono text-emerald-400 font-semibold">SYNCHRO CHIFFRÉE</span>
                     </div>
                     <h4 className="font-serif font-bold text-sm text-[#dce2f8]">
                       Inscription & Sauvegarde en Ligne
@@ -775,7 +846,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setIsAuthModalOpen(true)}
-                  className="px-4 py-2.5 rounded-xl bg-[#f2ca50] hover:bg-[#ffe088] text-[#3c2f00] font-bold text-xs uppercase tracking-wider shrink-0 shadow-md transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
+                  className="px-4 py-2.5 rounded-xl luxury-btn-gold font-bold text-xs uppercase tracking-wider shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffe088] cursor-pointer flex items-center gap-1.5"
                 >
                   <span className="material-symbols-outlined text-sm">login</span>
                   <span>S'inscrire</span>
@@ -785,13 +856,13 @@ export default function App() {
 
             {/* Editorial Banner for 6e-Terminale School Curriculum (kept clear in Reading Mode) */}
             <div
-              className="mx-4 sm:mx-6 my-4 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#191f2f] via-[#151b2b] to-[#232a3a] border border-[#f2ca50]/40 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all group"
+              className="mx-4 sm:mx-6 my-4 p-4 sm:p-5 rounded-2xl luxury-card-surface luxury-card-interactive flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all group"
             >
               <div
                 onClick={() => setActiveTab('cursus')}
                 className="flex items-center gap-3.5 cursor-pointer flex-1"
               >
-                <div className="w-12 h-12 rounded-xl bg-[#0c1322] border border-[#f2ca50]/40 flex items-center justify-center text-[#f2ca50] shadow-md group-hover:scale-105 transition-transform shrink-0">
+                <div className="w-12 h-12 rounded-xl luxury-hairline-panel border-[#f2ca50]/45 flex items-center justify-center text-[#f2ca50] group-hover:scale-105 transition-transform shrink-0">
                   <span className="material-symbols-outlined text-2xl">school</span>
                 </div>
                 <div className="flex flex-col">
@@ -799,11 +870,12 @@ export default function App() {
                     <span className="text-[10px] font-mono text-[#f2ca50] font-bold uppercase tracking-widest">
                       CURSUS OFFICIEL 6E ➔ TERMINALE
                     </span>
-                    <span className="px-2 py-0.2 rounded-full bg-emerald-500/20 text-emerald-400 text-[9px] font-mono font-bold">
+                    <span aria-hidden="true" className="text-[#99907c]">·</span>
+                    <span className="text-emerald-400 text-[10px] font-mono font-bold">
                       200 LEÇONS COMPLÈTES
                     </span>
                     {activeSelectedLesson && (
-                      <span className="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/50 text-[#f2ca50] text-[10px] font-mono font-bold flex items-center gap-1">
+                      <span className="px-2 py-0.5 rounded-md luxury-hairline-panel text-[#f2ca50] text-[10px] font-mono font-bold flex items-center gap-1">
                         <span className="material-symbols-outlined text-[13px] text-amber-400">check_circle</span>
                         <span>Active : {activeSelectedLesson.class_label || activeSelectedLesson.class_level} · {activeSelectedLesson.title}</span>
                       </span>
@@ -825,7 +897,7 @@ export default function App() {
                       e.stopPropagation();
                       setActiveSelectedLesson(ALL_200_LESSONS[0]);
                     }}
-                    className="px-3 py-2 rounded-xl bg-[#f2ca50]/15 hover:bg-[#f2ca50]/25 border border-[#f2ca50]/50 text-[#f2ca50] font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95"
+                    className="px-3 py-2 rounded-xl luxury-btn-amber-soft font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f2ca50]"
                     title="Sélectionner la leçon 1 pour activer le raccourci du Studio d'Élocution"
                   >
                     <span className="material-symbols-outlined text-sm">bookmark_add</span>
@@ -838,7 +910,7 @@ export default function App() {
                       e.stopPropagation();
                       setActiveSelectedLesson(null);
                     }}
-                    className="px-3 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 font-bold text-xs uppercase tracking-wider flex items-center gap-1 transition-all cursor-pointer shadow-sm active:scale-95"
+                    className="px-3 py-2 rounded-xl luxury-btn-ruby font-bold text-xs uppercase tracking-wider flex items-center gap-1 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
                     title="Désélectionner la leçon active"
                   >
                     <span className="material-symbols-outlined text-sm">close</span>
@@ -848,7 +920,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setActiveTab('cursus')}
-                  className="px-4 py-2.5 rounded-xl bg-[#f2ca50] text-[#3c2f00] font-bold text-xs uppercase tracking-wider flex items-center gap-1 shrink-0 hover:bg-[#ffe088] shadow-md transition-all cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl luxury-btn-gold font-bold text-xs uppercase tracking-wider flex items-center gap-1 shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffe088]"
                 >
                   <span>Explorer</span>
                   <span className="material-symbols-outlined text-sm">arrow_forward</span>
@@ -882,10 +954,10 @@ export default function App() {
             {/* Editorial Banner for 20 Mini-Games Arcade */}
             <div
               onClick={() => setActiveTab('jeux')}
-              className="mx-4 sm:mx-6 my-2 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-950/60 via-[#172133] to-[#121927] border border-[#f2ca50]/50 shadow-xl flex items-center justify-between gap-4 cursor-pointer hover:border-[#f2ca50] transition-all group"
+              className="mx-4 sm:mx-6 my-2 p-4 sm:p-5 rounded-2xl luxury-card-surface luxury-card-interactive flex items-center justify-between gap-4 cursor-pointer group"
             >
               <div className="flex items-center gap-3.5">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#f2ca50] via-amber-500 to-amber-700 flex items-center justify-center text-[#3c2f00] shadow-md group-hover:scale-105 transition-transform shrink-0">
+                <div className="w-12 h-12 rounded-xl luxury-btn-gold flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
                   <span className="material-symbols-outlined text-2xl font-bold">sports_esports</span>
                 </div>
                 <div className="flex flex-col">
@@ -893,7 +965,8 @@ export default function App() {
                     <span className="text-[10px] font-mono text-[#f2ca50] font-bold uppercase tracking-widest">
                       SALLE D'ARCADE LINGUISTIQUE
                     </span>
-                    <span className="px-2 py-0.2 rounded-full bg-amber-500/20 text-amber-300 text-[9px] font-mono font-bold">
+                    <span aria-hidden="true" className="text-[#99907c]">·</span>
+                    <span className="text-amber-300 text-[10px] font-mono font-bold">
                       20 MINI-JEUX INTERACTIFS
                     </span>
                   </div>
@@ -907,7 +980,7 @@ export default function App() {
               </div>
               <button
                 type="button"
-                className="px-4 py-2.5 rounded-xl bg-[#f2ca50] text-[#3c2f00] font-bold text-xs uppercase tracking-wider hidden sm:flex items-center gap-1 shrink-0 group-hover:bg-[#ffe088] shadow-md"
+                className="px-4 py-2.5 rounded-xl luxury-btn-gold font-bold text-xs uppercase tracking-wider hidden sm:flex items-center gap-1 shrink-0 cursor-pointer"
               >
                 <span>Jouer</span>
                 <span className="material-symbols-outlined text-sm">play_arrow</span>
@@ -920,10 +993,10 @@ export default function App() {
                 setCarteViewMode('adventure');
                 setActiveTab('carte');
               }}
-              className="mx-4 sm:mx-6 my-2 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#17263f] via-[#131d33] to-[#0c1322] border border-[#f2ca50]/55 shadow-xl flex items-center justify-between gap-4 cursor-pointer hover:border-[#f2ca50] transition-all group"
+              className="mx-4 sm:mx-6 my-2 p-4 sm:p-5 rounded-2xl luxury-card-surface luxury-card-interactive flex items-center justify-between gap-4 cursor-pointer group"
             >
               <div className="flex items-center gap-3.5">
-                <div className="w-12 h-12 rounded-xl bg-[#0c1322] border border-[#f2ca50]/55 flex items-center justify-center text-[#f2ca50] shadow-md group-hover:scale-105 transition-transform shrink-0">
+                <div className="w-12 h-12 rounded-xl luxury-btn-sapphire flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
                   <span className="material-symbols-outlined text-2xl font-bold">public</span>
                 </div>
                 <div className="flex flex-col">
@@ -944,7 +1017,7 @@ export default function App() {
               </div>
               <button
                 type="button"
-                className="px-4 py-2.5 rounded-xl bg-[#f2ca50] text-[#3c2f00] font-bold text-xs uppercase tracking-wider hidden sm:flex items-center gap-1 shrink-0 group-hover:bg-[#ffe088] shadow-md cursor-pointer"
+                className="px-4 py-2.5 rounded-xl luxury-btn-gold font-bold text-xs uppercase tracking-wider hidden sm:flex items-center gap-1 shrink-0 cursor-pointer"
               >
                 <span>Explorer</span>
                 <span className="material-symbols-outlined text-sm">explore</span>
@@ -957,10 +1030,10 @@ export default function App() {
                 setCarteViewMode('city_map');
                 setActiveTab('carte');
               }}
-              className="mx-4 sm:mx-6 my-2 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#191f2f] via-[#151b2b] to-[#0c1322] border border-[#f2ca50]/50 shadow-xl flex items-center justify-between gap-4 cursor-pointer hover:border-[#f2ca50] transition-all group"
+              className="mx-4 sm:mx-6 my-2 p-4 sm:p-5 rounded-2xl luxury-card-surface luxury-card-interactive flex items-center justify-between gap-4 cursor-pointer group"
             >
               <div className="flex items-center gap-3.5">
-                <div className="w-12 h-12 rounded-xl bg-[#0c1322] border border-[#f2ca50]/50 flex items-center justify-center text-[#f2ca50] shadow-md group-hover:scale-105 transition-transform shrink-0">
+                <div className="w-12 h-12 rounded-xl luxury-btn-emerald flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
                   <span className="material-symbols-outlined text-2xl font-bold" style={{ fontVariationSettings: "'FILL' 1" }}>
                     map
                   </span>
@@ -983,7 +1056,7 @@ export default function App() {
               </div>
               <button
                 type="button"
-                className="px-4 py-2.5 rounded-xl bg-[#f2ca50] text-[#3c2f00] font-bold text-xs uppercase tracking-wider hidden sm:flex items-center gap-1 shrink-0 group-hover:bg-[#ffe088] shadow-md cursor-pointer"
+                className="px-4 py-2.5 rounded-xl luxury-btn-gold font-bold text-xs uppercase tracking-wider hidden sm:flex items-center gap-1 shrink-0 cursor-pointer"
               >
                 <span>Ouvrir le Plan</span>
                 <span className="material-symbols-outlined text-sm">explore</span>
@@ -993,10 +1066,10 @@ export default function App() {
             {/* Editorial Banner for Weekly Leaderboard & Healthy Competition */}
             <div
               onClick={() => setActiveTab('classement')}
-              className="mx-4 sm:mx-6 my-2 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#172554]/70 via-[#101b33] to-[#1f1738]/80 border border-[#f2ca50]/50 shadow-xl flex items-center justify-between gap-4 cursor-pointer hover:border-[#f2ca50] transition-all group"
+              className="mx-4 sm:mx-6 my-2 p-4 sm:p-5 rounded-2xl luxury-card-surface luxury-card-interactive flex items-center justify-between gap-4 cursor-pointer group"
             >
               <div className="flex items-center gap-3.5">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#ffe088] via-[#f2ca50] to-[#b45309] flex items-center justify-center text-[#2c1d00] shadow-md group-hover:scale-105 transition-transform shrink-0">
+                <div className="w-12 h-12 rounded-xl luxury-btn-gold flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
                   <span className="material-symbols-outlined text-2xl font-bold">emoji_events</span>
                 </div>
                 <div className="flex flex-col">
@@ -1004,7 +1077,8 @@ export default function App() {
                     <span className="text-[10px] font-mono text-[#f2ca50] font-bold uppercase tracking-widest">
                       CLASSEMENT HEBDOMADAIRE • COMPÉTITION SAINE
                     </span>
-                    <span className="px-2 py-0.2 rounded-full bg-[#f2ca50]/20 text-[#ffe088] text-[9px] font-mono font-bold">
+                    <span aria-hidden="true" className="text-[#99907c]">·</span>
+                    <span className="text-[#ffe088] text-[10px] font-mono font-bold">
                       {(user.stats?.weeklyXp || 0).toLocaleString()} XP CETTE SEMAINE
                     </span>
                   </div>
@@ -1018,7 +1092,7 @@ export default function App() {
               </div>
               <button
                 type="button"
-                className="px-4 py-2.5 rounded-xl bg-[#f2ca50] text-[#3c2f00] font-bold text-xs uppercase tracking-wider hidden sm:flex items-center gap-1 shrink-0 group-hover:bg-[#ffe088] shadow-md"
+                className="px-4 py-2.5 rounded-xl luxury-btn-gold font-bold text-xs uppercase tracking-wider hidden sm:flex items-center gap-1 shrink-0 cursor-pointer"
               >
                 <span>Voir le Top</span>
                 <span className="material-symbols-outlined text-sm">leaderboard</span>
@@ -1135,32 +1209,34 @@ export default function App() {
               </div>
             </div>
 
-            {carteViewMode === 'adventure' ? (
-              <EnglishAdventureView
-                user={user}
-                currentLevel={currentLevel}
-                onXpEarned={(xp) => {
-                  if (xp > 0) {
-                    handleChallengeComplete(true, xp);
-                  }
-                  setUser(getLocalUserProfile());
-                }}
-                onProfileRefresh={() => setUser(getLocalUserProfile())}
-              />
-            ) : (
-              <CityQuizMapView
-                progression={cityMapProgression}
-                playerLevel={calculateLevel(user.stats?.totalXp ?? 0)}
-                onXpEarned={(xp) => {
-                  handleChallengeComplete(xp);
-                  setUser(getLocalUserProfile());
-                }}
-                onProgressionUpdated={(nextState) => {
-                  setCityMapProgression(nextState);
-                  setUser(getLocalUserProfile());
-                }}
-              />
-            )}
+            <Suspense fallback={<LazyViewFallback />}>
+              {carteViewMode === 'adventure' ? (
+                <EnglishAdventureView
+                  user={user}
+                  currentLevel={currentLevel}
+                  onXpEarned={(xp) => {
+                    if (xp > 0) {
+                      handleChallengeComplete(true, xp);
+                    }
+                    setUser(getLocalUserProfile());
+                  }}
+                  onProfileRefresh={() => setUser(getLocalUserProfile())}
+                />
+              ) : (
+                <CityQuizMapView
+                  progression={cityMapProgression}
+                  playerLevel={calculateLevel(user.stats?.totalXp ?? 0)}
+                  onXpEarned={(xp) => {
+                    handleChallengeComplete(xp);
+                    setUser(getLocalUserProfile());
+                  }}
+                  onProgressionUpdated={(nextState) => {
+                    setCityMapProgression(nextState);
+                    setUser(getLocalUserProfile());
+                  }}
+                />
+              )}
+            </Suspense>
               </motion.div>
             )}
 
@@ -1182,26 +1258,28 @@ export default function App() {
                 }}
                 className="max-w-4xl mx-auto pt-2 will-change-transform"
               >
-                <SchoolCurriculumView
-                  onLessonCompleted={(lessonId, xp) => {
-                    markLessonCompletedLocally(lessonId);
-                    handleChallengeComplete(xp);
-                  }}
-                  activeSelectedLessonId={activeSelectedLesson?.id}
-                  onSelectLesson={(lesson) => setActiveSelectedLesson(lesson)}
-                  favoriteLessonIds={favoriteLessonIds}
-                  onToggleFavorite={handleToggleFavoriteLesson}
-                  cityProgression={cityMapProgression}
-                  playerLevel={calculateLevel(user.stats?.totalXp ?? 0)}
-                  onCityXpEarned={(xp) => {
-                    handleChallengeComplete(xp);
-                    setUser(getLocalUserProfile());
-                  }}
-                  onCityProgressionUpdated={(nextState) => {
-                    setCityMapProgression(nextState);
-                    setUser(getLocalUserProfile());
-                  }}
-                />
+                <Suspense fallback={<LazyViewFallback />}>
+                  <SchoolCurriculumView
+                    onLessonCompleted={(lessonId, xp) => {
+                      markLessonCompletedLocally(lessonId);
+                      handleChallengeComplete(xp);
+                    }}
+                    activeSelectedLessonId={activeSelectedLesson?.id}
+                    onSelectLesson={(lesson) => setActiveSelectedLesson(lesson)}
+                    favoriteLessonIds={favoriteLessonIds}
+                    onToggleFavorite={handleToggleFavoriteLesson}
+                    cityProgression={cityMapProgression}
+                    playerLevel={calculateLevel(user.stats?.totalXp ?? 0)}
+                    onCityXpEarned={(xp) => {
+                      handleChallengeComplete(xp);
+                      setUser(getLocalUserProfile());
+                    }}
+                    onCityProgressionUpdated={(nextState) => {
+                      setCityMapProgression(nextState);
+                      setUser(getLocalUserProfile());
+                    }}
+                  />
+                </Suspense>
               </motion.div>
             )}
 
@@ -1223,11 +1301,13 @@ export default function App() {
                 }}
                 className="max-w-5xl mx-auto pt-2 will-change-transform"
               >
-                <TwentyGamesHub
-                  onXpEarned={(xp) => handleChallengeComplete(xp)}
-                  onPointsDeducted={(pts) => handleChallengeComplete(pts)}
-                  onClose={() => setActiveTab('accueil')}
-                />
+                <Suspense fallback={<LazyViewFallback />}>
+                  <TwentyGamesHub
+                    onXpEarned={(xp) => handleChallengeComplete(xp)}
+                    onPointsDeducted={(pts) => handleChallengeComplete(pts)}
+                    onClose={() => setActiveTab('accueil')}
+                  />
+                </Suspense>
               </motion.div>
             )}
 
@@ -1249,11 +1329,13 @@ export default function App() {
                 }}
                 className="max-w-4xl mx-auto pt-2 px-4 sm:px-6 will-change-transform"
               >
-                <LeaderboardView
-                  user={user}
-                  onNavigateToGames={() => setActiveTab('jeux')}
-                  onNavigateToPractice={() => setActiveTab('pratique')}
-                />
+                <Suspense fallback={<LazyViewFallback />}>
+                  <LeaderboardView
+                    user={user}
+                    onNavigateToGames={() => setActiveTab('jeux')}
+                    onNavigateToPractice={() => setActiveTab('pratique')}
+                  />
+                </Suspense>
               </motion.div>
             )}
 
@@ -1273,18 +1355,20 @@ export default function App() {
                   scale: { duration: 0.26, ease: TAB_EASE_OUT },
                   layout: { duration: 0.28, ease: TAB_EASE_OUT }
                 }}
-                className="max-w-4xl mx-auto pt-2 space-y-6 will-change-transform"
+                className="max-w-6xl mx-auto pt-2 space-y-6 will-change-transform"
               >
-                <DashboardView
-                  user={user}
-                  onResumePractice={() => setActiveTab('pratique')}
-                  onUpdateStudyTarget={handleUpdateStudyTarget}
-                  onOpenFlashcards={() => setIsFlashcardsOpen(true)}
-                  onNavigateLeaderboard={() => setActiveTab('classement')}
-                  onLaunchEcosystemModule={handleLaunchEcosystemModule}
-                />
-                {/* Section 'Mon historique de progression' sous le composant DashboardView */}
-                <ProgressHistorySection user={user} />
+                <Suspense fallback={<LazyViewFallback />}>
+                  <DashboardView
+                    user={user}
+                    onResumePractice={() => setActiveTab('pratique')}
+                    onUpdateStudyTarget={handleUpdateStudyTarget}
+                    onOpenFlashcards={() => setIsFlashcardsOpen(true)}
+                    onNavigateLeaderboard={() => setActiveTab('classement')}
+                    onLaunchEcosystemModule={handleLaunchEcosystemModule}
+                  />
+                  {/* Section 'Mon historique de progression' sous le composant DashboardView */}
+                  <ProgressHistorySection user={user} />
+                </Suspense>
               </motion.div>
             )}
 
@@ -1306,44 +1390,46 @@ export default function App() {
                 }}
                 className="max-w-4xl mx-auto pt-2 will-change-transform"
               >
-                <PracticeView
-                  currentLevel={currentLevel}
-                  onSelectLevel={handleLevelChange}
-                  onOpenDictation={() => setIsDictationOpen(true)}
-                  onOpenFlashcards={() => {
-                    setFlashcardsDeckMode('vocab');
-                    setIsFlashcardsOpen(true);
-                  }}
-                  onOpenFlashcardsFocus={() => {
-                    setFlashcardsDeckMode('vocab');
-                    setFlashcardsFocusMode(true);
-                    setIsFlashcardsOpen(true);
-                  }}
-                  onOpenDialogueFlashcards={() => {
-                    setFlashcardsDeckMode('dialogues');
-                    setFlashcardsFocusMode(false);
-                    setIsFlashcardsOpen(true);
-                  }}
-                  onOpenDialogues={(themeId = 'all') => {
-                    setDialoguesInitialTheme(themeId);
-                    setIsDialoguesOpen(true);
-                  }}
-                  onOpenQuiz={() => setIsQuizOpen(true)}
-                  onOpenSpeaking={() => setIsSpeakingOpen(true)}
-                  onOpenGames={() => setActiveTab('jeux')}
-                  onOpenCityMap={() => {
-                    setCarteViewMode('city_map');
-                    setActiveTab('carte');
-                  }}
-                  onOpenAdventure={() => {
-                    setCarteViewMode('adventure');
-                    setActiveTab('carte');
-                  }}
-                  onOpenAiTutor={() => setIsTutorOpen(true)}
-                  onOpenEscapeRoom={() => setIsEscapeRoomOpen(true)}
-                  onOpenListeningCinema={() => setIsCinemaOpen(true)}
-                  onOpenGrammarBattle={() => setIsGrammarBattleOpen(true)}
-                />
+                <Suspense fallback={<LazyViewFallback />}>
+                  <PracticeView
+                    currentLevel={currentLevel}
+                    onSelectLevel={handleLevelChange}
+                    onOpenDictation={() => setIsDictationOpen(true)}
+                    onOpenFlashcards={() => {
+                      setFlashcardsDeckMode('vocab');
+                      setIsFlashcardsOpen(true);
+                    }}
+                    onOpenFlashcardsFocus={() => {
+                      setFlashcardsDeckMode('vocab');
+                      setFlashcardsFocusMode(true);
+                      setIsFlashcardsOpen(true);
+                    }}
+                    onOpenDialogueFlashcards={() => {
+                      setFlashcardsDeckMode('dialogues');
+                      setFlashcardsFocusMode(false);
+                      setIsFlashcardsOpen(true);
+                    }}
+                    onOpenDialogues={(themeId = 'all') => {
+                      setDialoguesInitialTheme(themeId);
+                      setIsDialoguesOpen(true);
+                    }}
+                    onOpenQuiz={() => setIsQuizOpen(true)}
+                    onOpenSpeaking={() => setIsSpeakingOpen(true)}
+                    onOpenGames={() => setActiveTab('jeux')}
+                    onOpenCityMap={() => {
+                      setCarteViewMode('city_map');
+                      setActiveTab('carte');
+                    }}
+                    onOpenAdventure={() => {
+                      setCarteViewMode('adventure');
+                      setActiveTab('carte');
+                    }}
+                    onOpenAiTutor={() => setIsTutorOpen(true)}
+                    onOpenEscapeRoom={() => setIsEscapeRoomOpen(true)}
+                    onOpenListeningCinema={() => setIsCinemaOpen(true)}
+                    onOpenGrammarBattle={() => setIsGrammarBattleOpen(true)}
+                  />
+                </Suspense>
               </motion.div>
             )}
 
@@ -1363,19 +1449,25 @@ export default function App() {
                   scale: { duration: 0.26, ease: TAB_EASE_OUT },
                   layout: { duration: 0.28, ease: TAB_EASE_OUT }
                 }}
-                className="max-w-xl mx-auto pt-2 will-change-transform"
+                className="max-w-5xl mx-auto px-3 sm:px-6 pt-2"
               >
-                <ProfileModal
-                  user={user}
-                  onClose={() => setActiveTab('accueil')}
-                  onUpdateUser={async (partial) => {
-                    const updated = await updateUserProfile(partial);
-                    setUser(updated);
-                  }}
-                  onCustomPhotoUpload={handleCustomUpload}
-                  onOpenInstallModal={() => setIsInstallModalOpen(true)}
-                  onOpenPlacement={() => setIsPlacementModalOpen(true)}
-                />
+                <Suspense fallback={<LazyViewFallback />}>
+                  <ProfileModal
+                    mode="page"
+                    user={user}
+                    onClose={() => setActiveTab('accueil')}
+                    onUpdateUser={async (partial) => {
+                      const updated = await updateUserProfile(partial);
+                      setUser(updated);
+                    }}
+                    onCustomPhotoUpload={handleCustomUpload}
+                    onResetHeroPhoto={() => handlePhotoChange(DEFAULT_USER_PROFILE.heroImageURL)}
+                    onOpenInstallModal={() => setIsInstallModalOpen(true)}
+                    onOpenPlacement={() => setIsPlacementModalOpen(true)}
+                    onLaunchSkillModule={handleLaunchEcosystemModule}
+                    onNavigateDashboard={() => setActiveTab('dashboard')}
+                  />
+                </Suspense>
               </motion.div>
             )}
           </AnimatePresence>
@@ -1387,119 +1479,161 @@ export default function App() {
 
       {/* MODALS */}
       {isProfileOpen && (
-        <ProfileModal
-          user={user}
-          onClose={() => setIsProfileOpen(false)}
-          onUpdateUser={async (partial) => {
-            const updated = await updateUserProfile(partial);
-            setUser(updated);
-          }}
-          onCustomPhotoUpload={handleCustomUpload}
-          onOpenInstallModal={() => setIsInstallModalOpen(true)}
-          onOpenPlacement={() => {
-            setIsProfileOpen(false);
-            setIsPlacementModalOpen(true);
-          }}
-        />
+        <Suspense fallback={null}>
+          <ProfileModal
+            mode="modal"
+            user={user}
+            onClose={() => setIsProfileOpen(false)}
+            onUpdateUser={async (partial) => {
+              const updated = await updateUserProfile(partial);
+              setUser(updated);
+            }}
+            onCustomPhotoUpload={handleCustomUpload}
+            onResetHeroPhoto={() => handlePhotoChange(DEFAULT_USER_PROFILE.heroImageURL)}
+            onOpenInstallModal={() => setIsInstallModalOpen(true)}
+            onOpenPlacement={() => {
+              setIsProfileOpen(false);
+              setIsPlacementModalOpen(true);
+            }}
+            onLaunchSkillModule={(action) => {
+              setIsProfileOpen(false);
+              handleLaunchEcosystemModule(action);
+            }}
+            onNavigateDashboard={() => {
+              setIsProfileOpen(false);
+              setActiveTab('dashboard');
+            }}
+          />
+        </Suspense>
       )}
 
       {isDictationOpen && (
-        <DictationModal
-          currentLevel={currentLevel}
-          onClose={() => setIsDictationOpen(false)}
-          onAttemptRecorded={() => {
-            setUser(getLocalUserProfile());
-          }}
-        />
+        <Suspense fallback={null}>
+          <DictationModal
+            currentLevel={currentLevel}
+            onClose={() => setIsDictationOpen(false)}
+            onAttemptRecorded={() => {
+              setUser(getLocalUserProfile());
+            }}
+          />
+        </Suspense>
       )}
 
       {isFlashcardsOpen && (
-        <FlashcardsModal
-          currentLevel={currentLevel}
-          initialFocusMode={flashcardsFocusMode}
-          initialDeckMode={flashcardsDeckMode}
-          onClose={() => {
-            setIsFlashcardsOpen(false);
-            setFlashcardsFocusMode(false);
-          }}
-          onCardReviewed={() => {
-            setUser(getLocalUserProfile());
-          }}
-        />
+        <Suspense fallback={null}>
+          <FlashcardsModal
+            currentLevel={currentLevel}
+            initialFocusMode={flashcardsFocusMode}
+            initialDeckMode={flashcardsDeckMode}
+            onClose={() => {
+              setIsFlashcardsOpen(false);
+              setFlashcardsFocusMode(false);
+            }}
+            onCardReviewed={() => {
+              setUser(getLocalUserProfile());
+            }}
+          />
+        </Suspense>
       )}
 
       {isDialoguesOpen && (
-        <AtelierDialoguesModal
-          isOpen={isDialoguesOpen}
-          initialTheme={dialoguesInitialTheme}
-          onClose={() => setIsDialoguesOpen(false)}
-          onDialogueCompleted={(_dlgId, xp) => {
-            handleChallengeComplete(xp);
-            setUser(getLocalUserProfile());
-          }}
-          onOpenDialogueFlashcards={() => {
-            setIsDialoguesOpen(false);
-            setFlashcardsDeckMode('dialogues');
-            setFlashcardsFocusMode(false);
-            setIsFlashcardsOpen(true);
-          }}
-        />
+        <Suspense fallback={null}>
+          <AtelierDialoguesModal
+            isOpen={isDialoguesOpen}
+            initialTheme={dialoguesInitialTheme}
+            onClose={() => setIsDialoguesOpen(false)}
+            onDialogueCompleted={(_dlgId, xp) => {
+              handleChallengeComplete(xp);
+              setUser(getLocalUserProfile());
+            }}
+            onOpenDialogueFlashcards={() => {
+              setIsDialoguesOpen(false);
+              setFlashcardsDeckMode('dialogues');
+              setFlashcardsFocusMode(false);
+              setIsFlashcardsOpen(true);
+            }}
+          />
+        </Suspense>
       )}
 
       {isQuizOpen && (
-        <QuizModal
-          currentLevel={currentLevel}
-          onClose={() => setIsQuizOpen(false)}
-          onQuizFinished={() => {
-            setUser(getLocalUserProfile());
-          }}
-        />
+        <Suspense fallback={null}>
+          <QuizModal
+            currentLevel={currentLevel}
+            onClose={() => setIsQuizOpen(false)}
+            onQuizFinished={() => {
+              setUser(getLocalUserProfile());
+            }}
+          />
+        </Suspense>
       )}
 
       {isSpeakingOpen && (
-        <SpeakingStudioModal
-          currentLevel={currentLevel}
-          onClose={() => setIsSpeakingOpen(false)}
-          onSpeakingComplete={() => {
-            setUser(getLocalUserProfile());
-          }}
-          activeLesson={activeSelectedLesson}
-        />
+        <Suspense fallback={null}>
+          <SpeakingStudioModal
+            currentLevel={currentLevel}
+            onClose={() => setIsSpeakingOpen(false)}
+            onSpeakingComplete={() => {
+              setUser(getLocalUserProfile());
+            }}
+            activeLesson={activeSelectedLesson}
+          />
+        </Suspense>
       )}
 
       {/* Theme and Floral Skin Selector Modal */}
-      <ThemeSelectorModal
-        isOpen={isThemeSelectorOpen}
-        onClose={() => setIsThemeSelectorOpen(false)}
-      />
+      {isThemeSelectorOpen && (
+        <Suspense fallback={null}>
+          <ThemeSelectorModal
+            isOpen={isThemeSelectorOpen}
+            onClose={() => setIsThemeSelectorOpen(false)}
+          />
+        </Suspense>
+      )}
 
       {/* Mobile Icon & PWA Installation Modal */}
-      <InstallAppModal
-        isOpen={isInstallModalOpen}
-        onClose={() => setIsInstallModalOpen(false)}
-      />
+      {isInstallModalOpen && (
+        <Suspense fallback={null}>
+          <InstallAppModal
+            isOpen={isInstallModalOpen}
+            onClose={() => setIsInstallModalOpen(false)}
+          />
+        </Suspense>
+      )}
 
       {/* Google Authentication & Firebase Cloud Sync Modal */}
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-        onSuccess={(profile) => setUser(profile)}
-      />
+      {isAuthModalOpen && (
+        <Suspense fallback={null}>
+          <AuthModal
+            isOpen={isAuthModalOpen}
+            onClose={() => setIsAuthModalOpen(false)}
+            onSuccess={(profile) => setUser(profile)}
+          />
+        </Suspense>
+      )}
 
       {/* Authentic American Accent Studio Modal */}
-      <AmericanAccentStudioModal
-        isOpen={isAccentStudioOpen}
-        onClose={() => setIsAccentStudioOpen(false)}
-      />
+      {isAccentStudioOpen && (
+        <Suspense fallback={null}>
+          <AmericanAccentStudioModal
+            isOpen={isAccentStudioOpen}
+            onClose={() => setIsAccentStudioOpen(false)}
+          />
+        </Suspense>
+      )}
 
       {/* Collectible Cards & MSZ Coins Shop Modal */}
-      <MszShopModal
-        isOpen={isShopModalOpen}
-        onClose={() => setIsShopModalOpen(false)}
-        userLevel={calculateLevel(user.stats?.totalXp ?? 0)}
-        completedLessons={user.stats?.completedModules ?? 0}
-        onProfileUpdated={() => setUser(getLocalUserProfile())}
-      />
+      {isShopModalOpen && (
+        <Suspense fallback={null}>
+          <MszShopModal
+            isOpen={isShopModalOpen}
+            onClose={() => setIsShopModalOpen(false)}
+            userLevel={calculateLevel(user.stats?.totalXp ?? 0)}
+            completedLessons={user.stats?.completedModules ?? 0}
+            onProfileUpdated={() => setUser(getLocalUserProfile())}
+          />
+        </Suspense>
+      )}
 
       {/* Level-Up Celebration Modal (Framer Motion) */}
       <LevelUpCelebrationModal
@@ -1507,7 +1641,6 @@ export default function App() {
         data={levelUpData}
         onClose={() => setIsLevelUpModalOpen(false)}
         onClaimReward={() => {
-          // Bonus honorifique de complétion
           setIsLevelUpModalOpen(false);
         }}
       />
@@ -1519,86 +1652,110 @@ export default function App() {
       />
 
       {/* AI English Tutor Modal */}
-      <AITutorModal
-        isOpen={isTutorOpen}
-        onClose={() => setIsTutorOpen(false)}
-        user={user}
-        schoolGrade={activeSchoolGrade}
-        cefrLevel={currentLevel}
-        weakestSkills={user.adaptiveProfile?.weakestSkills}
-        onXpEarned={(xp) => {
-          handleChallengeComplete(xp);
-          setUser(getLocalUserProfile());
-        }}
-        onProfileUpdated={() => setUser(getLocalUserProfile())}
-      />
+      {isTutorOpen && (
+        <Suspense fallback={null}>
+          <AITutorModal
+            isOpen={isTutorOpen}
+            onClose={() => setIsTutorOpen(false)}
+            user={user}
+            schoolGrade={activeSchoolGrade}
+            cefrLevel={currentLevel}
+            weakestSkills={user.adaptiveProfile?.weakestSkills}
+            onXpEarned={(xp) => {
+              handleChallengeComplete(xp);
+              setUser(getLocalUserProfile());
+            }}
+            onProfileUpdated={() => setUser(getLocalUserProfile())}
+          />
+        </Suspense>
+      )}
 
       {/* English Escape Room Modal */}
-      <EnglishEscapeRoomModal
-        isOpen={isEscapeRoomOpen}
-        onClose={() => setIsEscapeRoomOpen(false)}
-        schoolGrade={activeSchoolGrade}
-        cefrLevel={currentLevel}
-        onXpEarned={(xp) => {
-          handleChallengeComplete(xp);
-          setUser(getLocalUserProfile());
-        }}
-      />
+      {isEscapeRoomOpen && (
+        <Suspense fallback={null}>
+          <EnglishEscapeRoomModal
+            isOpen={isEscapeRoomOpen}
+            onClose={() => setIsEscapeRoomOpen(false)}
+            schoolGrade={activeSchoolGrade}
+            cefrLevel={currentLevel}
+            onXpEarned={(xp) => {
+              handleChallengeComplete(xp);
+              setUser(getLocalUserProfile());
+            }}
+          />
+        </Suspense>
+      )}
 
       {/* Listening Cinema Modal */}
-      <ListeningCinemaModal
-        isOpen={isCinemaOpen}
-        onClose={() => setIsCinemaOpen(false)}
-        schoolGrade={activeSchoolGrade}
-        cefrLevel={currentLevel}
-        onXpEarned={(xp) => {
-          handleChallengeComplete(xp);
-          setUser(getLocalUserProfile());
-        }}
-      />
+      {isCinemaOpen && (
+        <Suspense fallback={null}>
+          <ListeningCinemaModal
+            isOpen={isCinemaOpen}
+            onClose={() => setIsCinemaOpen(false)}
+            schoolGrade={activeSchoolGrade}
+            cefrLevel={currentLevel}
+            onXpEarned={(xp) => {
+              handleChallengeComplete(xp);
+              setUser(getLocalUserProfile());
+            }}
+          />
+        </Suspense>
+      )}
 
       {/* Grammar Battle Arena Modal */}
-      <GrammarBattleModal
-        isOpen={isGrammarBattleOpen}
-        onClose={() => setIsGrammarBattleOpen(false)}
-        schoolGrade={activeSchoolGrade}
-        cefrLevel={currentLevel}
-        onXpEarned={(xp) => {
-          handleChallengeComplete(xp);
-          setUser(getLocalUserProfile());
-        }}
-      />
+      {isGrammarBattleOpen && (
+        <Suspense fallback={null}>
+          <GrammarBattleModal
+            isOpen={isGrammarBattleOpen}
+            onClose={() => setIsGrammarBattleOpen(false)}
+            schoolGrade={activeSchoolGrade}
+            cefrLevel={currentLevel}
+            onXpEarned={(xp) => {
+              handleChallengeComplete(xp);
+              setUser(getLocalUserProfile());
+            }}
+          />
+        </Suspense>
+      )}
 
       {/* Adaptive Placement Test & Student Profile Modal */}
-      <AdaptivePlacementModal
-        isOpen={isPlacementModalOpen}
-        user={user}
-        onClose={() => setIsPlacementModalOpen(false)}
-        onCompleted={(updated, xpAwarded) => {
-          setUser(updated);
-          setCurrentLevel(updated.level);
-          if (xpAwarded > 0) {
-            handleChallengeComplete(xpAwarded);
-          }
-        }}
-      />
+      {isPlacementModalOpen && (
+        <Suspense fallback={null}>
+          <AdaptivePlacementModal
+            isOpen={isPlacementModalOpen}
+            user={user}
+            onClose={() => setIsPlacementModalOpen(false)}
+            onCompleted={(updated, xpAwarded) => {
+              setUser(updated);
+              setCurrentLevel(updated.level);
+              if (xpAwarded > 0) {
+                handleChallengeComplete(xpAwarded);
+              }
+            }}
+          />
+        </Suspense>
+      )}
 
       {/* Interactive Lesson Detail Modal from Global Search */}
-      <LessonDetailModal
-        lesson={searchLessonForDetail}
-        isOpen={searchLessonForDetail !== null}
-        onClose={() => setSearchLessonForDetail(null)}
-        onCompleteLesson={(id, xp) => {
-          markLessonCompletedLocally(id);
-          handleChallengeComplete(xp);
-        }}
-        isFavorite={searchLessonForDetail ? favoriteLessonIds.includes(searchLessonForDetail.id) : false}
-        onToggleFavorite={
-          searchLessonForDetail
-            ? () => handleToggleFavoriteLesson(searchLessonForDetail.id)
-            : undefined
-        }
-      />
+      {searchLessonForDetail !== null && (
+        <Suspense fallback={null}>
+          <LessonDetailModal
+            lesson={searchLessonForDetail}
+            isOpen={searchLessonForDetail !== null}
+            onClose={() => setSearchLessonForDetail(null)}
+            onCompleteLesson={(id, xp) => {
+              markLessonCompletedLocally(id);
+              handleChallengeComplete(xp);
+            }}
+            isFavorite={searchLessonForDetail ? favoriteLessonIds.includes(searchLessonForDetail.id) : false}
+            onToggleFavorite={
+              searchLessonForDetail
+                ? () => handleToggleFavoriteLesson(searchLessonForDetail.id)
+                : undefined
+            }
+          />
+        </Suspense>
+      )}
 
       {/* Bouton de raccourci flottant vers le Studio d'Élocution (uniquement si une leçon est activement sélectionnée) */}
       <AnimatePresence mode="wait">

@@ -90,7 +90,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
       initial={shouldReduceMotion ? false : { y: 16 }}
       animate={{ y: 0 }}
       transition={{ duration: 0.24, ease: EASE_OUT_EXPO }}
-      className={`fixed bottom-0 left-0 right-0 z-40 pb-safe bg-[#0c1322]/88 backdrop-blur-xl border-t border-[#232a3a]/80 shadow-[0_-4px_24px_rgba(0,0,0,0.6)] transition-opacity duration-300 ${
+      className={`fixed bottom-0 left-0 right-0 z-40 pb-safe bg-[#090f1d]/90 backdrop-blur-xl border-t border-[#d4af37]/20 shadow-[0_-8px_28px_rgba(2,6,18,0.68)] transition-opacity duration-300 ${
         isReadingMode
           ? 'opacity-15 hover:opacity-95 focus-within:opacity-100'
           : 'opacity-100'

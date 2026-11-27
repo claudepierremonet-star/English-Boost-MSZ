@@ -65,7 +65,12 @@
         "outils",
         "chatbot",
         "evaluation ia",
-        "ia"
+        "ia",
+        "repetition espacee",
+        "memoire active",
+        "sm-2",
+        "rappel flash",
+        "flashcard"
       ],
       "antiTriggers": [
         "sans ia",
@@ -294,6 +299,10 @@
         "audio",
         "voix",
         "prononciation",
+        "elocution",
+        "studio d'elocution",
+        "phoneme",
+        "phonemes",
         "transcription",
         "parole",
         "paroles",
@@ -391,7 +400,10 @@
         "metriques",
         "kpi",
         "tendance",
-        "correlation"
+        "correlation",
+        "repetition espacee",
+        "memoire active",
+        "retention"
       ],
       "antiTriggers": []
     },
@@ -636,5 +648,6 @@
       ],
       "antiTriggers": []
     }
-  ]
+  ],
+  "updatedAt": "2026-11-26T16:14:27.088Z"
 }

@@ -107,6 +107,20 @@ export interface SkillInstructionsResponse {
   reason: string;
 }
 
+export interface GlobalAgentContextSnapshot {
+  sourceRegistry: 'skills/index.json';
+  generatedAt: string;
+  totalSkills: number;
+  enabledCount: number;
+  disabledCount: number;
+  loadedCount: number;
+  totalBytes: number;
+  activeSkillIds: string[];
+  disabledSkillIds: string[];
+  context: SkillSelectionApiResponse['context'];
+  hasSimulatedSkills: false;
+}
+
 async function parseErrorMessage(response: Response, fallback: string): Promise<string> {
   try {
     const payload = (await response.json()) as { error?: string };
@@ -130,10 +144,27 @@ export async function fetchSkillsRegistry(): Promise<SkillsRegistrySnapshot> {
   return (await res.json()) as SkillsRegistrySnapshot;
 }
 
+export async function fetchGlobalAgentContext(): Promise<GlobalAgentContextSnapshot> {
+  const res = await fetch('/api/skills/global-context', {
+    method: 'GET',
+    headers: { Accept: 'application/json' }
+  });
+  if (!res.ok) {
+    throw new Error(
+      await parseErrorMessage(res, 'Impossible de charger le contexte global de l’agent')
+    );
+  }
+  return (await res.json()) as GlobalAgentContextSnapshot;
+}
+
 export async function updateSkillEnabledState(
   skillId: string,
   enabled: boolean
-): Promise<{ skill: SkillAdminItem; snapshot: SkillsRegistrySnapshot }> {
+): Promise<{
+  skill: SkillAdminItem;
+  snapshot: SkillsRegistrySnapshot;
+  globalContext?: GlobalAgentContextSnapshot;
+}> {
   const res = await fetch(`/api/skills/${encodeURIComponent(skillId)}`, {
     method: 'PATCH',
     headers: {
@@ -145,7 +176,34 @@ export async function updateSkillEnabledState(
   if (!res.ok) {
     throw new Error(await parseErrorMessage(res, 'Impossible de modifier le statut de la Skill'));
   }
-  return (await res.json()) as { skill: SkillAdminItem; snapshot: SkillsRegistrySnapshot };
+  return (await res.json()) as {
+    skill: SkillAdminItem;
+    snapshot: SkillsRegistrySnapshot;
+    globalContext?: GlobalAgentContextSnapshot;
+  };
+}
+
+export async function bulkUpdateSkillsEnabled(
+  enabled: boolean,
+  skillIds?: string[]
+): Promise<{ snapshot: SkillsRegistrySnapshot; globalContext: GlobalAgentContextSnapshot }> {
+  const res = await fetch('/api/skills/bulk', {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json'
+    },
+    body: JSON.stringify({ enabled, skillIds })
+  });
+  if (!res.ok) {
+    throw new Error(
+      await parseErrorMessage(res, 'Impossible de mettre à jour les compétences en lot')
+    );
+  }
+  return (await res.json()) as {
+    snapshot: SkillsRegistrySnapshot;
+    globalContext: GlobalAgentContextSnapshot;
+  };
 }
 
 export async function selectSkillsForTask(
