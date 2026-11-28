@@ -144,7 +144,7 @@ service cloud.firestore {
         (!('moduleType' in data) || data.moduleType in [
           'dictation', 'flashcard', 'quiz', 'speaking', 'daily_challenge',
           'grammar', 'reading', 'writing', 'escape_room', 'listening_cinema',
-          'grammar_battle', 'tutor', 'dialogue', 'city_map', 'arcade', 'adventure'
+          'grammar_battle', 'tutor', 'dialogue', 'city_map', 'arcade', 'adventure', 'smart_memory'
         ]);
     }
 
@@ -179,6 +179,97 @@ service cloud.firestore {
         data.claimedAt is string && data.claimedAt.size() <= 64 &&
         (!('missionId' in data) || (data.missionId is string && data.missionId.size() <= 80)) &&
         (!('islandId' in data) || (data.islandId is string && data.islandId.size() <= 80));
+    }
+
+    function isValidSmartMemoryPayload(data, itemId) {
+      return data.keys().hasAll([
+          'itemId', 'normalizedKey', 'itemType', 'english', 'french',
+          'cefrLevel', 'topic', 'difficulty', 'state', 'repetitions',
+          'intervalDays', 'easeFactor', 'nextReviewDate', 'timezone',
+          'recallHistory', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'itemId', 'normalizedKey', 'itemType', 'english', 'french',
+          'pronunciation', 'exampleSentence', 'cefrLevel', 'topic', 'difficulty',
+          'state', 'repetitions', 'intervalDays', 'easeFactor', 'retentionScore',
+          'nextReviewDate', 'lastReviewedAt', 'timezone', 'nextReviewLocalDay',
+          'totalReviews', 'correctReviews', 'lastOutcome', 'lastResponseTimeMs',
+          'lastConfidence', 'lastMode', 'recallHistory', 'createdAt', 'updatedAt'
+        ]) &&
+        data.itemId is string && data.itemId == itemId && isValidId(itemId) &&
+        data.normalizedKey is string && data.normalizedKey.size() >= 1 && data.normalizedKey.size() <= 200 &&
+        data.itemType in ['vocabulary', 'expression', 'grammar', 'irregular_verb'] &&
+        data.english is string && data.english.size() >= 1 && data.english.size() <= 240 &&
+        data.french is string && data.french.size() >= 1 && data.french.size() <= 400 &&
+        (!('pronunciation' in data) || (data.pronunciation is string && data.pronunciation.size() <= 160)) &&
+        (!('exampleSentence' in data) || (data.exampleSentence is string && data.exampleSentence.size() <= 500)) &&
+        isValidCefrLevel(data.cefrLevel) &&
+        data.topic is string && data.topic.size() >= 1 && data.topic.size() <= 120 &&
+        data.difficulty in ['easy', 'medium', 'hard'] &&
+        data.state in ['new', 'learning', 'review', 'mastered'] &&
+        data.repetitions is number && data.repetitions >= 0 && data.repetitions <= 1000 &&
+        data.intervalDays is number && data.intervalDays >= 0 && data.intervalDays <= 3650 &&
+        data.easeFactor is number && data.easeFactor >= 1.1 && data.easeFactor <= 4.0 &&
+        (!('retentionScore' in data) || (data.retentionScore is number && data.retentionScore >= 0 && data.retentionScore <= 100)) &&
+        data.nextReviewDate is string && data.nextReviewDate.size() >= 10 && data.nextReviewDate.size() <= 64 &&
+        (!('lastReviewedAt' in data) || (data.lastReviewedAt is string && data.lastReviewedAt.size() <= 64)) &&
+        data.timezone is string && data.timezone.size() >= 1 && data.timezone.size() <= 80 &&
+        (!('nextReviewLocalDay' in data) || (data.nextReviewLocalDay is string && data.nextReviewLocalDay.size() <= 20)) &&
+        (!('totalReviews' in data) || (data.totalReviews is number && data.totalReviews >= 0 && data.totalReviews <= 5000)) &&
+        (!('correctReviews' in data) || (data.correctReviews is number && data.correctReviews >= 0 && data.correctReviews <= 5000)) &&
+        (!('lastOutcome' in data) || data.lastOutcome in ['incorrect', 'hard', 'correct', 'easy']) &&
+        (!('lastResponseTimeMs' in data) || (data.lastResponseTimeMs is number && data.lastResponseTimeMs >= 0 && data.lastResponseTimeMs <= 600000)) &&
+        (!('lastConfidence' in data) || (data.lastConfidence is number && data.lastConfidence >= 1 && data.lastConfidence <= 3)) &&
+        (!('lastMode' in data) || (data.lastMode is string && data.lastMode.size() <= 40)) &&
+        data.recallHistory is list && data.recallHistory.size() <= 25 &&
+        data.createdAt is string && data.createdAt.size() >= 10 && data.createdAt.size() <= 64 &&
+        data.updatedAt is string && data.updatedAt.size() >= 10 && data.updatedAt.size() <= 64;
+    }
+
+    function isValidSmartMemoryDuelPayload(data, duelId) {
+      return data.keys().hasAll([
+          'duelId', 'status', 'cefrLevel', 'mode', 'cardIds',
+          'hostUid', 'hostName', 'hostScore', 'hostCorrectCount',
+          'hostAnsweredCount', 'hostTotalTimeMs', 'hostStreak', 'hostAnswers',
+          'guestScore', 'guestCorrectCount', 'guestAnsweredCount',
+          'guestTotalTimeMs', 'guestStreak', 'guestAnswers',
+          'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'duelId', 'status', 'cefrLevel', 'mode', 'cardIds',
+          'hostUid', 'hostName', 'guestUid', 'guestName',
+          'hostScore', 'hostCorrectCount', 'hostAnsweredCount', 'hostTotalTimeMs', 'hostStreak', 'hostBestStreak', 'hostAnswers',
+          'guestScore', 'guestCorrectCount', 'guestAnsweredCount', 'guestTotalTimeMs', 'guestStreak', 'guestBestStreak', 'guestAnswers',
+          'winnerUid', 'createdAt', 'startedAt', 'finishedAt', 'updatedAt'
+        ]) &&
+        data.duelId is string && data.duelId == duelId && isValidId(duelId) &&
+        data.status in ['waiting', 'active', 'finished'] &&
+        isValidCefrLevel(data.cefrLevel) &&
+        data.mode in ['mixed', 'en_to_fr', 'fr_to_en', 'multiple_choice', 'complete_sentence'] &&
+        data.cardIds is list && data.cardIds.size() == 10 && data.cardIds[0] is string &&
+        data.hostUid is string && data.hostUid.size() >= 1 && data.hostUid.size() <= 128 &&
+        data.hostName is string && data.hostName.size() >= 1 && data.hostName.size() <= 80 &&
+        (!('guestUid' in data) || data.guestUid == null || (data.guestUid is string && data.guestUid.size() >= 1 && data.guestUid.size() <= 128)) &&
+        (!('guestName' in data) || data.guestName == null || (data.guestName is string && data.guestName.size() >= 1 && data.guestName.size() <= 80)) &&
+        data.hostScore is number && data.hostScore >= 0 && data.hostScore <= 25000 &&
+        data.hostCorrectCount is number && data.hostCorrectCount >= 0 && data.hostCorrectCount <= 10 &&
+        data.hostAnsweredCount is number && data.hostAnsweredCount >= 0 && data.hostAnsweredCount <= 10 &&
+        data.hostTotalTimeMs is number && data.hostTotalTimeMs >= 0 && data.hostTotalTimeMs <= 3600000 &&
+        data.hostStreak is number && data.hostStreak >= 0 && data.hostStreak <= 10 &&
+        (!('hostBestStreak' in data) || (data.hostBestStreak is number && data.hostBestStreak >= 0 && data.hostBestStreak <= 10)) &&
+        data.hostAnswers is list && data.hostAnswers.size() <= 10 &&
+        data.guestScore is number && data.guestScore >= 0 && data.guestScore <= 25000 &&
+        data.guestCorrectCount is number && data.guestCorrectCount >= 0 && data.guestCorrectCount <= 10 &&
+        data.guestAnsweredCount is number && data.guestAnsweredCount >= 0 && data.guestAnsweredCount <= 10 &&
+        data.guestTotalTimeMs is number && data.guestTotalTimeMs >= 0 && data.guestTotalTimeMs <= 3600000 &&
+        data.guestStreak is number && data.guestStreak >= 0 && data.guestStreak <= 10 &&
+        (!('guestBestStreak' in data) || (data.guestBestStreak is number && data.guestBestStreak >= 0 && data.guestBestStreak <= 10)) &&
+        data.guestAnswers is list && data.guestAnswers.size() <= 10 &&
+        (!('winnerUid' in data) || data.winnerUid == null || (data.winnerUid is string && data.winnerUid.size() <= 128)) &&
+        data.createdAt is string && data.createdAt.size() >= 10 && data.createdAt.size() <= 64 &&
+        (!('startedAt' in data) || data.startedAt == null || (data.startedAt is string && data.startedAt.size() <= 64)) &&
+        (!('finishedAt' in data) || data.finishedAt == null || (data.finishedAt is string && data.finishedAt.size() <= 64)) &&
+        data.updatedAt is string && data.updatedAt.size() >= 10 && data.updatedAt.size() <= 64;
     }
 
     // Default deny catch-all
@@ -239,6 +330,73 @@ service cloud.firestore {
         allow create: if isOwner(userId) && isValidId(claimId) && isValidAdventureClaimPayload(request.resource.data, claimId);
         allow update, delete: if false;
       }
+
+      // Deduplicated Smart Memory spaced repetition & recall history records
+      match /smartMemoryRecords/{itemId} {
+        allow read: if isOwner(userId) && isValidId(itemId);
+        allow create: if isOwner(userId) && isValidId(itemId) && isValidSmartMemoryPayload(request.resource.data, itemId);
+        allow update: if isOwner(userId) && isValidId(itemId) && isValidSmartMemoryPayload(request.resource.data, itemId) &&
+          request.resource.data.itemId == resource.data.itemId &&
+          request.resource.data.createdAt == resource.data.createdAt;
+        allow delete: if isOwner(userId) && isValidId(itemId);
+      }
+    }
+
+    // Shared real-time Smart Memory 10-card duel rooms
+    match /smartMemoryDuels/{duelId} {
+      allow get: if isSignedIn() && isValidId(duelId) && (
+        resource == null ||
+        resource.data.hostUid == request.auth.uid ||
+        resource.data.guestUid == request.auth.uid ||
+        resource.data.status == 'waiting'
+      );
+      allow list: if isSignedIn() && (
+        resource.data.hostUid == request.auth.uid ||
+        resource.data.guestUid == request.auth.uid
+      );
+      allow create: if isSignedIn() && isValidId(duelId) &&
+        isValidSmartMemoryDuelPayload(request.resource.data, duelId) &&
+        request.resource.data.hostUid == request.auth.uid &&
+        request.resource.data.guestUid == null &&
+        request.resource.data.status == 'waiting';
+      allow update: if isSignedIn() && isValidId(duelId) &&
+        isValidSmartMemoryDuelPayload(request.resource.data, duelId) &&
+        resource.data.status != 'finished' &&
+        request.resource.data.duelId == resource.data.duelId &&
+        request.resource.data.hostUid == resource.data.hostUid &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.cardIds == resource.data.cardIds && (
+          // Action: friend joins waiting duel room
+          (
+            resource.data.status == 'waiting' &&
+            resource.data.guestUid == null &&
+            request.resource.data.guestUid == request.auth.uid &&
+            request.auth.uid != resource.data.hostUid &&
+            request.resource.data.status == 'active' &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['guestUid', 'guestName', 'status', 'startedAt', 'updatedAt'])
+          ) ||
+          // Action: host submits answer progress / final scoreboard
+          (
+            request.auth.uid == resource.data.hostUid &&
+            request.resource.data.guestUid == resource.data.guestUid &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'hostScore', 'hostCorrectCount', 'hostAnsweredCount', 'hostTotalTimeMs',
+              'hostStreak', 'hostBestStreak', 'hostAnswers', 'status', 'winnerUid',
+              'finishedAt', 'updatedAt'
+            ])
+          ) ||
+          // Action: guest submits answer progress / final scoreboard
+          (
+            resource.data.guestUid == request.auth.uid &&
+            request.resource.data.guestUid == resource.data.guestUid &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'guestScore', 'guestCorrectCount', 'guestAnsweredCount', 'guestTotalTimeMs',
+              'guestStreak', 'guestBestStreak', 'guestAnswers', 'status', 'winnerUid',
+              'finishedAt', 'updatedAt'
+            ])
+          )
+        );
+      allow delete: if isSignedIn() && isValidId(duelId) && resource.data.hostUid == request.auth.uid;
     }
   }
 }

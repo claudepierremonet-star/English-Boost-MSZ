@@ -33,6 +33,7 @@ import {
   type VocalFeedbackPlaybackMode
 } from '../utils/phonemeFeedbackEngine';
 import { PhonemeVocalFeedbackPanel } from './PhonemeVocalFeedbackPanel';
+import { saveSpeakingPhonemeTelemetry } from '../utils/phoneticMasteryEngine';
 import {
   STUDIO_ACOUSTIC_PRESETS,
   getStudioAcousticPreset,
@@ -138,6 +139,8 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
   const blobUrlRef = useRef<string | null>(null);
   const vocalFeedbackCancelRef = useRef<(() => void) | null>(null);
   const pendingAutoFeedbackRef = useRef<boolean>(false);
+  const currentRecordingSessionIdRef = useRef<string | null>(null);
+  const lastPersistedEvalSignatureRef = useRef<string>('');
 
   // Effective practice target text based on mode
   const effectiveTargetText = useMemo(() => {
@@ -256,9 +259,46 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
     };
   }, []);
 
-  // Automatically play automated vocal feedback once recording + acoustic analysis settle
+  // Automatically persist real Studio d'Élocution phoneme telemetry and play vocal feedback once settled
   useEffect(() => {
-    if (!pendingAutoFeedbackRef.current || isRecording || isAnalyzing || !phonemeEvaluation) {
+    if (isRecording || isAnalyzing || !phonemeEvaluation) {
+      return;
+    }
+
+    if (phonemeEvaluation.vocalFeedbackPlan.hasSpeechDetected) {
+      const sessionId =
+        currentRecordingSessionIdRef.current ||
+        `spk_sess_${Date.now()}_${item.id}`;
+      currentRecordingSessionIdRef.current = sessionId;
+
+      const evalSignature = `${sessionId}|${selectedAccent}|${phonemeEvaluation.phonemeAccuracyScore}|${phonemeEvaluation.phonemeStatuses
+        .map((s) => `${s.symbol}:${s.status}`)
+        .join(',')}`;
+
+      if (lastPersistedEvalSignatureRef.current !== evalSignature) {
+        lastPersistedEvalSignatureRef.current = evalSignature;
+        saveSpeakingPhonemeTelemetry({
+          sessionId,
+          moduleId: isFreeDictationMode ? 'dictation-free' : item.id,
+          title: isFreeDictationMode ? 'Dictée Vocale Libre' : item.title,
+          level: item.level,
+          targetAccent: selectedAccent,
+          phonemeAccuracyScore: phonemeEvaluation.phonemeAccuracyScore,
+          overallScore: phoneticReport?.overallScore ?? phonemeEvaluation.phonemeAccuracyScore,
+          recordedAt: new Date().toISOString(),
+          validated: false,
+          source: 'studio_recording',
+          phonemeStatuses: phonemeEvaluation.phonemeStatuses.map((s) => ({
+            symbol: s.symbol,
+            status: s.status,
+            occurrences: s.occurrences,
+            exampleWords: s.exampleWords
+          }))
+        });
+      }
+    }
+
+    if (!pendingAutoFeedbackRef.current) {
       return;
     }
     pendingAutoFeedbackRef.current = false;
@@ -269,7 +309,19 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
       triggerAutomatedVocalFeedback(phonemeEvaluation);
     }, 280);
     return () => clearTimeout(timer);
-  }, [isRecording, isAnalyzing, phonemeEvaluation, autoVocalFeedbackEnabled, skillLoadState]);
+  }, [
+    isRecording,
+    isAnalyzing,
+    phonemeEvaluation,
+    phoneticReport,
+    item.id,
+    item.title,
+    item.level,
+    isFreeDictationMode,
+    selectedAccent,
+    autoVocalFeedbackEnabled,
+    skillLoadState
+  ]);
 
   // Clean up on unmount
   useEffect(() => {
@@ -326,6 +378,8 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
     stopSpeech();
     stopStudioAcousticAmbiance();
     setIsRecording(false);
+    currentRecordingSessionIdRef.current = null;
+    lastPersistedEvalSignatureRef.current = '';
     if (blobUrlRef.current) {
       URL.revokeObjectURL(blobUrlRef.current);
       blobUrlRef.current = null;
@@ -356,6 +410,7 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
   // Start real recording + Speech Recognition
   const handleStartRecording = async () => {
     resetRecordingState();
+    currentRecordingSessionIdRef.current = `spk_sess_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     setMicError(null);
     audioChunksRef.current = [];
 
@@ -539,13 +594,38 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
     }
   };
 
-  // Validate session score into Firebase
+  // Validate session score into Firebase + update per-phoneme Studio telemetry
   const handleValidateSession = async () => {
     const finalScore = phoneticReport
       ? phoneticReport.overallScore
       : analysisResult
       ? analysisResult.overallScore
       : 92;
+
+    const sessionId =
+      currentRecordingSessionIdRef.current ||
+      `spk_sess_${Date.now()}_${item.id}`;
+
+    if (phonemeEvaluation && phonemeEvaluation.vocalFeedbackPlan.hasSpeechDetected) {
+      saveSpeakingPhonemeTelemetry({
+        sessionId,
+        moduleId: isFreeDictationMode ? 'dictation-free' : item.id,
+        title: isFreeDictationMode ? 'Dictée Vocale Libre' : item.title,
+        level: item.level,
+        targetAccent: selectedAccent,
+        phonemeAccuracyScore: phonemeEvaluation.phonemeAccuracyScore,
+        overallScore: finalScore,
+        recordedAt: new Date().toISOString(),
+        validated: true,
+        source: 'studio_recording',
+        phonemeStatuses: phonemeEvaluation.phonemeStatuses.map((s) => ({
+          symbol: s.symbol,
+          status: s.status,
+          occurrences: s.occurrences,
+          exampleWords: s.exampleWords
+        }))
+      });
+    }
 
     playStudioValidationCue3D(finalScore);
     await recordAttempt({
@@ -554,7 +634,23 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
       title: `${item.title} (Dictée & Élocution)`,
       level: item.level,
       score: finalScore,
-      durationSeconds: Math.max(12, recordingSeconds)
+      durationSeconds: Math.max(12, recordingSeconds),
+      details: phonemeEvaluation
+        ? {
+            phonemeSessionId: sessionId,
+            targetAccent: selectedAccent,
+            phonemeAccuracyScore: phonemeEvaluation.phonemeAccuracyScore,
+            phonemeStatuses: phonemeEvaluation.phonemeStatuses.map((s) => ({
+              symbol: s.symbol,
+              status: s.status,
+              occurrences: s.occurrences,
+              exampleWords: s.exampleWords
+            }))
+          }
+        : {
+            phonemeSessionId: sessionId,
+            targetAccent: selectedAccent
+          }
     });
     onSpeakingComplete?.();
     onClose();
@@ -1226,7 +1322,11 @@ export const SpeakingStudioModal: React.FC<SpeakingStudioModalProps> = ({
                     title: `${item.title} (Pronunciation Duel)`,
                     level: item.level,
                     score,
-                    durationSeconds: 15
+                    durationSeconds: 15,
+                    details: {
+                      targetAccent: selectedAccent,
+                      mode: 'duel'
+                    }
                   });
                   onSpeakingComplete?.();
                 }}

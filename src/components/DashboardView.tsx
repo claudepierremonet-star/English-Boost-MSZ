@@ -42,6 +42,7 @@ import { SkillsAdminView } from './SkillsAdminView';
 import { MasterSkillsView } from './MasterSkillsView';
 import { SkillAnalyticsRadialD3 } from './SkillAnalyticsRadialD3';
 import { ActiveMemoryPanel } from './ActiveMemoryPanel';
+import { PhoneticMasteryWidget } from './PhoneticMasteryWidget';
 import { ChartSectionSkeleton } from './SkeletonLoaders';
 
 interface CustomTooltipProps {
@@ -1322,11 +1323,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         />
       )}
 
+      {(dashboardTab === 'all' || dashboardTab === 'mastery' || dashboardTab === 'analytics') && (
+        <motion.div variants={dashboardCardVariants} initial="hidden" animate="show">
+          <PhoneticMasteryWidget
+            recentAttempts={recentAttempts}
+            onOpenSpeaking={() => onLaunchEcosystemModule?.('speaking')}
+          />
+        </motion.div>
+      )}
+
       {(dashboardTab === 'all' || dashboardTab === 'mastery') && (
         <>
           <ActiveMemoryPanel
             user={user}
             onOpenFlashcards={onOpenFlashcards}
+            onOpenSmartMemory={() => onLaunchEcosystemModule?.('smart_memory')}
           />
 
           <motion.div variants={dashboardCardVariants} initial="hidden" animate="show">

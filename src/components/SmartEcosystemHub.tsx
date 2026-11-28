@@ -38,6 +38,7 @@ import { TelemetryListSkeleton } from './SkeletonLoaders';
 export type EcosystemLaunchTarget =
   | 'tutor'
   | 'adventure_world'
+  | 'smart_memory'
   | 'flashcards'
   | 'speaking'
   | 'escape_room'
@@ -221,8 +222,16 @@ export const SmartEcosystemHub: React.FC<SmartEcosystemHubProps> = ({
       accentClass: 'text-emerald-300 border-emerald-500/35'
     },
     {
+      id: 'smart_memory',
+      title: 'SMART MEMORY (9 Modes)',
+      subtitle: `${assessment.dueVocabularyCount} révisions dues · Défi & Grammaire`,
+      icon: 'neurology',
+      badge: 'Adaptatif',
+      accentClass: 'text-[#f2ca50] border-[#f2ca50]/45'
+    },
+    {
       id: 'flashcards',
-      title: 'Smart Memory (SM-2)',
+      title: 'Flashcards Oxford (SM-2)',
       subtitle: `${assessment.dueVocabularyCount} révision(s) due(s)`,
       icon: 'style',
       badge: 'SM-2',

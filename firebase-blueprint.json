@@ -137,7 +137,8 @@
             "dialogue",
             "city_map",
             "arcade",
-            "adventure"
+            "adventure",
+            "smart_memory"
           ],
           "description": "Exercise modality"
         },
@@ -218,6 +219,118 @@
         "claimedAt": { "type": "string", "format": "date-time", "description": "Claim timestamp" }
       },
       "required": ["claimId", "xpAwarded", "coinsAwarded", "accuracy", "claimedAt"]
+    },
+    "SmartMemoryRecord": {
+      "title": "SmartMemoryRecord",
+      "description": "Deduplicated adaptive spaced repetition learning item (vocabulary, expression, grammar rule, or irregular verb) with recall history and timezone-aware scheduling.",
+      "type": "object",
+      "properties": {
+        "itemId": { "type": "string", "description": "Canonical deduplicated item ID" },
+        "normalizedKey": { "type": "string", "description": "Normalized lowercase key preventing duplicate vocabulary records" },
+        "itemType": { "type": "string", "enum": ["vocabulary", "expression", "grammar", "irregular_verb"] },
+        "english": { "type": "string" },
+        "french": { "type": "string" },
+        "pronunciation": { "type": "string" },
+        "exampleSentence": { "type": "string" },
+        "cefrLevel": { "type": "string", "enum": ["A1", "A2", "B1", "B2", "C1", "C2"] },
+        "topic": { "type": "string" },
+        "difficulty": { "type": "string", "enum": ["easy", "medium", "hard"] },
+        "state": { "type": "string", "enum": ["new", "learning", "review", "mastered"] },
+        "repetitions": { "type": "number" },
+        "intervalDays": { "type": "number" },
+        "easeFactor": { "type": "number" },
+        "retentionScore": { "type": "number" },
+        "nextReviewDate": { "type": "string", "format": "date-time" },
+        "lastReviewedAt": { "type": "string", "format": "date-time" },
+        "timezone": { "type": "string" },
+        "nextReviewLocalDay": { "type": "string" },
+        "totalReviews": { "type": "number" },
+        "correctReviews": { "type": "number" },
+        "lastOutcome": { "type": "string", "enum": ["incorrect", "hard", "correct", "easy"] },
+        "lastResponseTimeMs": { "type": "number" },
+        "lastConfidence": { "type": "number" },
+        "lastMode": { "type": "string" },
+        "recallHistory": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "itemId",
+        "normalizedKey",
+        "itemType",
+        "english",
+        "french",
+        "cefrLevel",
+        "topic",
+        "difficulty",
+        "state",
+        "repetitions",
+        "intervalDays",
+        "easeFactor",
+        "nextReviewDate",
+        "timezone",
+        "recallHistory",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "SmartMemoryDuel": {
+      "title": "SmartMemoryDuel",
+      "description": "Real-time 10-card spaced repetition duel room pairing two learners on synchronized Smart Memory items with live scores and final scoreboard.",
+      "type": "object",
+      "properties": {
+        "duelId": { "type": "string", "description": "6-character alphanumeric room identifier" },
+        "status": { "type": "string", "enum": ["waiting", "active", "finished"] },
+        "cefrLevel": { "type": "string", "enum": ["A1", "A2", "B1", "B2", "C1", "C2"] },
+        "mode": { "type": "string", "enum": ["mixed", "en_to_fr", "fr_to_en", "multiple_choice", "complete_sentence"] },
+        "cardIds": { "type": "array", "description": "Ordered list of 10 synchronized SmartMemoryCatalogItem IDs" },
+        "hostUid": { "type": "string" },
+        "hostName": { "type": "string" },
+        "guestUid": { "type": "string" },
+        "guestName": { "type": "string" },
+        "hostScore": { "type": "number" },
+        "hostCorrectCount": { "type": "number" },
+        "hostAnsweredCount": { "type": "number" },
+        "hostTotalTimeMs": { "type": "number" },
+        "hostStreak": { "type": "number" },
+        "hostBestStreak": { "type": "number" },
+        "hostAnswers": { "type": "array" },
+        "guestScore": { "type": "number" },
+        "guestCorrectCount": { "type": "number" },
+        "guestAnsweredCount": { "type": "number" },
+        "guestTotalTimeMs": { "type": "number" },
+        "guestStreak": { "type": "number" },
+        "guestBestStreak": { "type": "number" },
+        "guestAnswers": { "type": "array" },
+        "winnerUid": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "finishedAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "duelId",
+        "status",
+        "cefrLevel",
+        "mode",
+        "cardIds",
+        "hostUid",
+        "hostName",
+        "hostScore",
+        "hostCorrectCount",
+        "hostAnsweredCount",
+        "hostTotalTimeMs",
+        "hostStreak",
+        "hostAnswers",
+        "guestScore",
+        "guestCorrectCount",
+        "guestAnsweredCount",
+        "guestTotalTimeMs",
+        "guestStreak",
+        "guestAnswers",
+        "createdAt",
+        "updatedAt"
+      ]
     }
   },
   "firestore": {
@@ -240,6 +353,14 @@
     "/users/{userId}/adventureClaims/{claimId}": {
       "schema": "AdventureClaim",
       "description": "Write-once immutable reward claim ledger for English Adventure anti-duplication & XP fraud prevention"
+    },
+    "/users/{userId}/smartMemoryRecords/{itemId}": {
+      "schema": "SmartMemoryRecord",
+      "description": "Smart Memory adaptive spaced repetition records, recall history, and timezone-aware scheduling per canonical item"
+    },
+    "/smartMemoryDuels/{duelId}": {
+      "schema": "SmartMemoryDuel",
+      "description": "Shared real-time 10-card Smart Memory duel rooms between two players with synchronized scoreboard"
     }
   }
 }

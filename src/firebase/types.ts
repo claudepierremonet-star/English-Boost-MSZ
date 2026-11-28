@@ -360,7 +360,8 @@ export type AttemptModuleType =
   | 'dialogue'
   | 'city_map'
   | 'arcade'
-  | 'adventure';
+  | 'adventure'
+  | 'smart_memory';
 
 export interface LearningAttempt {
   attemptId: string;
@@ -383,6 +384,64 @@ export interface FlashcardProgress {
   nextReviewDate: string;
   lastQualityScore: number;
   state: 'learning' | 'review' | 'mastered';
+}
+
+export type SmartMemoryItemType = 'vocabulary' | 'expression' | 'grammar' | 'irregular_verb';
+export type SmartMemoryDifficulty = 'easy' | 'medium' | 'hard';
+export type SmartMemoryRecallOutcome = 'incorrect' | 'hard' | 'correct' | 'easy';
+export type SmartMemoryConfidence = 1 | 2 | 3; // 1 = Hésitant, 2 = Moyen, 3 = Sûr
+export type SmartMemoryItemState = 'new' | 'learning' | 'review' | 'mastered';
+export type SmartMemoryLearningMode =
+  | 'flashcards'
+  | 'en_to_fr'
+  | 'fr_to_en'
+  | 'listen_identify'
+  | 'spell_word'
+  | 'complete_sentence'
+  | 'multiple_choice'
+  | 'match_pairs'
+  | 'write_from_memory';
+
+export interface SmartMemoryRecallEntry {
+  reviewedAt: string; // UTC ISO instant
+  localDateKey: string; // YYYY-MM-DD in user's timezone
+  timezone: string; // IANA timezone (e.g. Europe/Paris)
+  mode: SmartMemoryLearningMode;
+  outcome: SmartMemoryRecallOutcome;
+  responseTimeMs: number;
+  confidence: SmartMemoryConfidence;
+  intervalDaysAfter: number;
+}
+
+export interface SmartMemoryRecord {
+  itemId: string;
+  normalizedKey: string;
+  itemType: SmartMemoryItemType;
+  english: string;
+  french: string;
+  pronunciation: string;
+  exampleSentence: string;
+  cefrLevel: CEFRLevel;
+  topic: string;
+  difficulty: SmartMemoryDifficulty;
+  state: SmartMemoryItemState;
+  repetitions: number;
+  intervalDays: number;
+  easeFactor: number;
+  retentionScore: number; // 0..100
+  nextReviewDate: string; // UTC ISO instant
+  lastReviewedAt?: string; // UTC ISO instant
+  timezone: string;
+  nextReviewLocalDay?: string; // YYYY-MM-DD in user's timezone
+  totalReviews: number;
+  correctReviews: number;
+  lastOutcome?: SmartMemoryRecallOutcome;
+  lastResponseTimeMs?: number;
+  lastConfidence?: SmartMemoryConfidence;
+  lastMode?: SmartMemoryLearningMode;
+  recallHistory: SmartMemoryRecallEntry[]; // capped <= 25 for Firestore rule hygiene
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface DailyChallengeState {
@@ -409,4 +468,54 @@ export interface LeaderboardEntry {
   change?: 'up' | 'down' | 'same';
   cheerCount?: number;
   badgeLabel?: string;
+}
+
+export type SmartMemoryDuelStatus = 'waiting' | 'active' | 'finished';
+
+export type SmartMemoryDuelMode =
+  | 'mixed'
+  | 'en_to_fr'
+  | 'fr_to_en'
+  | 'multiple_choice'
+  | 'complete_sentence';
+
+export interface SmartMemoryDuelAnswerRecord {
+  cardIndex: number;
+  itemId: string;
+  selectedOptionId: string;
+  isCorrect: boolean;
+  responseTimeMs: number;
+  pointsAwarded: number;
+  answeredAt: string;
+}
+
+export interface SmartMemoryDuelRoom {
+  duelId: string;
+  status: SmartMemoryDuelStatus;
+  cefrLevel: CEFRLevel;
+  mode: SmartMemoryDuelMode;
+  cardIds: string[];
+  hostUid: string;
+  hostName: string;
+  guestUid: string | null;
+  guestName: string | null;
+  hostScore: number;
+  hostCorrectCount: number;
+  hostAnsweredCount: number;
+  hostTotalTimeMs: number;
+  hostStreak: number;
+  hostBestStreak?: number;
+  hostAnswers: SmartMemoryDuelAnswerRecord[];
+  guestScore: number;
+  guestCorrectCount: number;
+  guestAnsweredCount: number;
+  guestTotalTimeMs: number;
+  guestStreak: number;
+  guestBestStreak?: number;
+  guestAnswers: SmartMemoryDuelAnswerRecord[];
+  winnerUid: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  updatedAt: string;
 }

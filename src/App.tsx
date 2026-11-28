@@ -114,6 +114,11 @@ const GrammarBattleModal = lazy(() =>
 const AdaptivePlacementModal = lazy(() =>
   import('./components/AdaptivePlacementModal').then((m) => ({ default: m.AdaptivePlacementModal }))
 );
+import type { SmartMemoryHubTab } from './components/SmartMemoryHubModal';
+
+const SmartMemoryHubModal = lazy(() =>
+  import('./components/SmartMemoryHubModal').then((m) => ({ default: m.SmartMemoryHubModal }))
+);
 
 const LazyViewFallback: React.FC = () => (
   <div
@@ -218,6 +223,35 @@ export default function App() {
   const [isCinemaOpen, setIsCinemaOpen] = useState<boolean>(false);
   const [isGrammarBattleOpen, setIsGrammarBattleOpen] = useState<boolean>(false);
   const [isPlacementModalOpen, setIsPlacementModalOpen] = useState<boolean>(false);
+  const [pendingDuelCode, setPendingDuelCode] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const raw = new URLSearchParams(window.location.search).get('duel');
+    const clean = raw ? raw.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) : '';
+    return clean.length >= 4 ? clean : null;
+  });
+  const [smartMemoryInitialTab, setSmartMemoryInitialTab] = useState<SmartMemoryHubTab>(() => {
+    if (typeof window === 'undefined') return 'overview';
+    const raw = new URLSearchParams(window.location.search).get('duel');
+    const clean = raw ? raw.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) : '';
+    return clean.length >= 4 ? 'duel' : 'overview';
+  });
+  const [isSmartMemoryOpen, setIsSmartMemoryOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const raw = new URLSearchParams(window.location.search).get('duel');
+    const clean = raw ? raw.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) : '';
+    return clean.length >= 4;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('duel')) {
+      params.delete('duel');
+      const nextQuery = params.toString();
+      const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`;
+      window.history.replaceState({}, '', nextUrl);
+    }
+  }, []);
   const [activeFolioForStudy, setActiveFolioForStudy] = useState<StudyFolio | null>(null);
 
   // Active Lesson selected across Curriculum / Search
@@ -355,6 +389,11 @@ export default function App() {
       case 'adventure_world':
         setCarteViewMode('adventure');
         setActiveTab('carte');
+        break;
+      case 'smart_memory':
+        setPendingDuelCode(null);
+        setSmartMemoryInitialTab('overview');
+        setIsSmartMemoryOpen(true);
         break;
       case 'flashcards':
         setFlashcardsDeckMode('vocab');
@@ -1428,6 +1467,11 @@ export default function App() {
                     onOpenEscapeRoom={() => setIsEscapeRoomOpen(true)}
                     onOpenListeningCinema={() => setIsCinemaOpen(true)}
                     onOpenGrammarBattle={() => setIsGrammarBattleOpen(true)}
+                    onOpenSmartMemory={() => {
+                      setPendingDuelCode(null);
+                      setSmartMemoryInitialTab('overview');
+                      setIsSmartMemoryOpen(true);
+                    }}
                   />
                 </Suspense>
               </motion.div>
@@ -1731,6 +1775,28 @@ export default function App() {
               if (xpAwarded > 0) {
                 handleChallengeComplete(xpAwarded);
               }
+            }}
+          />
+        </Suspense>
+      )}
+
+      {/* SMART MEMORY Adaptive Vocabulary & Grammar System */}
+      {isSmartMemoryOpen && (
+        <Suspense fallback={null}>
+          <SmartMemoryHubModal
+            isOpen={isSmartMemoryOpen}
+            currentLevel={currentLevel}
+            userDisplayName={user.displayName}
+            initialTab={smartMemoryInitialTab}
+            initialDuelCode={pendingDuelCode}
+            onClose={() => {
+              setIsSmartMemoryOpen(false);
+              setPendingDuelCode(null);
+              setSmartMemoryInitialTab('overview');
+            }}
+            onXpEarned={(xp) => {
+              handleChallengeComplete(xp);
+              setUser(getLocalUserProfile());
             }}
           />
         </Suspense>

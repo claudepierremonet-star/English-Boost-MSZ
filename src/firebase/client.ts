@@ -21,6 +21,8 @@ import {
   orderBy,
   limit,
   getDocFromServer,
+  onSnapshot,
+  runTransaction,
   type Firestore
 } from 'firebase/firestore';
 import {
@@ -49,8 +51,11 @@ import type {
   EnglishAdventureState,
   AdventureIslandId,
   AdventureDifficultyTier,
-  AdventureXpMultiplierBoost
+  AdventureXpMultiplierBoost,
+  SmartMemoryRecord,
+  SmartMemoryDuelRoom
 } from './types';
+import { applyAnswerToDuelRoom, mergeDuelRoomsIdempotent } from '../utils/smartMemoryDuelEngine';
 import { recordDailyMissionActivity } from '../utils/dailyMissionsManager';
 import { inferGradeFromCefr } from '../services/adaptiveEngine';
 import firebaseAppletConfig from '../../firebase-applet-config.json';
@@ -112,7 +117,9 @@ import {
   enqueueSyncOperation,
   saveProfileToIndexedDB,
   saveFlashcardToIndexedDB,
-  getAllFlashcardsFromIndexedDB
+  getAllFlashcardsFromIndexedDB,
+  saveSmartMemoryToIndexedDB,
+  getAllSmartMemoryFromIndexedDB
 } from '../offline/indexedDb';
 
 export { auth, db, storage };
@@ -168,6 +175,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 const LOCAL_USER_KEY = 'eb_msz_user_profile';
 const LOCAL_ATTEMPTS_KEY = 'eb_msz_attempts';
 const LOCAL_CARDS_KEY = 'eb_msz_cards_progress';
+const LOCAL_SMART_MEMORY_KEY = 'eb_msz_smart_memory_v1';
 export const LOCAL_FAVORITES_KEY = 'eb_msz_favorite_lessons';
 export const LOCAL_CITY_MAP_KEY = 'eb_msz_city_map_progression_v1';
 export const LOCAL_ADVENTURE_KEY = 'eb_msz_adventure_state_v1';
@@ -1270,7 +1278,8 @@ export async function recordAttempt(
     daily_challenge: ['vocabulary', 'reading'],
     city_map: ['grammar'],
     arcade: ['vocabulary'],
-    adventure: ['vocabulary', 'grammar', 'reading']
+    adventure: ['vocabulary', 'grammar', 'reading'],
+    smart_memory: ['vocabulary', 'grammar']
   };
   const catsToAdvance = missionCatsMap[newAttempt.moduleType] || ['reading'];
   const nextDailyState = recordDailyMissionActivity(
@@ -1436,6 +1445,216 @@ export async function getStoredFlashcardProgressList(): Promise<FlashcardProgres
     // ignore
   }
   return Array.from(byId.values());
+}
+
+/**
+ * Deduplicated read/merge helper for SmartMemoryRecord maps (prevents duplicate vocabulary/grammar records).
+ */
+function mergeSmartMemoryRecordMaps(
+  sources: SmartMemoryRecord[][]
+): Map<string, SmartMemoryRecord> {
+  const byItemId = new Map<string, SmartMemoryRecord>();
+  const idByNormalizedKey = new Map<string, string>();
+
+  for (const list of sources) {
+    for (const rec of list) {
+      if (!rec?.itemId || !rec?.english) continue;
+      const safeId = rec.itemId.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 128);
+      if (!safeId) continue;
+      const normKey = (rec.normalizedKey || `${rec.itemType}::${rec.english.trim().toLowerCase()}`).slice(0, 200);
+      const existingCanonicalId = idByNormalizedKey.get(normKey);
+      const targetId = existingCanonicalId || safeId;
+      const prev = byItemId.get(targetId);
+
+      const prevUpdated = prev ? new Date(prev.updatedAt || 0).getTime() : -1;
+      const curUpdated = new Date(rec.updatedAt || 0).getTime();
+
+      if (!prev || curUpdated >= prevUpdated) {
+        const earliestCreatedAt =
+          prev?.createdAt && rec.createdAt
+            ? new Date(prev.createdAt).getTime() <= new Date(rec.createdAt).getTime()
+              ? prev.createdAt
+              : rec.createdAt
+            : prev?.createdAt || rec.createdAt || new Date().toISOString();
+
+        byItemId.set(targetId, {
+          ...rec,
+          itemId: targetId,
+          normalizedKey: normKey,
+          recallHistory: Array.isArray(rec.recallHistory) ? rec.recallHistory.slice(-25) : [],
+          createdAt: earliestCreatedAt
+        });
+        idByNormalizedKey.set(normKey, targetId);
+      }
+    }
+  }
+
+  return byItemId;
+}
+
+/**
+ * Persist a Smart Memory adaptive spaced repetition record (IndexedDB + localStorage + Firestore).
+ * Enforces deterministic itemId & normalizedKey deduplication and preserves immutable createdAt.
+ */
+export async function saveSmartMemoryRecord(record: SmartMemoryRecord): Promise<SmartMemoryRecord> {
+  const safeId = record.itemId.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 128);
+  const normKey = (record.normalizedKey || `${record.itemType}::${record.english.trim().toLowerCase()}`).slice(0, 200);
+
+  let existingLocal: SmartMemoryRecord | undefined;
+  let localMap: Record<string, SmartMemoryRecord> = {};
+
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem(LOCAL_SMART_MEMORY_KEY);
+      if (raw) {
+        localMap = JSON.parse(raw) || {};
+        existingLocal = localMap[safeId];
+      }
+    } catch {
+      localMap = {};
+    }
+  }
+
+  const sanitizedRecord: SmartMemoryRecord = {
+    ...record,
+    itemId: safeId,
+    normalizedKey: normKey,
+    english: record.english.trim().slice(0, 240),
+    french: record.french.trim().slice(0, 400),
+    pronunciation: (record.pronunciation || '').trim().slice(0, 160),
+    exampleSentence: (record.exampleSentence || '').trim().slice(0, 500),
+    topic: (record.topic || 'General').trim().slice(0, 120),
+    repetitions: Math.max(0, Math.min(1000, Math.round(record.repetitions || 0))),
+    intervalDays: Math.max(0, Math.min(3650, Number(record.intervalDays || 0))),
+    easeFactor: Math.max(1.1, Math.min(4.0, Number((record.easeFactor || 2.5).toFixed(2)))),
+    retentionScore: Math.max(0, Math.min(100, Math.round(record.retentionScore ?? 0))),
+    timezone: (record.timezone || 'UTC').slice(0, 80),
+    totalReviews: Math.max(0, Math.min(5000, Math.round(record.totalReviews || 0))),
+    correctReviews: Math.max(0, Math.min(5000, Math.round(record.correctReviews || 0))),
+    recallHistory: (Array.isArray(record.recallHistory) ? record.recallHistory : []).slice(-25),
+    createdAt: existingLocal?.createdAt || record.createdAt || new Date().toISOString(),
+    updatedAt: record.updatedAt || new Date().toISOString()
+  };
+
+  // 1. Save to IndexedDB
+  await saveSmartMemoryToIndexedDB(sanitizedRecord);
+
+  // 2. Save to localStorage fallback
+  if (typeof window !== 'undefined') {
+    try {
+      localMap[safeId] = sanitizedRecord;
+      localStorage.setItem(LOCAL_SMART_MEMORY_KEY, JSON.stringify(localMap));
+      window.dispatchEvent(new CustomEvent('eb_smart_memory_updated', { detail: sanitizedRecord }));
+    } catch (e) {
+      console.warn('Local smart memory save error', e);
+    }
+  }
+
+  // 3. Advance daily mission cleanly
+  try {
+    const prof = getLocalUserProfile();
+    recordDailyMissionActivity(
+      'vocabulary',
+      1,
+      prof.schoolGrade || inferGradeFromCefr(prof.level || 'B1'),
+      prof.level || 'B1',
+      prof.adaptiveProfile?.weakestSkills?.[0] || 'grammar'
+    );
+  } catch {
+    // ignore
+  }
+
+  // 4. Push to Cloud Firestore or enqueue offline sync
+  if (typeof navigator !== 'undefined' && navigator.onLine && isFirebaseConfigured && db && auth?.currentUser) {
+    const uid = auth.currentUser.uid;
+    const recordPath = `users/${uid}/smartMemoryRecords/${safeId}`;
+    try {
+      const recordRef = doc(db, 'users', uid, 'smartMemoryRecords', safeId);
+      const remoteSnap = await getDoc(recordRef);
+      const payloadToWrite: SmartMemoryRecord = remoteSnap.exists()
+        ? {
+            ...sanitizedRecord,
+            createdAt:
+              (remoteSnap.data()?.createdAt as string) ||
+              sanitizedRecord.createdAt
+          }
+        : sanitizedRecord;
+      await setDoc(recordRef, payloadToWrite);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('Missing or insufficient permissions')) {
+        handleFirestoreError(err, OperationType.WRITE, recordPath);
+      }
+      console.warn('Firestore smart memory save deferred to queue:', err);
+      await enqueueSyncOperation('SMART_MEMORY_RECORD', sanitizedRecord, uid);
+    }
+  } else {
+    await enqueueSyncOperation('SMART_MEMORY_RECORD', sanitizedRecord, auth?.currentUser?.uid);
+  }
+
+  return sanitizedRecord;
+}
+
+/**
+ * Retrieve all Smart Memory spaced repetition records across localStorage, IndexedDB, and Cloud Firestore
+ * with deterministic deduplication.
+ */
+export async function getSmartMemoryRecords(): Promise<SmartMemoryRecord[]> {
+  const localRecords: SmartMemoryRecord[] = [];
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem(LOCAL_SMART_MEMORY_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Record<string, SmartMemoryRecord>;
+        Object.values(parsed || {}).forEach((r) => {
+          if (r?.itemId) localRecords.push(r);
+        });
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  let idbRecords: SmartMemoryRecord[] = [];
+  try {
+    idbRecords = await getAllSmartMemoryFromIndexedDB();
+  } catch {
+    idbRecords = [];
+  }
+
+  let remoteRecords: SmartMemoryRecord[] = [];
+  if (typeof navigator !== 'undefined' && navigator.onLine && isFirebaseConfigured && db && auth?.currentUser) {
+    const uid = auth.currentUser.uid;
+    const colPath = `users/${uid}/smartMemoryRecords`;
+    try {
+      const colRef = collection(db, 'users', uid, 'smartMemoryRecords');
+      const snap = await getDocs(colRef);
+      remoteRecords = snap.docs.map((d) => d.data() as SmartMemoryRecord).filter((r) => Boolean(r?.itemId));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('Missing or insufficient permissions')) {
+        handleFirestoreError(err, OperationType.LIST, colPath);
+      }
+    }
+  }
+
+  const merged = mergeSmartMemoryRecordMaps([localRecords, idbRecords, remoteRecords]);
+  const list = Array.from(merged.values());
+
+  // Cache merged deduplicated view locally
+  if (typeof window !== 'undefined' && list.length > 0) {
+    try {
+      const map: Record<string, SmartMemoryRecord> = {};
+      for (const item of list) {
+        map[item.itemId] = item;
+      }
+      localStorage.setItem(LOCAL_SMART_MEMORY_KEY, JSON.stringify(map));
+    } catch {
+      // ignore
+    }
+  }
+
+  return list;
 }
 
 /**
@@ -2733,5 +2952,214 @@ export async function reconcileUserProfileWithFirestore(): Promise<ReconcileFire
 
   return { profile: mergedProfile, synced: true, attemptsSynced };
 }
+
+/**
+ * Create a shared real-time Smart Memory 10-card duel room in Cloud Firestore.
+ */
+export async function createSmartMemoryDuelInFirestore(
+  room: SmartMemoryDuelRoom
+): Promise<SmartMemoryDuelRoom | null> {
+  if (!isFirebaseConfigured || !db || !auth?.currentUser) return null;
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return null;
+
+  const uid = auth.currentUser.uid;
+  const duelPath = `smartMemoryDuels/${room.duelId}`;
+  const docRoom: SmartMemoryDuelRoom = {
+    ...room,
+    hostUid: uid,
+    guestUid: null,
+    status: 'waiting'
+  };
+
+  try {
+    await setDoc(doc(db, 'smartMemoryDuels', room.duelId), stripUndefinedDeep(docRoom));
+    return docRoom;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('Missing or insufficient permissions')) {
+      handleFirestoreError(err, OperationType.CREATE, duelPath);
+    }
+    console.warn('Firestore duel create warning:', err);
+    return null;
+  }
+}
+
+/**
+ * Fetch an existing Smart Memory duel room by room code from Cloud Firestore.
+ */
+export async function getSmartMemoryDuelFromFirestore(
+  duelId: string
+): Promise<SmartMemoryDuelRoom | null> {
+  if (!isFirebaseConfigured || !db || !auth?.currentUser) return null;
+  const duelPath = `smartMemoryDuels/${duelId}`;
+  try {
+    const snap = await getDocFromServer(doc(db, 'smartMemoryDuels', duelId));
+    if (!snap.exists()) return null;
+    return snap.data() as SmartMemoryDuelRoom;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('Missing or insufficient permissions')) {
+      handleFirestoreError(err, OperationType.GET, duelPath);
+    }
+    return null;
+  }
+}
+
+/**
+ * Join a waiting Smart Memory duel room in Cloud Firestore atomically.
+ */
+export async function joinSmartMemoryDuelInFirestore(
+  duelId: string,
+  guestName: string
+): Promise<SmartMemoryDuelRoom | null> {
+  if (!isFirebaseConfigured || !db || !auth?.currentUser) return null;
+  const uid = auth.currentUser.uid;
+  const duelPath = `smartMemoryDuels/${duelId}`;
+  const duelRef = doc(db, 'smartMemoryDuels', duelId);
+
+  try {
+    return await runTransaction(db, async (tx) => {
+      const snap = await tx.get(duelRef);
+      if (!snap.exists()) return null;
+      const existing = snap.data() as SmartMemoryDuelRoom;
+      if (existing.hostUid === uid || existing.guestUid === uid) {
+        return existing;
+      }
+      if (existing.guestUid !== null || existing.status !== 'waiting') {
+        return existing;
+      }
+
+      const nowIso = new Date().toISOString();
+      const updatedFields = {
+        guestUid: uid,
+        guestName: (guestName || auth?.currentUser?.displayName || 'Ami').slice(0, 80),
+        status: 'active' as const,
+        startedAt: existing.startedAt ?? nowIso,
+        updatedAt: nowIso
+      };
+      tx.update(duelRef, updatedFields);
+      return { ...existing, ...updatedFields };
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('Missing or insufficient permissions')) {
+      handleFirestoreError(err, OperationType.UPDATE, duelPath);
+    }
+    console.warn('Firestore duel join warning:', err);
+    return null;
+  }
+}
+
+/**
+ * Atomically apply a player's answer inside Cloud Firestore using allowed action keys.
+ */
+export async function submitSmartMemoryDuelProgressInFirestore(params: {
+  duelId: string;
+  cardIndex: number;
+  selectedOptionId: string;
+  responseTimeMs: number;
+}): Promise<SmartMemoryDuelRoom | null> {
+  if (!isFirebaseConfigured || !db || !auth?.currentUser) return null;
+  const uid = auth.currentUser.uid;
+  const duelPath = `smartMemoryDuels/${params.duelId}`;
+  const duelRef = doc(db, 'smartMemoryDuels', params.duelId);
+
+  try {
+    return await runTransaction(db, async (tx) => {
+      const snap = await tx.get(duelRef);
+      if (!snap.exists()) return null;
+      const current = snap.data() as SmartMemoryDuelRoom;
+      if (current.status === 'finished') return current;
+
+      const nextRoom = applyAnswerToDuelRoom({
+        room: current,
+        playerUid: uid,
+        cardIndex: params.cardIndex,
+        selectedOptionId: params.selectedOptionId,
+        responseTimeMs: params.responseTimeMs
+      });
+
+      if (nextRoom === current) return current;
+
+      const isHost = uid === current.hostUid;
+      const patch = isHost
+        ? {
+            hostScore: nextRoom.hostScore,
+            hostCorrectCount: nextRoom.hostCorrectCount,
+            hostAnsweredCount: nextRoom.hostAnsweredCount,
+            hostTotalTimeMs: nextRoom.hostTotalTimeMs,
+            hostStreak: nextRoom.hostStreak,
+            hostBestStreak: nextRoom.hostBestStreak ?? 0,
+            hostAnswers: nextRoom.hostAnswers,
+            status: nextRoom.status,
+            winnerUid: nextRoom.winnerUid ?? null,
+            finishedAt: nextRoom.finishedAt ?? null,
+            updatedAt: nextRoom.updatedAt
+          }
+        : {
+            guestScore: nextRoom.guestScore,
+            guestCorrectCount: nextRoom.guestCorrectCount,
+            guestAnsweredCount: nextRoom.guestAnsweredCount,
+            guestTotalTimeMs: nextRoom.guestTotalTimeMs,
+            guestStreak: nextRoom.guestStreak,
+            guestBestStreak: nextRoom.guestBestStreak ?? 0,
+            guestAnswers: nextRoom.guestAnswers,
+            status: nextRoom.status,
+            winnerUid: nextRoom.winnerUid ?? null,
+            finishedAt: nextRoom.finishedAt ?? null,
+            updatedAt: nextRoom.updatedAt
+          };
+
+      tx.update(duelRef, stripUndefinedDeep(patch));
+      return nextRoom;
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('Missing or insufficient permissions')) {
+      handleFirestoreError(err, OperationType.UPDATE, duelPath);
+    }
+    console.warn('Firestore duel progress warning:', err);
+    return null;
+  }
+}
+
+/**
+ * Subscribe to real-time updates on a Smart Memory duel room in Cloud Firestore.
+ */
+export function subscribeToSmartMemoryDuelInFirestore(
+  duelId: string,
+  onUpdate: (room: SmartMemoryDuelRoom) => void,
+  onError?: (err: unknown) => void
+): () => void {
+  if (!isFirebaseConfigured || !db || !auth?.currentUser) {
+    return () => {};
+  }
+  const duelPath = `smartMemoryDuels/${duelId}`;
+  const duelRef = doc(db, 'smartMemoryDuels', duelId);
+
+  return onSnapshot(
+    duelRef,
+    (snap) => {
+      if (snap.exists()) {
+        onUpdate(snap.data() as SmartMemoryDuelRoom);
+      }
+    },
+    (error) => {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.includes('Missing or insufficient permissions')) {
+        try {
+          handleFirestoreError(error, OperationType.GET, duelPath);
+        } catch (wrappedErr) {
+          onError?.(wrappedErr);
+          return;
+        }
+      }
+      onError?.(error);
+    }
+  );
+}
+
+export { mergeDuelRoomsIdempotent };
+
 
 

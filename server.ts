@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import express from 'express';
@@ -12,6 +13,7 @@ import {
   selectAndLoadSkillsForTask,
   getSkillInstructionsDetails
 } from './skills/skillsStore.ts';
+import { attachSmartMemoryDuelWebSocket } from './server/smartMemoryDuelServer.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1251,7 +1253,10 @@ Return valid JSON strictly matching the schema.`;
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const httpServer = http.createServer(app);
+  attachSmartMemoryDuelWebSocket(httpServer);
+
+  httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`English Boost MSZ server listening on http://0.0.0.0:${PORT}`);
   });
 }

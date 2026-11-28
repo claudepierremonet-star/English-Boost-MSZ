@@ -4,14 +4,14 @@
  * and background synchronisation queue.
  */
 
-import type { LearningAttempt, UserProfile, FlashcardProgress } from '../firebase/types';
+import type { LearningAttempt, UserProfile, FlashcardProgress, SmartMemoryRecord } from '../firebase/types';
 
 const DB_NAME = 'english_boost_mz_db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export interface SyncQueueItem {
   id?: number;
-  action: 'ADD_ATTEMPT' | 'UPDATE_PROFILE' | 'FLASHCARD_PROGRESS';
+  action: 'ADD_ATTEMPT' | 'UPDATE_PROFILE' | 'FLASHCARD_PROGRESS' | 'SMART_MEMORY_RECORD';
   payload: any;
   userId?: string;
   createdAt: string;
@@ -78,6 +78,14 @@ export function getIndexedDB(): Promise<IDBDatabase> {
       // 5. App Metadata / Sync Meta
       if (!db.objectStoreNames.contains('metadata')) {
         db.createObjectStore('metadata', { keyPath: 'key' });
+      }
+
+      // 6. Smart Memory Adaptive SRS Records
+      if (!db.objectStoreNames.contains('smart_memory')) {
+        const smStore = db.createObjectStore('smart_memory', { keyPath: 'itemId' });
+        smStore.createIndex('nextReviewDate', 'nextReviewDate', { unique: false });
+        smStore.createIndex('itemType', 'itemType', { unique: false });
+        smStore.createIndex('normalizedKey', 'normalizedKey', { unique: false });
       }
     };
 
@@ -319,6 +327,45 @@ export async function getAllFlashcardsFromIndexedDB(): Promise<FlashcardProgress
     });
   } catch (error) {
     console.warn('Failed to retrieve flashcards from IndexedDB:', error);
+    return [];
+  }
+}
+
+/**
+ * Save Smart Memory record in IndexedDB (deduplicated by itemId keyPath)
+ */
+export async function saveSmartMemoryToIndexedDB(record: SmartMemoryRecord): Promise<void> {
+  try {
+    const db = await getIndexedDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['smart_memory'], 'readwrite');
+      const store = transaction.objectStore('smart_memory');
+      const req = store.put(record);
+
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch (error) {
+    console.warn('Failed to save smart memory record to IndexedDB:', error);
+  }
+}
+
+/**
+ * Retrieve all Smart Memory records from IndexedDB
+ */
+export async function getAllSmartMemoryFromIndexedDB(): Promise<SmartMemoryRecord[]> {
+  try {
+    const db = await getIndexedDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['smart_memory'], 'readonly');
+      const store = transaction.objectStore('smart_memory');
+      const req = store.getAll();
+
+      req.onsuccess = () => resolve((req.result as SmartMemoryRecord[]) || []);
+      req.onerror = () => reject(req.error);
+    });
+  } catch (error) {
+    console.warn('Failed to retrieve smart memory records from IndexedDB:', error);
     return [];
   }
 }

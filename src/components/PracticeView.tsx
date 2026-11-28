@@ -24,6 +24,7 @@ interface PracticeViewProps {
   onOpenEscapeRoom?: () => void;
   onOpenListeningCinema?: () => void;
   onOpenGrammarBattle?: () => void;
+  onOpenSmartMemory?: () => void;
 }
 
 export const PracticeView: React.FC<PracticeViewProps> = ({
@@ -42,7 +43,8 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
   onOpenAiTutor,
   onOpenEscapeRoom,
   onOpenListeningCinema,
-  onOpenGrammarBattle
+  onOpenGrammarBattle,
+  onOpenSmartMemory
 }) => {
   const [miniCardFlipped, setMiniCardFlipped] = useState<boolean>(false);
   const cefrTrackRef = useRef<HTMLDivElement | null>(null);
@@ -183,6 +185,40 @@ export const PracticeView: React.FC<PracticeViewProps> = ({
           <span className="material-symbols-outlined text-sm">arrow_forward</span>
         </button>
       </section>
+
+      {/* Featured SMART MEMORY Intelligent Retention Banner */}
+      {onOpenSmartMemory && (
+        <section
+          onClick={onOpenSmartMemory}
+          className="p-4 sm:p-5 rounded-2xl luxury-card-surface luxury-card-interactive border border-[#f2ca50]/40 flex items-center justify-between gap-4 cursor-pointer group"
+        >
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-xl luxury-btn-gold flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+              <span className="material-symbols-outlined text-2xl font-bold">neurology</span>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 text-[10px] font-mono font-bold uppercase tracking-wider">
+                <span className="text-[#f2ca50]">SMART MEMORY · RÉPÉTITION ADAPTATIVE</span>
+                <span aria-hidden="true" className="text-[#99907c]">·</span>
+                <span className="text-emerald-300">9 MODES &amp; FIRESTORE SYNC</span>
+              </div>
+              <h3 className="font-serif font-bold text-base sm:text-lg text-[#dce2f8] group-hover:text-[#f2ca50] transition-colors mt-0.5">
+                Today&apos;s Memory Challenge : Vocabulaire, Expressions, Grammaire &amp; Verbes Irréguliers
+              </h3>
+              <p className="text-xs text-[#d0c5af]/85">
+                Algorithme adaptatif (précision, temps de réponse, confiance), recommandations ciblées et audio UK/US.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="px-4 py-2.5 rounded-xl luxury-btn-gold font-bold text-xs uppercase tracking-wider hidden sm:flex items-center gap-1 shrink-0 cursor-pointer"
+          >
+            <span>Lancer</span>
+            <span className="material-symbols-outlined text-sm">play_arrow</span>
+          </button>
+        </section>
+      )}
 
       {/* 20 Mini-Jeux Arcade Banner */}
       {onOpenGames && (

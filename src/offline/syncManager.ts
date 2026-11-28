@@ -421,6 +421,23 @@ class SyncManager {
         }
       }
 
+      case 'SMART_MEMORY_RECORD': {
+        const record = item.payload;
+        if (!record?.itemId) return true;
+        const recordPath = `users/${targetUid}/smartMemoryRecords/${record.itemId}`;
+        try {
+          const recordRef = doc(db, 'users', targetUid, 'smartMemoryRecords', record.itemId);
+          await setDoc(recordRef, record, { merge: true });
+          return true;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (msg.includes('Missing or insufficient permissions')) {
+            handleFirestoreError(err, OperationType.WRITE, recordPath);
+          }
+          throw err;
+        }
+      }
+
       default:
         return true;
     }

@@ -26,6 +26,7 @@ import { TelemetryListSkeleton } from './SkeletonLoaders';
 export interface ActiveMemoryPanelProps {
   user: UserProfile;
   onOpenFlashcards?: () => void;
+  onOpenSmartMemory?: () => void;
 }
 
 type QueueFilter = 'all' | 'priority' | 'new';
@@ -53,7 +54,8 @@ const URGENCY_META: Record<
 
 export const ActiveMemoryPanel: React.FC<ActiveMemoryPanelProps> = ({
   user,
-  onOpenFlashcards
+  onOpenFlashcards,
+  onOpenSmartMemory
 }) => {
   const shouldReduceMotion = useReducedMotion();
 
@@ -268,6 +270,23 @@ export const ActiveMemoryPanel: React.FC<ActiveMemoryPanelProps> = ({
               🇺🇸 US
             </button>
           </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (onOpenSmartMemory) {
+                onOpenSmartMemory();
+              } else {
+                window.dispatchEvent(
+                  new CustomEvent('eb_launch_ecosystem_target', { detail: 'smart_memory' })
+                );
+              }
+            }}
+            className="luxury-btn-gold min-h-[38px] px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ffe088]"
+          >
+            <span className="material-symbols-outlined text-base">neurology</span>
+            <span>SMART MEMORY</span>
+          </button>
 
           {onOpenFlashcards && (
             <button
